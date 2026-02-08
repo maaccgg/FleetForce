@@ -5,20 +5,22 @@ import {
   LayoutDashboard, 
   Wrench, 
   FileCheck, 
+  DollarSign,
   Map, 
   ReceiptText, 
   Scale, 
-  Truck 
+  Truck,
 } from 'lucide-react';
 
 const menuItems = [
-  { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+  { name: 'Inicio', href: '/', icon: LayoutDashboard },
+  { name: 'Unidades', href: '/unidades', icon: Truck },
   { name: 'Mantenimiento', href: '/mantenimiento', icon: Wrench },
+  { name: 'Dinero', href: '/dinero', icon: DollarSign },
   { name: 'Vigencias', href: '/vigencias', icon: FileCheck },
   { name: 'Rutas', href: '/rutas', icon: Map },
   { name: 'Facturas', href: '/facturas', icon: ReceiptText },
   { name: 'SAT', href: '/fiscal', icon: Scale },
-  { name: 'Unidades', href: '/unidades', icon: Truck },
 ];
 
 export default function Sidebar() {

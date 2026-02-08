@@ -1,194 +1,120 @@
-
-//return - en el backend (supabase) se regresan datos. En React, se regresan interfases vizuales
-
-//EN Next.js, no van <a>, van Links. El Link siempre lleva un href="/(Nombre de la carpeta con el archivo que quieres ligar"
-//**OJO** el Link aplica dentro de mi "app", cuando es algo fuera de mi "app" si lleva <a>/
-
 "use client";
 import { useEffect, useState } from 'react';
-import { supabase } from '../lib/supabaseClient';
-import TarjetaDato from '../components/tarjetaDato';
-import Sidebar from '../components/sidebar'
+import { supabase } from '@/lib/supabaseClient';
+import TarjetaDato from '@/components/tarjetaDato';
+import { Bell, Calendar, DollarSign, TrendingUp, AlertTriangle, fuel, Tool } from 'lucide-react';
 
-//funcion principal
 export default function Page() {
-  
-
-  //unidades
-  const [conteoUnidades, setConteoUnidades] = useState(0); 
-  const [nuevoCamion, setNuevoCamion] = useState(""); 
-
-  //dinero
-  const [totalIngresos, setTotalIngresos] = useState(0); 
-  const [montoIngreso, setMontoIngreso] = useState(""); 
-  
-  // CAJA PARA LA LISTA: Aquí guardamos los datos para que el .map() no marque error
-  const [listaIngresos, setListaIngresos] = useState([]); 
-
-  //credenciales
+  const [metricas, setMetricas] = useState({ ingresos: 0, gastos: 0, ganancia: 0 });
   const [sesion, setSesion] = useState(null);
   const [email, setEmail] = useState(""); 
   const [password, setPassword] = useState(""); 
 
-                              useEffect(() => {
-                                supabase.auth.getSession().then(({ data: { session } }) => {
-                                  setSesion(session);
-                                });
-                                const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-                                  setSesion(session);
-                                });
-                                return () => subscription.unsubscribe();
-                              }, []);
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => setSesion(session));
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => setSesion(session));
+    return () => subscription.unsubscribe();
+  }, []);
 
-  async function iniciarSesion(e) {
-    e.preventDefault();
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) alert("Acceso denegado: " + error.message);
+  async function obtenerFinanzas() {
+    const { data: facturas } = await supabase.from('facturas').select('monto_total');
+    const totalIngresos = facturas?.reduce((acc, curr) => acc + (Number(curr.monto_total) || 0), 0) || 0;
+
+    const { data: gastosBD } = await supabase.from('gastos').select('monto');
+    const totalGastos = gastosBD?.reduce((acc, curr) => acc + (Number(curr.monto) || 0), 0) || 0;
+
+    setMetricas({
+      ingresos: totalIngresos,
+      gastos: totalGastos,
+      ganancia: totalIngresos - totalGastos
+    });
   }
 
-  async function obtenerDatos() {
-    const { count, error } = await supabase
-      .from('unidades')
-      .select('*', { count: 'exact', head: true });
-    if (!error) setConteoUnidades(count || 0);
-  }
+  useEffect(() => {
+    if (!sesion) return; 
+    obtenerFinanzas();
+  }, [sesion]);
 
-  async function obtenerIngresos() {
-    const { data, error } = await supabase
-      .from('ingresos')
-      .select('*') 
-      .order('created_at', { ascending: false });
-
-    if (!error && data) {
-      const suma = data.reduce((acc, curr) => acc + (Number(curr.monto) || 0), 0);
-      setTotalIngresos(suma);
-      setListaIngresos(data); // Llenamos la lista con los datos reales
-    }
-  }
-
-                                    useEffect(() => {
-                                      if (!sesion) return; 
-                                      obtenerDatos();
-                                      obtenerIngresos();
-
-                                      const canalUnidades = supabase.channel('cambios-unidades')
-                                        .on('postgres_changes', { event: '*', schema: 'public', table: 'unidades' }, () => obtenerDatos())
-                                        .subscribe();
-
-                                      const canalIngresos = supabase.channel('cambios-ingresos')
-                                        .on('postgres_changes', { event: '*', schema: 'public', table: 'ingresos' }, () => obtenerIngresos())
-                                        .subscribe();
-
-                                      return () => {
-                                        supabase.removeChannel(canalUnidades);
-                                        supabase.removeChannel(canalIngresos);
-                                      };
-                                    }, [sesion]);
-
-  async function agregarUnidad() {
-    if (!nuevoCamion) return;
-    const { error } = await supabase.from('unidades').insert([{ nombre: nuevoCamion, estado: 'Activo' }]);
-    if (!error) setNuevoCamion(""); 
-  }
-
-  async function agregarIngreso() {
-    if (!montoIngreso) return;
-    const { error } = await supabase.from('ingresos').insert([{ monto: Number(montoIngreso), concepto: 'Servicio Plomería' }]);
-    if (!error) setMontoIngreso("");
-  }
-
-  async function eliminarIngreso(id) {
-    const confirmacion = confirm("¿Deseas eliminar este registro?");
-    if (!confirmacion) return;
-    const { error } = await supabase.from('ingresos').delete().eq('id', id);
-    if (error) console.error(error.message);
-    // El Realtime se encarga de refrescar la lista solo
-  }
-
-  if (!sesion) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-slate-950 text-white p-6">
-        <form onSubmit={iniciarSesion} className="bg-slate-900 p-8 rounded-2xl border border-slate-800 w-full max-w-md shadow-2xl">
-          <h2 className="text-2xl font-bold mb-6 text-blue-500 italic uppercase tracking-tighter text-center">Ingresa tu usuario</h2>
-          <input 
-            type="email" placeholder="Correo Maestro" 
-            className="w-full bg-slate-950 border border-slate-800 p-3 rounded-lg mb-4 outline-none focus:border-blue-500"
-            value={email} onChange={(e) => setEmail(e.target.value)}
-          />
-          <input 
-            type="password" placeholder="Contraseña" 
-            className="w-full bg-slate-950 border border-slate-800 p-3 rounded-lg mb-6 outline-none focus:border-blue-500"
-            value={password} onChange={(e) => setPassword(e.target.value)}
-          />
-          <button className="w-full bg-blue-600 hover:bg-blue-500 py-3 rounded-lg font-bold transition-all uppercase tracking-widest">
-            Entrar a la Bóveda
-          </button>
-        </form>
-      </div>
-    );
-  }
+  if (!sesion) { /* ... (Mantener mismo bloque de login anterior) ... */ }
 
   return (
-    <div className="flex bg-slate-950 text-slate-50 min-h-screen">
-      <main className="flex-1 p-8">
-        <div className="max-w-5xl mx-auto">
-          <header className="mb-10 flex justify-between items-center">
-            <div>
-              <h1 className="text-3xl font-extrabold tracking-tighter uppercase italic text-blue-500">
-                Panel de Control <span className="text-slate-100">Institución</span>
-              </h1>
-              <p className="text-slate-500 mt-2 font-medium">Consolidación 2026 - Gestión Táctica</p>
-            </div>
-            <button onClick={() => supabase.auth.signOut()} className="text-xs bg-slate-800 hover:bg-red-900 px-3 py-1 rounded border border-slate-700 transition-colors">
-              Cerrar Bóveda
-            </button>
-          </header>
+    <main className="p-8 min-h-screen bg-slate-950">
+      <div className="max-w-400 mx-auto">
+        
+        <header className="mb-12">
+          <h1 className="text-4xl font-black tracking-tighter uppercase italic text-white">
+            CENTRO DE <span className="text-blue-600">OPERACIONES</span>
+          </h1>
+          <p className="text-slate-500 mt-2 font-bold uppercase text-[10px] tracking-[0.3em]">Institución Marco Cantu - Consolidación 2026</p>
+        </header>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-            {/* Unidades */}
-            <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-xl">
-              <p className="text-xs font-bold text-slate-400 uppercase mb-4 tracking-widest">Nueva Unidad</p>
-              <div className="flex gap-4">
-                <input type="text" placeholder="ID Camión..." className="flex-1 bg-slate-950 border border-slate-800 rounded-lg p-3 text-white outline-none focus:border-blue-500" value={nuevoCamion} onChange={(e) => setNuevoCamion(e.target.value)} />
-                <button onClick={agregarUnidad} className="bg-blue-600 hover:bg-blue-500 px-6 py-3 rounded-lg font-bold">+</button>
+        {/* CONTENEDOR PRINCIPAL DIVIDIDO */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+          
+          {/* LADO IZQUIERDO: FINANZAS */}
+          <section className="space-y-8">
+            <div className="flex items-center gap-3 mb-2">
+              <TrendingUp className="text-green-500" size={20} />
+              <h2 className="text-sm font-black text-slate-400 uppercase tracking-[0.2em]">Balance Financiero</h2>
+            </div>
+            
+            <div className="grid grid-cols-1 gap-6">
+              <TarjetaDato titulo="Ingresos Mensuales" valor={`$${metricas.ingresos.toLocaleString()}`} color="blue" />
+              <TarjetaDato titulo="Gastos Totales" valor={`$${metricas.gastos.toLocaleString()}`} color="slate" />
+              <div className="bg-green-600/10 border border-green-500/20 p-8 rounded-[2.5rem] shadow-xl">
+                 <p className="text-xs font-black text-green-500 uppercase tracking-widest mb-1">Ganancia Neta</p>
+                 <h3 className="text-5xl font-black text-white italic tracking-tighter">
+                   ${metricas.ganancia.toLocaleString()}
+                 </h3>
               </div>
             </div>
+          </section>
 
-            {/* Ingresos + Historial */}
-            <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-xl">
-              <p className="text-xs font-bold text-slate-400 uppercase mb-4 tracking-widest">Registrar Cobro ($)</p>
-              <div className="flex gap-4 mb-6">
-                <input type="number" placeholder="Monto..." className="flex-1 bg-slate-950 border border-slate-800 rounded-lg p-3 text-white outline-none focus:border-green-500" value={montoIngreso} onChange={(e) => setMontoIngreso(e.target.value)} />
-                <button onClick={agregarIngreso} className="bg-green-600 hover:bg-green-500 px-6 py-3 rounded-lg font-bold">$</button>
+          {/* LADO DERECHO: AVISOS DE OCASIÓN */}
+          <section className="space-y-8">
+            <div className="flex items-center gap-3 mb-2">
+              <Bell className="text-blue-500" size={20} />
+              <h2 className="text-sm font-black text-slate-400 uppercase tracking-[0.2em]">Avisos de Ocasión</h2>
+            </div>
+
+            <div className="space-y-4">
+              {/* Alerta 1 */}
+              <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl flex items-center gap-6 hover:border-orange-500/50 transition-all cursor-pointer group">
+                <div className="bg-orange-500/10 p-4 rounded-2xl text-orange-500 group-hover:scale-110 transition-transform">
+                  <DollarSign size={28} />
+                </div>
+                <div>
+                  <h4 className="text-white font-black uppercase text-sm italic">Cobranza Pendiente</h4>
+                  <p className="text-slate-500 text-xs mt-1">3 facturas superan los 15 días de crédito.</p>
+                </div>
               </div>
 
-              {/* LISTA DE REGISTROS CON BOTÓN DE ELIMINAR */}
-              <div className="space-y-2 border-t border-slate-800 pt-4">
-                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Historial</p>
-                <div className="max-h-48 overflow-y-auto pr-2">
-                  {listaIngresos.map((item) => (
-                    <div key={item.id} className="flex justify-between items-center bg-slate-950 p-2 rounded border border-slate-800 text-sm mb-2 group">
-                      <span className="font-mono text-green-500">${Number(item.monto).toLocaleString()}</span>
-                      <button 
-                        onClick={() => eliminarIngreso(item.id)} 
-                        className="text-[10px] text-red-500 opacity-0 group-hover:opacity-100 transition-opacity font-bold"
-                      >
-                        ELIMINAR
-                      </button>
-                    </div>
-                  ))}
+              {/* Alerta 2 */}
+              <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl flex items-center gap-6 hover:border-blue-500/50 transition-all cursor-pointer group">
+                <div className="bg-blue-500/10 p-4 rounded-2xl text-blue-500 group-hover:scale-110 transition-transform">
+                  <Calendar size={28} />
+                </div>
+                <div>
+                  <h4 className="text-white font-black uppercase text-sm italic">Próximo Mantenimiento</h4>
+                  <p className="text-slate-500 text-xs mt-1">Unidad #204: Cambio de aceite preventivo.</p>
+                </div>
+              </div>
+
+              {/* Alerta 3 (Nueva sugerida para PMV) */}
+              <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl flex items-center gap-6 hover:border-red-500/50 transition-all cursor-pointer group">
+                <div className="bg-red-500/10 p-4 rounded-2xl text-red-500 group-hover:scale-110 transition-transform">
+                  <AlertTriangle size={28} />
+                </div>
+                <div>
+                  <h4 className="text-white font-black uppercase text-sm italic">Documentación Vencida</h4>
+                  <p className="text-slate-500 text-xs mt-1">Póliza de seguro del tracto #102 vence en 3 días.</p>
                 </div>
               </div>
             </div>
-          </div>
+          </section>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <TarjetaDato titulo="Unidades Activas" valor={conteoUnidades.toString()} color="blue" />
-            <TarjetaDato titulo="Ingresos Totales" valor={`$${totalIngresos.toLocaleString()}`} color="green" />
-            <TarjetaDato titulo="Meta Mensual" valor="$60,000" color="slate" />
-          </div>
         </div>
-      </main>
-    </div>
+      </div>
+    </main>
   );
 }
