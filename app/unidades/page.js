@@ -375,8 +375,6 @@ const agregarMantenimiento = async (e) => {
     </table>
   </div>
 </div>
-
-
         </div>
       </main>
     </div>

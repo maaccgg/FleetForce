@@ -109,8 +109,7 @@ export default function GastosOperativosPage() {
           </header>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
-            <TarjetaDato titulo="Egreso Total" valor={`$${metricas.totalMes.toLocaleString()}`} color="green" />
-            <TarjetaDato titulo="Servicios Realizados" valor={metricas.preventivos.toString()} color="blue" />
+            <TarjetaDato titulo="Egreso Total" valor={`$${metricas.totalMes.toLocaleString()}`} color="blue" />
           </div>
 
           {/* FORMULARIO DESPLEGABLE TÉCNICO */}
