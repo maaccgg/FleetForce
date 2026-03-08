@@ -4,7 +4,7 @@ import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import { 
   PlusCircle, Trash2, CheckCircle, Clock, X, 
-  Save, Calendar, ChevronDown, DollarSign, Truck, FileText, Download, ShieldCheck
+  Calendar, ChevronDown, DollarSign, Truck, FileText, Download, ShieldCheck, Settings
 } from 'lucide-react';
 import Sidebar from '@/components/sidebar';
 import TarjetaDato from '@/components/tarjetaDato';
@@ -33,10 +33,11 @@ function FacturasContenido() {
   const [fechaInicio, setFechaInicio] = useState(primerDiaMes);
   const [fechaFin, setFechaFin] = useState(ultimoDiaMes);
 
+  // NUEVO: Agregamos forma_pago y metodo_pago al estado inicial
   const [formData, setFormData] = useState({ 
     cliente_id: '', monto_total: '', folio_fiscal: '', 
     ruta: 'Flete / Servicio de Transporte', fecha_viaje: new Date().toISOString().split('T')[0],
-    fecha_vencimiento: '' 
+    fecha_vencimiento: '', forma_pago: '99', metodo_pago: 'PPD'
   });
 
   useEffect(() => {
@@ -61,6 +62,15 @@ function FacturasContenido() {
       }
     }
   }, [formData.cliente_id, formData.fecha_viaje, clientes]);
+
+  // Inteligencia de UX: Si eligen PUE, la forma de pago debe ser distinta a 99.
+  useEffect(() => {
+    if (formData.metodo_pago === 'PUE' && formData.forma_pago === '99') {
+      setFormData(prev => ({ ...prev, forma_pago: '03' })); // Cambia a Transferencia automático
+    } else if (formData.metodo_pago === 'PPD') {
+      setFormData(prev => ({ ...prev, forma_pago: '99' })); // PPD exige forma de pago 99
+    }
+  }, [formData.metodo_pago]);
 
   async function obtenerPerfilEmisor(userId) {
     const { data } = await supabase.from('perfil_emisor').select('*').eq('usuario_id', userId).single();
@@ -100,10 +110,6 @@ function FacturasContenido() {
     setLoading(false);
   }
 
-  // =====================================================================
-  // SECCIÓN NUEVA: LÓGICA DE TIMBRADO SAT (PAC)
-  // =====================================================================
-
   const prepararJsonParaPAC = (factura) => {
     const total = Number(factura.monto_total);
     const subtotal = Number((total / 1.16).toFixed(2));
@@ -117,8 +123,11 @@ function FacturasContenido() {
       "Serie": "F",
       "Folio": factura.id.toString().slice(0,5),
       "Fecha": new Date().toISOString(),
-      "FormaPago": "03", 
-      "MetodoPago": "PPD", 
+      
+      // NUEVO: Variables dinámicas desde la Base de Datos
+      "FormaPago": factura.forma_pago || "99", 
+      "MetodoPago": factura.metodo_pago || "PPD", 
+      
       "TipoDeComprobante": "I",
       "Exportacion": "01",
       "Moneda": "MXN",
@@ -132,7 +141,7 @@ function FacturasContenido() {
       "Receptor": {
         "Rfc": clienteData.rfc || "XAXX010101000",
         "Nombre": clienteData.nombre || "PUBLICO EN GENERAL",
-        "UsoCFDI": "G03",
+        "UsoCFDI": clienteData.uso_cfdi || "G03", // NUEVO: Uso dinámico del catálogo
         "RegimenFiscalReceptor": clienteData.regimen_fiscal || "616",
         "DomicilioFiscalReceptor": clienteData.codigo_postal || "00000"
       },
@@ -167,151 +176,231 @@ function FacturasContenido() {
     return jsonFactura;
   };
 
-  const timbrarFactura = async (factura) => {
-    // 1. Preparamos los datos
-    const datosJSON = prepararJsonParaPAC(factura);
-    
-    // Mostramos en consola para que veas la estructura que el SAT exige
-    console.log("📦 PAQUETE JSON LISTO PARA ENVIAR AL PAC:");
-    console.log(JSON.stringify(datosJSON, null, 2));
+const timbrarFactura = async (factura) => {
+    // 1. CAMBIO DE RUTA: Ahora usamos la API-Lite (Multiemisor)
+    const apiUrl = 'https://apisandbox.facturama.mx/api-lite/3/cfdis';
 
-    if (!confirm("Se simulará el envío de esta factura al PAC. Revisa la consola para ver el JSON estructurado. ¿Deseas continuar?")) return;
+    // 2. TUS CREDENCIALES (Asegúrate de que sean las de la cuenta nueva)
+    const authUser = "ESCUELAKEMPERURATE"; 
+    const authPass = "Cantumar151"; // Tu contraseña real aquí
+    const encodedAuth = btoa(`${authUser}:${authPass}`);
 
-    setLoading(true);
+    // 3. CÁLCULOS (Mantenemos tu lógica exacta)
+    const totalInput = Number(factura.monto_total);
+    const subtotal = Number((totalInput / 1.16).toFixed(2));
+    const iva = Number((subtotal * 0.16).toFixed(2));
+    const retencionIva = Number((subtotal * 0.04).toFixed(2)); 
+    const totalFinal = Number((subtotal + iva - retencionIva).toFixed(2));
+
+    // 4. JSON MULTIEMISOR: Aquí mandamos TODO explícitamente
+    const facturamaJSON = {
+      "Serie": "F",
+      "Folio": factura.id.toString().slice(0, 5),
+      "ExpeditionPlace": "65000",
+      "PaymentForm": factura.forma_pago || "99",
+      "PaymentMethod": factura.metodo_pago || "PPD",
+      "Currency": "MXN",
+      "CfdiType": "I",
+      "Date": new Date().toISOString(),
+
+      // EN API-LITE, EL EMISOR ES EL QUE MANDA
+      "Issuer": {
+        "Rfc": "EKU9003173C9",
+        "Name": "ESCUELA KEMPER URATE", // <--- Aquí mandamos el nombre perfecto
+        "FiscalRegime": "601"
+      },
+
+      "Receiver": {
+        "Rfc": "URE180429TM6", 
+        "Name": "UNIVERSIDAD ROBOTICA ESPAÑOLA",
+        "CfdiUse": "G03",
+        "FiscalRegime": "603",
+        "TaxZipCode": "65000"
+      },
+      "Items": [
+        {
+          "ProductCode": "78101802", 
+          "UnitCode": "E48",
+          "Unit": "Servicio",
+          "Description": factura.ruta || "Servicio de flete nacional",
+          "Quantity": 1,
+          "UnitPrice": subtotal,
+          "Subtotal": subtotal,
+          "TaxObject": "02",
+          "Taxes": [
+            {
+              "Name": "IVA",
+              "Base": subtotal,
+              "Rate": 0.16,
+              "Total": iva,
+              "IsRetention": false 
+            },
+            {
+              "Name": "IVA",
+              "Base": subtotal,
+              "Rate": 0.04,
+              "Total": retencionIva,
+              "IsRetention": true 
+            }
+          ],
+          "Total": totalFinal 
+        }
+      ]
+    };
+
+    console.log("🚀 ENVIANDO A API-LITE:", JSON.stringify(facturamaJSON, null, 2));
+
+    if (!confirm("Intentando timbrado vía API-Lite Multiemisor. ¿Continuar?")) return;
+
+setLoading(true);
     try {
-      // AQUÍ IRÁ EL FETCH REAL A SW SAPIEN EN EL FUTURO.
-      // Por ahora, simulamos un tiempo de espera y un éxito.
-      await new Promise(resolve => setTimeout(resolve, 1500)); 
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': `Basic ${encodedAuth}`
+        },
+        body: JSON.stringify(facturamaJSON)
+      });
 
-      // Simulamos la respuesta del PAC (Un UUID falso)
-      const simulatedUUID = `SIM-${Math.random().toString(36).substring(2, 10).toUpperCase()}-XXXX-YYYY`;
+      // CAMBIO CLAVE: Leemos primero como texto para evitar el error de "Unexpected end of JSON"
+      const rawText = await response.text(); 
+      let res;
+      
+      try {
+        res = rawText ? JSON.parse(rawText) : {};
+      } catch (parseError) {
+        // Si no es JSON, imprimimos el error de conexión real
+        throw new Error(`Error del servidor (${response.status}): ${rawText || 'Sin respuesta'}`);
+      }
 
-      // Actualizamos la base de datos con el nuevo UUID
-      const { error } = await supabase.from('facturas').update({ 
-        folio_fiscal: simulatedUUID 
-      }).eq('id', factura.id);
+if (response.ok) {
+        // Imprimimos la respuesta completa en consola para poder verla
+        console.log("✅ RESPUESTA COMPLETA DEL SAT:", res);
 
-      if (error) throw error;
+        // Cazamos el UUID buscando en todas las posibles rutas de la API-Lite
+        const uuidReal = res.Uuid || res.UUID || res.Id || res.Complement?.TaxStamp?.Uuid;
+        
+        if (!uuidReal) {
+          alert("La factura se timbró, pero no pudimos leer el UUID. Revisa la consola (F12).");
+          return;
+        }
 
-      alert(`✅ ¡Timbrado Simulado con Éxito!\n\nFolio Fiscal (UUID): ${simulatedUUID}`);
-      obtenerDatos(sesion.user.id);
+        const { error } = await supabase.from('facturas').update({ 
+          folio_fiscal: uuidReal 
+        }).eq('id', factura.id);
 
+        if (error) throw error;
+        
+        alert(`🎉 ¡TIMBRADO EXITOSO!\n\nUUID: ${uuidReal}`);
+        obtenerDatos(sesion.user.id);
+      }
+      
+      else {
+        console.error("❌ RECHAZO API-LITE:", res);
+        // Si el servidor devolvió un error, aquí lo veremos detallado
+        const errorMsg = res.Message || JSON.stringify(res.ModelState) || "Error desconocido en API-Lite";
+        alert(`Rechazo del PAC (API-Lite):\n${errorMsg}`);
+      }
     } catch (err) {
-      console.error(err);
-      alert("Error en el timbrado: " + err.message);
+      console.error("Error de conexión:", err);
+      alert("Detalle del error:\n" + err.message);
     } finally {
       setLoading(false);
     }
-  };
+};
 
-  // =====================================================================
-
-  const generarFacturaPDF = (factura) => {
+const generarFacturaPDF = (factura) => {
     const doc = new jsPDF('p', 'mm', 'a4');
     const clienteData = clientes.find(c => c.nombre === factura.cliente) || {};
 
     const total = Number(factura.monto_total);
     const subtotal = total / 1.16;
-    const iva = total - subtotal;
+    const iva = subtotal * 0.16;
+    const retencionIva = subtotal * 0.04;
+    const totalFinal = subtotal + iva - retencionIva; 
     
     const esVencida = new Date(factura.fecha_vencimiento + 'T23:59:59') < new Date() && factura.estatus_pago !== 'Pagado';
     let etiquetaEstatus = factura.estatus_pago === 'Pagado' ? 'PAGADO' : (esVencida ? 'ATRASADO' : 'PENDIENTE');
     let colorEstatus = factura.estatus_pago === 'Pagado' ? [34, 197, 94] : (esVencida ? [239, 68, 68] : [249, 115, 22]);
 
-    doc.setFontSize(22);
-    doc.setFont("helvetica", "bold");
-    doc.text("Factura", 14, 25);
+    // --- CABECERA ESTILO FEMA ---
+    doc.setDrawColor(200); doc.rect(14, 15, 35, 20);
+    doc.setFontSize(8); doc.setTextColor(150);
+    doc.text("ESPACIO\nPARA LOGO", 31.5, 24, { align: 'center' });
 
-    doc.setFillColor(colorEstatus[0], colorEstatus[1], colorEstatus[2]);
-    doc.rect(160, 15, 35, 10, 'F');
-    doc.setFontSize(10);
-    doc.setTextColor(255, 255, 255);
-    doc.text(etiquetaEstatus, 177.5, 21.5, { align: 'center' });
+    doc.setTextColor(0, 0, 0); doc.setFontSize(14); doc.setFont("helvetica", "bold");
+    doc.text(`${perfilEmisor?.razon_social || 'EMPRESA DE TRANSPORTE SA DE CV'}`, 55, 20);
+    doc.setFontSize(8); doc.setFont("helvetica", "normal");
+    doc.text(`RFC: ${perfilEmisor?.rfc || 'XAXX010101000'}`, 55, 25);
+    doc.text(`Régimen Fiscal: ${perfilEmisor?.regimen_fiscal || '601'}`, 55, 29);
+    doc.text(`C.P. Emisión: ${perfilEmisor?.codigo_postal || '00000'}`, 55, 33);
 
-    doc.setTextColor(0, 0, 0);
-    doc.setFontSize(12);
-    doc.setFont("helvetica", "bold");
-    doc.text(`${perfilEmisor?.razon_social || 'EMPRESA DE TRANSPORTE SA DE CV'}`, 14, 35);
-    
-    doc.setFontSize(9);
-    doc.setFont("helvetica", "normal");
-    doc.text(`RFC: ${perfilEmisor?.rfc || 'XAXX010101000'}`, 14, 40);
-    doc.text(`Régimen Fiscal: ${perfilEmisor?.regimen_fiscal || '601'}`, 14, 45);
-    doc.text(`C.P. de Expedición: ${perfilEmisor?.codigo_postal || '00000'}`, 14, 50);
+    // Bloque derecho de Estatus y Folio
+    doc.setFillColor(colorEstatus[0], colorEstatus[1], colorEstatus[2]); 
+    doc.rect(145, 15, 51, 8, 'F');
+    doc.setFontSize(9); doc.setFont("helvetica", "bold"); doc.setTextColor(255, 255, 255); 
+    doc.text(`FACTURA - ${etiquetaEstatus}`, 170.5, 20, { align: 'center' });
 
+    doc.setTextColor(0); doc.setFontSize(8);
     autoTable(doc, {
-      startY: 32,
-      margin: { left: 120 },
+      startY: 23, margin: { left: 145, right: 14 },
       body: [
-        ['Fecha:', factura.fecha_viaje || new Date().toLocaleDateString()],
-        ['Nº de Factura:', factura.folio_fiscal || `INT-${factura.id.toString().slice(0,6).toUpperCase()}`],
-        ['Vencimiento:', factura.fecha_vencimiento || '---'],
+        ['Fecha Emisión:', factura.fecha_viaje || new Date().toLocaleDateString()],
+        ['Folio Fiscal (UUID):', factura.folio_fiscal || 'BORRADOR']
       ],
-      theme: 'plain',
-      styles: { fontSize: 9, cellPadding: 1 },
-      columnStyles: { 0: { fontStyle: 'bold', halign: 'right' }, 1: { halign: 'right' } }
+      theme: 'plain', styles: { fontSize: 7, cellPadding: 1 }, columnStyles: { 0: { fontStyle: 'bold' }, 1: { halign: 'right' } }
     });
 
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "bold");
-    doc.text("Facturar a:", 14, 65);
+    // --- DATOS DEL RECEPTOR ---
+    doc.setDrawColor(200); doc.line(14, 45, 196, 45);
+    doc.setFontSize(9); doc.setFont("helvetica", "bold"); doc.text("CLIENTE / FACTURAR A:", 14, 51);
     
-    doc.setFontSize(11);
-    doc.text(factura.cliente, 14, 72);
-    
-    doc.setFontSize(9);
-    doc.setFont("helvetica", "normal");
-    doc.text(`RFC: ${clienteData.rfc || '---'}`, 14, 77);
-    doc.text(`Régimen: ${clienteData.regimen_fiscal || '---'}`, 14, 82);
-    doc.text(`C.P.: ${clienteData.codigo_postal || '---'}`, 14, 87);
+    doc.setFontSize(9); doc.setFont("helvetica", "normal");
+    doc.text(factura.cliente, 14, 56);
+    doc.setFontSize(8);
+    doc.text(`RFC: ${clienteData.rfc || '---'} | Uso CFDI: ${clienteData.uso_cfdi || 'G03'}`, 14, 60);
+    doc.text(`Régimen: ${clienteData.regimen_fiscal || '---'} | C.P.: ${clienteData.codigo_postal || '---'}`, 14, 64);
 
+    const diasCredito = clienteData.dias_credito || 0;
+    const condicionPago = diasCredito > 0 ? `CRÉDITO A ${diasCredito} DÍAS` : "CONTADO";
+    doc.setFont("helvetica", "bold");
+    doc.text(`Condiciones de Pago: ${condicionPago}`, 120, 56);
+
+    // --- CONCEPTOS ---
     autoTable(doc, {
-      startY: 100,
+      startY: 75,
       head: [['Cant.', 'Descripción / Concepto', 'Precio unitario', 'Importe']],
-      body: [
-        ['1', factura.ruta || 'Servicio de Autotransporte', `$${subtotal.toFixed(2)}`, `$${subtotal.toFixed(2)}`]
-      ],
-      theme: 'grid',
-      headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold' },
-      styles: { fontSize: 9, cellPadding: 4 },
-      columnStyles: { 
-        0: { halign: 'center', cellWidth: 20 },
-        2: { halign: 'right', cellWidth: 40 },
-        3: { halign: 'right', cellWidth: 40 }
-      }
+      body: [['1', factura.ruta || 'Servicio de Autotransporte', `$${subtotal.toFixed(2)}`, `$${subtotal.toFixed(2)}`]],
+      theme: 'grid', headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold' },
+      styles: { fontSize: 8, cellPadding: 4 }, columnStyles: { 0: { halign: 'center', cellWidth: 20 }, 2: { halign: 'right', cellWidth: 40 }, 3: { halign: 'right', cellWidth: 40 } }
     });
 
+    // --- OPCIONES FISCALES Y TOTALES ---
     const finalY = doc.lastAutoTable.finalY + 10;
     
-    doc.setFontSize(9);
-    doc.setFont("helvetica", "bold");
-    doc.text("Observaciones:", 14, finalY);
-    doc.setFont("helvetica", "normal");
-    doc.text(factura.viaje_id ? `Folio Interno de Viaje: #${factura.viaje_id.toString().slice(0,8)}` : "Servicio Extraordinario", 14, finalY + 5);
-    doc.text("Gracias por su preferencia.", 14, finalY + 12);
+    doc.setFontSize(9); doc.setFont("helvetica", "bold"); doc.text("Opciones Fiscales (CFDI 4.0):", 14, finalY);
+    doc.setFont("helvetica", "normal"); doc.setFontSize(8);
+    doc.text(`Método de Pago: ${factura.metodo_pago || 'PPD'}`, 14, finalY + 5);
+    doc.text(`Forma de Pago: ${factura.forma_pago || '99'}`, 14, finalY + 10);
+    doc.text(`Vencimiento: ${factura.fecha_vencimiento}`, 14, finalY + 15);
 
     autoTable(doc, {
-      startY: finalY,
-      margin: { left: 120 },
+      startY: finalY - 5, margin: { left: 120 },
       body: [
-        ['Subtotal', `$${subtotal.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`],
-        ['IVA (16%)', `$${iva.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`],
-        ['Total', `$${total.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`],
-        ['Saldo Pendiente', factura.estatus_pago === 'Pagado' ? '$0.00' : `$${total.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`]
+        ['Subtotal', `$${subtotal.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`],
+        ['IVA (16%)', `$${iva.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`],
+        ['Retención IVA (4%)', `-$${retencionIva.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`],
+        ['Total Neto', `$${totalFinal.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`],
       ],
-      theme: 'plain',
-      styles: { fontSize: 10, cellPadding: 2 },
+      theme: 'plain', styles: { fontSize: 9, cellPadding: 2 },
       columnStyles: { 0: { fontStyle: 'bold', halign: 'right' }, 1: { halign: 'right' } },
-      didParseCell: function(data) {
-        if (data.row.index === 2) { 
-          data.cell.styles.fontStyle = 'bold';
-        }
-      }
+      didParseCell: function(data) { if (data.row.index === 3) data.cell.styles.fontStyle = 'bold'; }
     });
 
-    doc.setFontSize(8);
-    doc.setTextColor(150);
-    doc.text("Este documento es una representación comercial impresa de un Comprobante Fiscal.", 105, 280, { align: 'center' });
+    doc.setFontSize(8); doc.setTextColor(150);
+    doc.text("Este documento es una representación impresa de un CFDI de Ingreso.", 105, 280, { align: 'center' });
 
     doc.save(`Factura_${factura.cliente}_${factura.fecha_viaje}.pdf`);
   };
@@ -331,6 +420,8 @@ function FacturasContenido() {
         ruta: formData.ruta,
         fecha_viaje: formData.fecha_viaje,
         fecha_vencimiento: formData.fecha_vencimiento,
+        forma_pago: formData.forma_pago,
+        metodo_pago: formData.metodo_pago,
         estatus_pago: 'Pendiente',
         usuario_id: sesion.user.id 
       }
@@ -339,7 +430,7 @@ function FacturasContenido() {
     if (error) {
       alert("Fallo al guardar: " + error.message);
     } else {
-      setFormData({ cliente_id: '', monto_total: '', folio_fiscal: '', ruta: 'Flete / Servicio de Transporte', fecha_viaje: new Date().toISOString().split('T')[0], fecha_vencimiento: '' });
+      setFormData({ cliente_id: '', monto_total: '', folio_fiscal: '', ruta: 'Flete / Servicio de Transporte', fecha_viaje: new Date().toISOString().split('T')[0], fecha_vencimiento: '', forma_pago: '99', metodo_pago: 'PPD' });
       setMostrarFormulario(false);
       obtenerDatos(sesion.user.id);
     }
@@ -354,7 +445,7 @@ function FacturasContenido() {
 
   const eliminarFactura = async (id, tieneViajeAsociado) => {
     if (tieneViajeAsociado) {
-       alert("No puedes borrar esta factura desde aquí porque está asociada a un Viaje. Debes borrar el Viaje desde la Bitácora de Operaciones.");
+       alert("No puedes borrar esta factura desde aquí porque está asociada a un Viaje. Debes borrar el Viaje desde la pestaña de viajes");
        return;
     }
     if (!confirm("¿Eliminar registro manual?")) return;
@@ -438,12 +529,12 @@ function FacturasContenido() {
           {mostrarFormulario && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
               <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-md" onClick={() => setMostrarFormulario(false)} />
-              <div className="relative bg-slate-900 border border-slate-800 w-full max-w-2xl rounded-[3rem] p-10 shadow-2xl animate-in zoom-in-95 duration-200">
+              <div className="relative bg-slate-900 border border-slate-800 w-full max-w-3xl rounded-[3rem] p-10 shadow-2xl animate-in zoom-in-95 duration-200">
                 <button onClick={() => setMostrarFormulario(false)} className="absolute top-8 right-8 text-slate-500 hover:text-white"><X size={24} /></button>
                 <h2 className="text-2xl font-black text-white italic uppercase mb-8">Registrar <span className="text-green-500">Ingreso Manual</span></h2>
-                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-6 -mt-6">Usa esto para fletes extra o servicios sin Carta Porte.</p>
                 
                 <form onSubmit={registrarFactura} className="space-y-6">
+                  {/* SECCIÓN 1: DATOS BÁSICOS */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="md:col-span-2">
                       <div className="flex justify-between items-center mb-2">
@@ -454,7 +545,6 @@ function FacturasContenido() {
                         <option value="">-- Seleccionar de Catálogo SAT --</option>
                         {clientes.map(c => <option key={c.id} value={c.id}>{c.nombre} ({c.dias_credito} días crédito)</option>)}
                       </select>
-                      {clientes.length === 0 && <p className="text-[9px] text-red-500 font-bold mt-2 ml-2">⚠️ No tienes clientes registrados. Ve a "Config SAT" para darlos de alta.</p>}
                     </div>
                     <div>
                       <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1">Monto Total con IVA ($)</label>
@@ -462,10 +552,39 @@ function FacturasContenido() {
                         value={formData.monto_total} onChange={e => setFormData({...formData, monto_total: e.target.value})} placeholder="0.00" />
                     </div>
                     <div>
-                      <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1">Folio Fiscal / Concepto</label>
-                      <input className="w-full bg-slate-950 border border-slate-800 p-4 rounded-2xl text-sm text-white outline-none font-mono uppercase" 
-                        value={formData.folio_fiscal} onChange={e => setFormData({...formData, folio_fiscal: e.target.value})} placeholder="Ej. Flete MTY" />
+                      <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1">Concepto / Referencia</label>
+                      <input className="w-full bg-slate-950 border border-slate-800 p-4 rounded-2xl text-sm text-white outline-none" 
+                        value={formData.ruta} onChange={e => setFormData({...formData, ruta: e.target.value})} placeholder="Ej. Flete Extra" />
                     </div>
+                  </div>
+
+                  {/* SECCIÓN 2: OPCIONES FISCALES (NUEVO) */}
+                  <div className="p-6 bg-blue-900/10 border border-blue-500/20 rounded-2xl">
+                    <p className="text-[9px] font-black text-blue-400 uppercase tracking-widest mb-4 flex items-center gap-2"><Settings size={12}/> Configuración SAT (CFDI 4.0)</p>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-[9px] font-black text-slate-400 uppercase mb-2 block ml-1">Método de Pago</label>
+                        <select className="w-full bg-slate-950 border border-slate-800 p-3 rounded-xl text-xs text-white font-bold"
+                          value={formData.metodo_pago} onChange={e => setFormData({...formData, metodo_pago: e.target.value})}>
+                          <option value="PPD">PPD - Pago en Parcialidades o Diferido</option>
+                          <option value="PUE">PUE - Pago en una Sola Exhibición</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-[9px] font-black text-slate-400 uppercase mb-2 block ml-1">Forma de Pago</label>
+                        <select className="w-full bg-slate-950 border border-slate-800 p-3 rounded-xl text-xs text-white font-bold"
+                          value={formData.forma_pago} onChange={e => setFormData({...formData, forma_pago: e.target.value})} disabled={formData.metodo_pago === 'PPD'}>
+                          <option value="99">99 - Por Definir (Obligatorio en PPD)</option>
+                          <option value="03">03 - Transferencia Electrónica</option>
+                          <option value="01">01 - Efectivo</option>
+                          <option value="02">02 - Cheque Nominativo</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* SECCIÓN 3: FECHAS */}
+                  <div className="grid grid-cols-2 gap-6">
                     <div>
                       <label className="text-[9px] font-black text-blue-500 uppercase tracking-widest mb-2 block ml-1">Fecha de Servicio</label>
                       <input type="date" required className="w-full bg-slate-950 border border-slate-800 p-4 rounded-2xl text-sm text-white" 
@@ -477,7 +596,8 @@ function FacturasContenido() {
                         value={formData.fecha_vencimiento} />
                     </div>
                   </div>
-                  <button type="submit" disabled={loading || clientes.length === 0} className="w-full bg-green-600 hover:bg-green-500 disabled:bg-slate-800 disabled:text-slate-600 text-white p-5 rounded-2xl font-black uppercase text-[11px] tracking-widest shadow-xl transition-all">
+
+                  <button type="submit" disabled={loading || clientes.length === 0} className="w-full bg-green-600 hover:bg-green-500 disabled:bg-slate-800 disabled:text-slate-600 text-white p-5 rounded-2xl font-black uppercase text-[11px] tracking-widest shadow-xl transition-all mt-4">
                     {loading ? "Sincronizando..." : "Confirmar Factura Libre"}
                   </button>
                 </form>
@@ -539,7 +659,6 @@ function FacturasContenido() {
                         </td>
                         <td className="py-4 pr-4 rounded-r-2xl border-y border-r border-slate-800 text-right flex justify-end gap-2">
                           
-                          {/* NUEVO BOTÓN: EMITIR SAT (Solo si no está timbrado) */}
                           {sinTimbrar && (
                             <button onClick={() => timbrarFactura(item)} 
                               title="Timbrar Factura ante el SAT"

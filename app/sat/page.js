@@ -26,7 +26,7 @@ export default function SATConfigPage() {
   const [formDataUb, setFormDataUb] = useState({ nombre_lugar: '', rfc_ubicacion: '', codigo_postal: '', estado: '', municipio: '', direccion: '' });
   const [formDataMe, setFormDataMe] = useState({ descripcion: '', clave_sat: '', clave_unidad: 'KGM', peso_unitario_kg: '' });
   const [formDataRe, setFormDataRe] = useState({ numero_economico: '', placas: '', subtipo_remolque: 'CTR007' });
-  const [formDataCl, setFormDataCl] = useState({ nombre: '', rfc: '', regimen_fiscal: '601', codigo_postal: '', dias_credito: 0 });
+  const [formDataCl, setFormDataCl] = useState({ nombre: '', rfc: '', regimen_fiscal: '601', codigo_postal: '', dias_credito: 0, uso_cfdi: 'G03' });
 
   const [editandoId, setEditandoId] = useState(null);
 
@@ -116,17 +116,19 @@ export default function SATConfigPage() {
   };
 
   // PREPARADORES DE EDICIÓN (Solución al error "uncontrolled input")
-  const editarCliente = (cl) => {
+const editarCliente = (cl) => {
     setEditandoId(cl.id);
     setFormDataCl({
       nombre: cl.nombre || '',
       rfc: cl.rfc || '',
       regimen_fiscal: cl.regimen_fiscal || '601',
       codigo_postal: cl.codigo_postal || '',
-      dias_credito: cl.dias_credito || 0
+      dias_credito: cl.dias_credito || 0,
+      uso_cfdi: cl.uso_cfdi || 'G03' // <--- NUEVO
     });
     setMostrarModal(true);
   };
+
 
   const editarOperador = (op) => {
     setEditandoId(op.id);
@@ -318,20 +320,13 @@ export default function SATConfigPage() {
                 <div><label className="text-[9px] font-black text-slate-500 uppercase ml-1 mb-2 block">CP Fiscal</label>
                   <input className="w-full bg-slate-950 border border-slate-800 p-4 rounded-2xl text-sm text-white" 
                     value={perfilFiscal.codigo_postal} onChange={e => setPerfilFiscal({...perfilFiscal, codigo_postal: e.target.value})} /></div>
-                <div className="col-span-2">
-                  <label className="text-[9px] font-black text-slate-500 uppercase ml-1 mb-2 block">Régimen Fiscal</label>
-                  <select className="w-full bg-slate-950 border border-slate-800 p-4 rounded-2xl text-sm text-white"
-                    value={perfilFiscal.regimen_fiscal} onChange={e => setPerfilFiscal({...perfilFiscal, regimen_fiscal: e.target.value})}>
-                    <option value="601">601 - General de Ley Personas Morales</option>
-                    <option value="612">612 - Personas Físicas con Actividades Empresariales</option>
-                    <option value="626">626 - Régimen Simplificado de Confianza (RESICO)</option>
-                  </select>
-                </div>
               </div>
               <button onClick={guardarPerfilFiscal} disabled={loading} className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl flex justify-center items-center gap-2 transition-all hover:bg-blue-500">
                 <Save size={16}/> {loading ? "Sincronizando..." : "Actualizar Datos Maestros"}
               </button>
             </div>
+            
+
           )}
 
           {/* MODAL MAESTRO */}
@@ -344,31 +339,45 @@ export default function SATConfigPage() {
                 
                 <form onSubmit={guardarRegistro} className="space-y-6">
                   
-                  {/* FORMULARIO CLIENTES */}
-                  {activeTab === 'clientes' && (
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="col-span-2">
-                        <label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1">Razón Social del Cliente</label>
-                        <input required className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white font-bold" value={formDataCl.nombre} onChange={e => setFormDataCl({...formDataCl, nombre: e.target.value})} />
-                      </div>
-                      <div>
-                        <label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1">RFC</label>
-                        <input required className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white uppercase font-mono" value={formDataCl.rfc} onChange={e => setFormDataCl({...formDataCl, rfc: e.target.value})} />
-                      </div>
-                      <div>
-                        <label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1">CP Fiscal</label>
-                        <input required className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white" value={formDataCl.codigo_postal} onChange={e => setFormDataCl({...formDataCl, codigo_postal: e.target.value})} />
-                      </div>
-                      <div className="col-span-2">
-                        <label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1">Régimen Fiscal</label>
-                        <select className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white font-bold" value={formDataCl.regimen_fiscal} onChange={e => setFormDataCl({...formDataCl, regimen_fiscal: e.target.value})}>
-                          <option value="601">601 - General de Ley Personas Morales</option>
-                          <option value="612">612 - Personas Físicas con Actividad Empresarial</option>
-                          <option value="626">626 - Régimen Simplificado de Confianza (RESICO)</option>
-                        </select>
-                      </div>
-                    </div>
-                  )}
+{/* FORMULARIO CLIENTES / RECEPTORES */}
+{activeTab === 'clientes' && (
+  <div className="grid grid-cols-2 gap-4">
+    <div className="col-span-2">
+      <label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1">Razón Social del Cliente</label>
+      <input required className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white font-bold" value={formDataCl.nombre} onChange={e => setFormDataCl({...formDataCl, nombre: e.target.value})} />
+    </div>
+    <div>
+      <label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1">RFC</label>
+      <input required className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white uppercase font-mono" value={formDataCl.rfc} onChange={e => setFormDataCl({...formDataCl, rfc: e.target.value})} />
+    </div>
+    <div>
+      <label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1">CP Fiscal</label>
+      <input required className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white" value={formDataCl.codigo_postal} onChange={e => setFormDataCl({...formDataCl, codigo_postal: e.target.value})} />
+    </div>
+    
+    <div className="col-span-2">
+      <label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1">Régimen Fiscal</label>
+      <select className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white font-bold" value={formDataCl.regimen_fiscal} onChange={e => setFormDataCl({...formDataCl, regimen_fiscal: e.target.value})}>
+        <option value="601">601 - General de Ley Personas Morales</option>
+        <option value="612">612 - Personas Físicas con Actividad Empresarial</option>
+        <option value="626">626 - Régimen Simplificado de Confianza (RESICO)</option>
+      </select>
+    </div>
+
+    {/* AQUÍ ES EL LUGAR CORRECTO PARA EL USO DE CFDI */}
+    <div className="col-span-2">
+      <label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1">Uso de CFDI (Default para este cliente)</label>
+      <select className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white font-bold" 
+        value={formDataCl.uso_cfdi} onChange={e => setFormDataCl({...formDataCl, uso_cfdi: e.target.value})}>
+        <option value="G03">G03 - Gastos en general</option>
+        <option value="G01">G01 - Adquisición de mercancías</option>
+        <option value="I04">I04 - Equipo de computo y accesorios</option>
+        <option value="S01">S01 - Sin efectos fiscales</option>
+      </select>
+    </div>
+
+  </div>
+)}
 
                   {/* FORMULARIO OPERADORES */}
                   {activeTab === 'operadores' && (
