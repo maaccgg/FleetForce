@@ -177,233 +177,308 @@ function FacturasContenido() {
   };
 
 const timbrarFactura = async (factura) => {
-    // 1. CAMBIO DE RUTA: Ahora usamos la API-Lite (Multiemisor)
-    const apiUrl = 'https://apisandbox.facturama.mx/api-lite/3/cfdis';
+    // 1. REEMPLAZA ESTO CON TU API KEY DE PRUEBAS (sk_test_...)
+    const facturapiKey = "sk_test_sBNjdoZ5A1UcJVmQ2KUisCQBpiD8MPFecYABBhRYci"; 
+    const apiUrl = 'https://www.facturapi.io/v2/invoices';
 
-    // 2. TUS CREDENCIALES (Asegúrate de que sean las de la cuenta nueva)
-    const authUser = "ESCUELAKEMPERURATE"; 
-    const authPass = "Cantumar151"; // Tu contraseña real aquí
-    const encodedAuth = btoa(`${authUser}:${authPass}`);
-
-    // 3. CÁLCULOS (Mantenemos tu lógica exacta)
+    // 2. CÁLCULOS AUTOMATIZADOS
+    // Facturapi calcula IVA y Retenciones por ti, solo mándale el subtotal
     const totalInput = Number(factura.monto_total);
     const subtotal = Number((totalInput / 1.16).toFixed(2));
-    const iva = Number((subtotal * 0.16).toFixed(2));
-    const retencionIva = Number((subtotal * 0.04).toFixed(2)); 
-    const totalFinal = Number((subtotal + iva - retencionIva).toFixed(2));
 
-    // 4. JSON MULTIEMISOR: Aquí mandamos TODO explícitamente
-    const facturamaJSON = {
-      "Serie": "F",
-      "Folio": factura.id.toString().slice(0, 5),
-      "ExpeditionPlace": "65000",
-      "PaymentForm": factura.forma_pago || "99",
-      "PaymentMethod": factura.metodo_pago || "PPD",
-      "Currency": "MXN",
-      "CfdiType": "I",
-      "Date": new Date().toISOString(),
-
-      // EN API-LITE, EL EMISOR ES EL QUE MANDA
-      "Issuer": {
-        "Rfc": "EKU9003173C9",
-        "Name": "ESCUELA KEMPER URATE", // <--- Aquí mandamos el nombre perfecto
-        "FiscalRegime": "601"
-      },
-
-      "Receiver": {
-        "Rfc": "URE180429TM6", 
-        "Name": "UNIVERSIDAD ROBOTICA ESPAÑOLA",
-        "CfdiUse": "G03",
-        "FiscalRegime": "603",
-        "TaxZipCode": "65000"
-      },
-      "Items": [
-        {
-          "ProductCode": "78101802", 
-          "UnitCode": "E48",
-          "Unit": "Servicio",
-          "Description": factura.ruta || "Servicio de flete nacional",
-          "Quantity": 1,
-          "UnitPrice": subtotal,
-          "Subtotal": subtotal,
-          "TaxObject": "02",
-          "Taxes": [
-            {
-              "Name": "IVA",
-              "Base": subtotal,
-              "Rate": 0.16,
-              "Total": iva,
-              "IsRetention": false 
-            },
-            {
-              "Name": "IVA",
-              "Base": subtotal,
-              "Rate": 0.04,
-              "Total": retencionIva,
-              "IsRetention": true 
-            }
-          ],
-          "Total": totalFinal 
+    // 3. OBJETO DE FACTURACIÓN (CFDI 4.0)
+    const invoiceData = {
+customer: {
+        legal_name: "UNIVERSIDAD ROBOTICA ESPAÑOLA",
+        tax_id: "URE180429TM6",
+        tax_system: "603",
+        address: {
+          zip: "65000" // <--- En v2 va envuelto en address
         }
-      ]
+      },
+      items: [{
+        quantity: 1,
+        product: {
+          description: factura.ruta || "Servicio de flete nacional",
+          product_key: "78101802", // Clave SAT Autotransporte
+          price: subtotal,
+          taxes: [
+            { type: "IVA", rate: 0.16 },
+            { type: "IVA", rate: 0.04, withholding: true } // Retención 4% fletes
+          ]
+        }
+      }],
+      payment_form: factura.forma_pago || "99",
+      payment_method: factura.metodo_pago || "PPD",
+      use: "G03"
     };
 
-    console.log("🚀 ENVIANDO A API-LITE:", JSON.stringify(facturamaJSON, null, 2));
+    console.log("🚀 ENVIANDO A FACTURAPI:", invoiceData);
 
-    if (!confirm("Intentando timbrado vía API-Lite Multiemisor. ¿Continuar?")) return;
-
-setLoading(true);
+    setLoading(true);
     try {
+      // Usamos el token directamente en el Header (Bearer Auth)
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'Authorization': `Basic ${encodedAuth}`
+          'Authorization': `Bearer ${facturapiKey}`
         },
-        body: JSON.stringify(facturamaJSON)
+        body: JSON.stringify(invoiceData)
       });
 
-      // CAMBIO CLAVE: Leemos primero como texto para evitar el error de "Unexpected end of JSON"
-      const rawText = await response.text(); 
-      let res;
-      
-      try {
-        res = rawText ? JSON.parse(rawText) : {};
-      } catch (parseError) {
-        // Si no es JSON, imprimimos el error de conexión real
-        throw new Error(`Error del servidor (${response.status}): ${rawText || 'Sin respuesta'}`);
-      }
+      const res = await response.json();
 
 if (response.ok) {
-        // Imprimimos la respuesta completa en consola para poder verla
-        console.log("✅ RESPUESTA COMPLETA DEL SAT:", res);
-
-        // Cazamos el UUID buscando en todas las posibles rutas de la API-Lite
-        const uuidReal = res.Uuid || res.UUID || res.Id || res.Complement?.TaxStamp?.Uuid;
+        console.log("✅ ÉXITO FACTURAPI:", res);
         
-        if (!uuidReal) {
-          alert("La factura se timbró, pero no pudimos leer el UUID. Revisa la consola (F12).");
-          return;
-        }
-
-        const { error } = await supabase.from('facturas').update({ 
-          folio_fiscal: uuidReal 
-        }).eq('id', factura.id);
-
-        if (error) throw error;
+        // 1. Atrapamos toda la información fiscal que nos da Facturapi
+        const uuidReal = res.uuid;
+        const selloEmisor = res.stamp?.signature || "SELLO_NO_ENCONTRADO";
+        const selloSat = res.stamp?.sat_signature || "SELLO_SAT_NO_ENCONTRADO";
+        const cadenaOriginal = res.stamp?.complement_string || "CADENA_NO_ENCONTRADA";
         
-        alert(`🎉 ¡TIMBRADO EXITOSO!\n\nUUID: ${uuidReal}`);
+        // 2. Guardamos todo en tus nuevas columnas de Supabase
+        const { error: supabaseError } = await supabase
+          .from('facturas')
+          .update({ 
+            folio_fiscal: uuidReal,
+            sello_emisor: selloEmisor,
+            sello_sat: selloSat,
+            cadena_original: cadenaOriginal
+          })
+          .eq('id', factura.id);
+
+        if (supabaseError) throw supabaseError;
+        
+        alert(`🎉 ¡FACTURA TIMBRADA CON SELLOS!\n\nUUID: ${uuidReal}`);
         obtenerDatos(sesion.user.id);
       }
       
       else {
-        console.error("❌ RECHAZO API-LITE:", res);
-        // Si el servidor devolvió un error, aquí lo veremos detallado
-        const errorMsg = res.Message || JSON.stringify(res.ModelState) || "Error desconocido en API-Lite";
-        alert(`Rechazo del PAC (API-Lite):\n${errorMsg}`);
+        console.error("❌ ERROR:", res);
+        alert(`Error de Facturapi:\n${res.message || "Error desconocido"}`);
       }
     } catch (err) {
       console.error("Error de conexión:", err);
-      alert("Detalle del error:\n" + err.message);
+      alert("Error de red:\n" + err.message);
     } finally {
       setLoading(false);
     }
 };
 
-const generarFacturaPDF = (factura) => {
+const generarFacturaPDF = async (factura) => {
     const doc = new jsPDF('p', 'mm', 'a4');
     const clienteData = clientes.find(c => c.nombre === factura.cliente) || {};
 
+    // Matemáticas
     const total = Number(factura.monto_total);
     const subtotal = total / 1.16;
     const iva = subtotal * 0.16;
     const retencionIva = subtotal * 0.04;
     const totalFinal = subtotal + iva - retencionIva; 
     
+    // Estatus
     const esVencida = new Date(factura.fecha_vencimiento + 'T23:59:59') < new Date() && factura.estatus_pago !== 'Pagado';
     let etiquetaEstatus = factura.estatus_pago === 'Pagado' ? 'PAGADO' : (esVencida ? 'ATRASADO' : 'PENDIENTE');
     let colorEstatus = factura.estatus_pago === 'Pagado' ? [34, 197, 94] : (esVencida ? [239, 68, 68] : [249, 115, 22]);
 
-    // --- CABECERA ESTILO FEMA ---
-    doc.setDrawColor(200); doc.rect(14, 15, 35, 20);
+    // ==========================================
+    // 1. CABECERA (LOGO Y DATOS DEL EMISOR)
+    // ==========================================
+    doc.setDrawColor(200); 
+    doc.rect(14, 15, 35, 20); // Cuadro del logo
     doc.setFontSize(8); doc.setTextColor(150);
-    doc.text("ESPACIO\nPARA LOGO", 31.5, 24, { align: 'center' });
+    doc.text("LOGO\nEMPRESA", 31.5, 24, { align: 'center' });
 
-    doc.setTextColor(0, 0, 0); doc.setFontSize(14); doc.setFont("helvetica", "bold");
-    doc.text(`${perfilEmisor?.razon_social || 'EMPRESA DE TRANSPORTE SA DE CV'}`, 55, 20);
+    doc.setTextColor(0, 0, 0); 
+    doc.setFontSize(12); doc.setFont("helvetica", "bold");
+    doc.text(`${perfilEmisor?.razon_social || 'ESCUELA KEMPER URATE'}`, 55, 19);
     doc.setFontSize(8); doc.setFont("helvetica", "normal");
-    doc.text(`RFC: ${perfilEmisor?.rfc || 'XAXX010101000'}`, 55, 25);
-    doc.text(`Régimen Fiscal: ${perfilEmisor?.regimen_fiscal || '601'}`, 55, 29);
-    doc.text(`C.P. Emisión: ${perfilEmisor?.codigo_postal || '00000'}`, 55, 33);
+    doc.text(`RFC: ${perfilEmisor?.rfc || 'EKU9003173C9'}`, 55, 24);
+    doc.text(`Régimen Fiscal: ${perfilEmisor?.regimen_fiscal || '601 - General de Ley Personas Morales'}`, 55, 28);
+    doc.text(`Lugar de Expedición (C.P.): ${perfilEmisor?.codigo_postal || '65000'}`, 55, 32);
 
-    // Bloque derecho de Estatus y Folio
+    // ==========================================
+    // 2. BLOQUE DERECHO (FOLIO Y ESTATUS)
+    // ==========================================
     doc.setFillColor(colorEstatus[0], colorEstatus[1], colorEstatus[2]); 
-    doc.rect(145, 15, 51, 8, 'F');
+    doc.rect(135, 15, 61, 7, 'F');
     doc.setFontSize(9); doc.setFont("helvetica", "bold"); doc.setTextColor(255, 255, 255); 
-    doc.text(`FACTURA - ${etiquetaEstatus}`, 170.5, 20, { align: 'center' });
+    doc.text(`FACTURA CFDI 4.0 - ${etiquetaEstatus}`, 165.5, 20, { align: 'center' });
 
     doc.setTextColor(0); doc.setFontSize(8);
     autoTable(doc, {
-      startY: 23, margin: { left: 145, right: 14 },
+      startY: 22, margin: { left: 135, right: 14 },
       body: [
+        ['Serie y Folio:', `F - ${factura.id.toString().slice(0, 5)}`],
         ['Fecha Emisión:', factura.fecha_viaje || new Date().toLocaleDateString()],
-        ['Folio Fiscal (UUID):', factura.folio_fiscal || 'BORRADOR']
+        ['Uso CFDI:', clienteData.uso_cfdi || 'G03 - Gastos en general']
       ],
-      theme: 'plain', styles: { fontSize: 7, cellPadding: 1 }, columnStyles: { 0: { fontStyle: 'bold' }, 1: { halign: 'right' } }
+      theme: 'plain', styles: { fontSize: 7, cellPadding: 1 }, 
+      columnStyles: { 0: { fontStyle: 'bold', cellWidth: 25 }, 1: { halign: 'right' } }
     });
 
-    // --- DATOS DEL RECEPTOR ---
-    doc.setDrawColor(200); doc.line(14, 45, 196, 45);
-    doc.setFontSize(9); doc.setFont("helvetica", "bold"); doc.text("CLIENTE / FACTURAR A:", 14, 51);
+    // ==========================================
+    // 3. DATOS DEL RECEPTOR (CLIENTE)
+    // ==========================================
+    doc.setDrawColor(0); doc.setLineWidth(0.5);
+    doc.line(14, 42, 196, 42); // Línea separadora principal superior
+
+    doc.setFontSize(9); doc.setFont("helvetica", "bold"); 
+    doc.text("RECEPTOR (CLIENTE):", 14, 48);
     
     doc.setFontSize(9); doc.setFont("helvetica", "normal");
-    doc.text(factura.cliente, 14, 56);
+    doc.text(factura.cliente, 14, 53);
     doc.setFontSize(8);
-    doc.text(`RFC: ${clienteData.rfc || '---'} | Uso CFDI: ${clienteData.uso_cfdi || 'G03'}`, 14, 60);
-    doc.text(`Régimen: ${clienteData.regimen_fiscal || '---'} | C.P.: ${clienteData.codigo_postal || '---'}`, 14, 64);
+    doc.text(`RFC: ${clienteData.rfc || 'URE180429TM6'}`, 14, 58);
+    doc.text(`Régimen: ${clienteData.regimen_fiscal || '603'} | C.P.: ${clienteData.codigo_postal || '65000'}`, 14, 62);
 
     const diasCredito = clienteData.dias_credito || 0;
     const condicionPago = diasCredito > 0 ? `CRÉDITO A ${diasCredito} DÍAS` : "CONTADO";
-    doc.setFont("helvetica", "bold");
-    doc.text(`Condiciones de Pago: ${condicionPago}`, 120, 56);
-
-    // --- CONCEPTOS ---
-    autoTable(doc, {
-      startY: 75,
-      head: [['Cant.', 'Descripción / Concepto', 'Precio unitario', 'Importe']],
-      body: [['1', factura.ruta || 'Servicio de Autotransporte', `$${subtotal.toFixed(2)}`, `$${subtotal.toFixed(2)}`]],
-      theme: 'grid', headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold' },
-      styles: { fontSize: 8, cellPadding: 4 }, columnStyles: { 0: { halign: 'center', cellWidth: 20 }, 2: { halign: 'right', cellWidth: 40 }, 3: { halign: 'right', cellWidth: 40 } }
-    });
-
-    // --- OPCIONES FISCALES Y TOTALES ---
-    const finalY = doc.lastAutoTable.finalY + 10;
     
-    doc.setFontSize(9); doc.setFont("helvetica", "bold"); doc.text("Opciones Fiscales (CFDI 4.0):", 14, finalY);
-    doc.setFont("helvetica", "normal"); doc.setFontSize(8);
-    doc.text(`Método de Pago: ${factura.metodo_pago || 'PPD'}`, 14, finalY + 5);
-    doc.text(`Forma de Pago: ${factura.forma_pago || '99'}`, 14, finalY + 10);
-    doc.text(`Vencimiento: ${factura.fecha_vencimiento}`, 14, finalY + 15);
+    // Cuadro de condiciones de pago a la derecha
+    doc.setDrawColor(200); doc.setLineWidth(0.1);
+    doc.rect(120, 45, 76, 18);
+    doc.setFont("helvetica", "bold");
+    doc.text("DATOS DE PAGO:", 122, 50);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Condiciones: ${condicionPago}`, 122, 55);
+    doc.text(`Método: ${factura.metodo_pago || 'PPD'} | Forma: ${factura.forma_pago || '99'}`, 122, 60);
 
+    // ==========================================
+    // 4. TABLA DE CONCEPTOS (PARTIDAS)
+    // ==========================================
     autoTable(doc, {
-      startY: finalY - 5, margin: { left: 120 },
-      body: [
-        ['Subtotal', `$${subtotal.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`],
-        ['IVA (16%)', `$${iva.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`],
-        ['Retención IVA (4%)', `-$${retencionIva.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`],
-        ['Total Neto', `$${totalFinal.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`],
-      ],
-      theme: 'plain', styles: { fontSize: 9, cellPadding: 2 },
-      columnStyles: { 0: { fontStyle: 'bold', halign: 'right' }, 1: { halign: 'right' } },
-      didParseCell: function(data) { if (data.row.index === 3) data.cell.styles.fontStyle = 'bold'; }
+      startY: 68,
+      head: [['Clave SAT', 'Cant.', 'Unidad', 'Descripción / Concepto', 'Precio Unitario', 'Importe']],
+      body: [['78101802', '1', 'E48', factura.ruta || 'Servicio de flete nacional', `$${subtotal.toFixed(2)}`, `$${subtotal.toFixed(2)}`]],
+      theme: 'grid', 
+      headStyles: { fillColor: [40, 40, 40], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' },
+      styles: { fontSize: 8, cellPadding: 3 }, 
+      columnStyles: { 
+        0: { halign: 'center', cellWidth: 20 }, 
+        1: { halign: 'center', cellWidth: 12 },
+        2: { halign: 'center', cellWidth: 15 },
+        4: { halign: 'right', cellWidth: 30 }, 
+        5: { halign: 'right', cellWidth: 30 } 
+      }
     });
 
-    doc.setFontSize(8); doc.setTextColor(150);
-    doc.text("Este documento es una representación impresa de un CFDI de Ingreso.", 105, 280, { align: 'center' });
+    const finalY = doc.lastAutoTable.finalY;
 
-    doc.save(`Factura_${factura.cliente}_${factura.fecha_viaje}.pdf`);
-  };
+    // ==========================================
+    // 5. TOTALES Y MONEDA
+    // ==========================================
+    doc.setFontSize(8); doc.setFont("helvetica", "normal");
+    doc.text("Moneda: MXN - Peso Mexicano", 14, finalY + 8);
+    
+    // Cuadro de totales
+    autoTable(doc, {
+      startY: finalY + 2, margin: { left: 135, right: 14 },
+      body: [
+        ['Subtotal:', `$${subtotal.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`],
+        ['IVA Trasladado (16%):', `$${iva.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`],
+        ['Retención IVA (4%):', `-$${retencionIva.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`],
+        ['Total Neto:', `$${totalFinal.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`],
+      ],
+      theme: 'plain', styles: { fontSize: 8, cellPadding: 1.5 },
+      columnStyles: { 0: { fontStyle: 'bold', halign: 'right' }, 1: { halign: 'right' } },
+      didParseCell: function(data) { if (data.row.index === 3) { data.cell.styles.fontStyle = 'bold'; data.cell.styles.fontSize = 9; } }
+    });
+
+   // ==========================================
+    // 6. PIE DE PÁGINA FISCAL Y QR (El secreto del SAT)
+    // ==========================================
+    const footerY = 225; // Fijamos el pie de página al fondo de la hoja
+    doc.setDrawColor(0); doc.setLineWidth(0.5);
+    doc.line(14, footerY - 3, 196, footerY - 3);
+
+    // 1. EXTRAEMOS LOS DATOS REALES DE SUPABASE
+    const uuid = factura.folio_fiscal || '00000000-0000-0000-0000-000000000000';
+    const rfcEmisor = perfilEmisor?.rfc || 'EKU9003173C9';
+    const rfcReceptor = clienteData.rfc || 'URE180429TM6';
+    const totalStr = totalFinal.toFixed(6);
+
+    const selloEmisor = factura.sello_emisor || 'Timbre la factura para generar el sello digital.';
+    const selloSat = factura.sello_sat || 'Timbre la factura para generar el sello del SAT.';
+    const cadenaOriginal = factura.cadena_original || '||Timbre la factura para generar la cadena original.||';
+
+    // 2. EL TRUCO DEL QR: El SAT pide exactamente los últimos 8 caracteres del sello del emisor
+    const selloOcho = factura.sello_emisor ? factura.sello_emisor.slice(-8) : '00000000';
+
+// 3. GENERAMOS LA IMAGEN DEL QR (Convertida a formato PDF-friendly)
+    const qrUrl = `https://verificacfdi.facturaelectronica.sat.gob.mx/default.aspx?id=${uuid}&re=${rfcEmisor}&rr=${rfcReceptor}&tt=${totalStr}&fe=${selloOcho}`;
+    
+    // Cambiamos a esta API que es más rápida y amigable con las descargas
+    const apiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(qrUrl)}`;
+
+    // Función "mágica" que espera a que descargue la imagen y la vuelve código (Base64)
+    const cargarImagenBase64 = (url) => {
+      return new Promise((resolve, reject) => {
+        let img = new Image();
+        img.crossOrigin = 'Anonymous'; // Evita bloqueos de seguridad del navegador
+        img.onload = () => {
+          let canvas = document.createElement('canvas');
+          canvas.width = img.width;
+          canvas.height = img.height;
+          let ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0);
+          resolve(canvas.toDataURL('image/png'));
+        };
+        img.onerror = () => reject(new Error('Error cargando QR'));
+        img.src = url;
+      });
+    };
+
+    try {
+        // AHORA SÍ: Esperamos la imagen antes de ponerla en el PDF
+        const base64QR = await cargarImagenBase64(apiUrl);
+        doc.addImage(base64QR, 'PNG', 14, footerY, 35, 35);
+    } catch (e) {
+        console.error("No se pudo generar el QR", e);
+        doc.setDrawColor(200); doc.rect(14, footerY, 35, 35);
+        doc.text("QR", 31.5, footerY + 17, { align: 'center' });
+    }
+    // 4. IMPRIMIMOS LAS LETRAS CHIQUITAS (Usamos splitTextToSize para que no se salgan del margen)
+    let textoY = footerY + 3;
+    doc.setFontSize(6); 
+    
+    doc.setFont("helvetica", "bold");
+    doc.text("Folio Fiscal (UUID):", 52, textoY);
+    textoY += 3;
+    doc.setFont("helvetica", "normal");
+    doc.text(uuid, 52, textoY);
+    textoY += 4;
+
+    doc.setFont("helvetica", "bold");
+    doc.text("Sello Digital del Emisor:", 52, textoY);
+    textoY += 3;
+    doc.setFont("helvetica", "normal");
+    const lineasSelloEmisor = doc.splitTextToSize(selloEmisor, 140); // 140 es el ancho máximo
+    doc.text(lineasSelloEmisor, 52, textoY);
+    textoY += (lineasSelloEmisor.length * 2.5) + 1.5; // Calculamos el salto de línea automático
+
+    doc.setFont("helvetica", "bold");
+    doc.text("Sello Digital del SAT:", 52, textoY);
+    textoY += 3;
+    doc.setFont("helvetica", "normal");
+    const lineasSelloSat = doc.splitTextToSize(selloSat, 140);
+    doc.text(lineasSelloSat, 52, textoY);
+    textoY += (lineasSelloSat.length * 2.5) + 1.5;
+
+    doc.setFont("helvetica", "bold");
+    doc.text("Cadena Original del Complemento de Certificación:", 52, textoY);
+    textoY += 3;
+    doc.setFont("helvetica", "normal");
+    const lineasCadena = doc.splitTextToSize(cadenaOriginal, 140);
+    doc.text(lineasCadena, 52, textoY);
+
+    doc.setFontSize(7); doc.setTextColor(100);
+    doc.text("Este documento es una representación impresa de un CFDI 4.0 de Ingreso.", 105, 285, { align: 'center' });
+
+    doc.save(`Factura_${factura.cliente}_${factura.folio_fiscal?.slice(0,5) || 'Borrador'}.pdf`);
+};
 
   const registrarFactura = async (e) => {
     e.preventDefault();
