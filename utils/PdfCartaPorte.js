@@ -53,6 +53,19 @@ if (perfilEmisor?.logo_base64) {
   doc.text(`Uso CFDI: ${viaje.clientes?.uso_cfdi || 'G03'} | Régimen: ${viaje.clientes?.regimen_fiscal || '601'}`, 14, 62);
 
   // ==========================================
+  // Función ayudante para unir direcciones
+  // ==========================================
+  const formatDireccion = (obj) => {
+    if (!obj) return '---';
+    const parts = [];
+    if (obj.calle_numero) parts.push(obj.calle_numero);
+    if (obj.colonia) parts.push(`Col. ${obj.colonia}`);
+    if (obj.municipio) parts.push(obj.municipio);
+    // No metemos el estado aquí porque ya se imprime aparte en la línea de abajo
+    return parts.length > 0 ? parts.join(', ') : '---';
+  };
+
+  // ==========================================
   // 3. SECCIÓN: LOGÍSTICA (ORIGEN Y DESTINO)
   // ==========================================
   doc.setFillColor(245, 245, 245); doc.rect(14, 68, 182, 6, 'F');
@@ -65,7 +78,7 @@ if (perfilEmisor?.logo_base64) {
   
   // Origen
   doc.text(`Nombre/Ubicación: ${viaje.origen?.nombre_lugar || 'Domicilio Conocido'}`, 14, yLog);
-  const dirO = doc.splitTextToSize(`Dirección: ${viaje.origen?.direccion || '---'}`, 85);
+  const dirO = doc.splitTextToSize(`Dirección: ${formatDireccion(viaje.origen)}`, 85);
   doc.text(dirO, 14, yLog + 4);
   const saltoO = dirO.length * 4;
   doc.text(`C.P.: ${viaje.origen?.codigo_postal || '00000'} | Estado: ${viaje.origen?.estado || 'NLE'}`, 14, yLog + saltoO + 4);
@@ -73,7 +86,7 @@ if (perfilEmisor?.logo_base64) {
   
   // Destino
   doc.text(`Nombre/Ubicación: ${viaje.destino?.nombre_lugar || 'Domicilio Conocido'}`, 110, yLog);
-  const dirD = doc.splitTextToSize(`Dirección: ${viaje.destino?.direccion || '---'}`, 85);
+  const dirD = doc.splitTextToSize(`Dirección: ${formatDireccion(viaje.destino)}`, 85);
   doc.text(dirD, 110, yLog + 4);
   const saltoD = dirD.length * 4;
   doc.text(`C.P.: ${viaje.destino?.codigo_postal || '00000'} | Estado: ${viaje.destino?.estado || 'TAM'}`, 110, yLog + saltoD + 4);

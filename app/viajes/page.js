@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import { 
-  Truck, User, MapPin, Package, PlusCircle, Trash2, FileText, Navigation, Receipt, ShieldCheck, DollarSign, Loader2, Edit2, XCircle, X,
+  Truck, User, MapPin, Package, PlusCircle, Trash2, FileText, Navigation, Receipt, ShieldCheck, DollarSign, Loader2, Edit2, XCircle, FileCode, X,
 } from 'lucide-react';
 import Sidebar from '@/components/sidebar';
 import { generarPDFCartaPorte } from '@/utils/PdfCartaPorte'; 
@@ -103,108 +103,179 @@ export default function ViajesPage() {
     finally { setLoading(false); }
   };
 
-  // ==========================================
-  // NUEVO: CANCELACIÓN OFICIAL DE CARTA PORTE
-  // ==========================================
   const cancelarViaje = async (viaje) => {
     if (!confirm("¿Estás seguro de CANCELAR esta Carta Porte? Se enviará la petición al SAT y la factura quedará invalidada.")) return;
-    
     setLoading(true);
     try {
-      // 1. Buscamos la factura asociada para obtener su ID de Facturapi
       const { data: factura } = await supabase.from('facturas').select('facturapi_id').eq('viaje_id', viaje.id).single();
-
-      // 2. Si existe en Facturapi, la cancelamos vía API (Motivo 02: Errores sin relación)
       if (factura && factura.facturapi_id) {
         const facturapiKey = "sk_test_sBNjdoZ5A1UcJVmQ2KUisCQBpiD8MPFecYABBhRYci";
-        const response = await fetch(`https://www.facturapi.io/v2/invoices/${factura.facturapi_id}?motive=02`, {
-          method: 'DELETE',
-          headers: { 'Authorization': `Bearer ${facturapiKey}` }
-        });
-        
-        if (!response.ok) {
-          const err = await response.json();
-          console.error("Error API:", err);
-          // Si el sandbox ya la borró antes, no detenemos el proceso local
-        }
+        await fetch(`https://www.facturapi.io/v2/invoices/${factura.facturapi_id}?motive=02`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${facturapiKey}` }});
       }
-
-      // 3. Actualizamos nuestra Base de Datos a estatus Cancelado
       await supabase.from('viajes').update({ estatus: 'Cancelado' }).eq('id', viaje.id);
       await supabase.from('facturas').update({ estatus_pago: 'Cancelada' }).eq('viaje_id', viaje.id);
-
       alert("✅ Carta Porte CANCELADA exitosamente.");
       obtenerViajes(sesion.user.id);
+    } catch (error) { alert("Error al cancelar: " + error.message); } finally { setLoading(false); }
+  };
 
-    } catch (error) {
-      alert("Error al cancelar: " + error.message);
+  // ==========================================
+  // NUEVA FUNCIÓN: DESCARGAR XML DESDE FACTURAPI
+  // ==========================================
+  const descargarXML = async (viajeId) => {
+    setLoading(true);
+    try {
+      const { data: factura } = await supabase.from('facturas').select('facturapi_id').eq('viaje_id', viajeId).single();
+      if (!factura || !factura.facturapi_id) throw new Error("No se encontró el registro de esta factura en el sistema.");
+
+      const facturapiKey = "sk_test_sBNjdoZ5A1UcJVmQ2KUisCQBpiD8MPFecYABBhRYci";
+      const response = await fetch(`https://www.facturapi.io/v2/invoices/${factura.facturapi_id}/xml`, {
+        method: 'GET',
+        headers: { 'Authorization': `Bearer ${facturapiKey}` }
+      });
+
+      if (!response.ok) throw new Error("No se pudo descargar el XML del SAT.");
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `CartaPorte_${factura.facturapi_id}.xml`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } catch (err) {
+      alert(err.message);
     } finally {
       setLoading(false);
     }
   };
 
-  const traducirErrorFacturapi = (err) => { 
-    if (String(err).includes("ConfigVehicular")) return "🚨 ERROR EN UNIDAD: Revisa que la Configuración Vehicular sea una clave válida del SAT (Ej: T3S2, C2, VL) y no un texto descriptivo.";
-    return `❌ Error del SAT: ${err}`; 
+  const traducirErrorFacturapi = (err) => {
+    const errorStr = typeof err === 'object' ? JSON.stringify(err).toLowerCase() : String(err).toLowerCase();
+    
+    if (errorStr.includes("legal_name") || errorStr.includes("nombre")) return "🚨 NOMBRE INCORRECTO: Escríbelo exactamente como en la Constancia Fiscal (sin S.A. de C.V.).";
+    if (errorStr.includes("zip") || errorStr.includes("postal")) return "🚨 CÓDIGO POSTAL: El CP del cliente o ubicación no coincide con el RFC en el SAT.";
+    if (errorStr.includes("tax_system") || errorStr.includes("regimen")) return "🚨 RÉGIMEN FISCAL: El régimen del cliente no es correcto según su constancia.";
+    if (errorStr.includes("tax_id") || errorStr.includes("rfc")) return "🚨 RFC INVÁLIDO: Verifica que los RFC no tengan espacios o errores.";
+    if (errorStr.includes("configvehicular")) return "🚨 ERROR EN UNIDAD: La Configuración Vehicular debe ser una clave del SAT (Ej: T3S2) y no texto.";
+    if (errorStr.includes("placa")) return "🚨 PLACAS INVÁLIDAS: Revisa que las placas de la unidad no tengan guiones ni espacios.";
+    if (errorStr.includes("peso") || errorStr.includes("weight")) return "🚨 ERROR DE PESO: Verifica que el peso en la mercancía sea mayor a 0.";
+    if (errorStr.includes("unidadpeso") || errorStr.includes("claveunidad")) return "🚨 CLAVE DE EMBALAJE: Verifica el embalaje seleccionado.";
+    if (errorStr.includes("permisosct") || errorStr.includes("numpermiso")) return "🚨 PERMISO SCT: Faltan datos del permiso SCT de la unidad.";
+    if (errorStr.includes("fecha") || errorStr.includes("date")) return "🚨 FECHA INVÁLIDA: La fecha de salida no es válida.";
+    if (errorStr.includes("catalog key") || errorStr.includes("bienestransp")) return "🚨 CLAVE SAT INVÁLIDA: El código de la mercancía no existe. Recuerda que debe ser un número de 8 dígitos del catálogo oficial del SAT.";
+    if (errorStr.includes("ubicaciones") && errorStr.includes("estado")) return "🚨 ESTADO FALTANTE: Falta la clave del Estado (Ej: NLE, CMX, JAL) en la ubicación de Origen o Destino. Edítala en Configuración SAT.";
+
+    if (typeof err === 'object' && err.message) return `❌ El SAT rechazó el timbrado:\n${err.message}`;
+    return `❌ Error técnico:\n${typeof err === 'object' ? JSON.stringify(err) : err}`;
   };
 
   const timbrarCartaPorte = async (viaje) => {
-    const facturapiKey = "sk_test_sBNjdoZ5A1UcJVmQ2KUisCQBpiD8MPFecYABBhRYci"; 
-    const subtotal = Number((Number(viaje.monto_flete || 0) / 1.16).toFixed(2));
-
-    const arregloMercanciasFacturapi = (viaje.mercancias_detalle || []).map((item) => {
-      return {
-        BienesTransp: item.clave_sat || "31181701", Descripcion: item.descripcion || "Mercancia general",        
-        Cantidad: parseFloat(item.cantidad) || 1, ClaveUnidad: item.embalaje || "4G",           
-        PesoEnKg: parseFloat(item.peso_kg) || 1, MaterialPeligroso: item.material_peligroso ? "Sí" : "No"
-      };
-    });
-
-    const invoiceData = {
-      type: "I",
-      customer: {
-        legal_name: viaje.clientes?.nombre || "PÚBLICO EN GENERAL",
-        tax_id: (viaje.clientes?.rfc && viaje.clientes.rfc.trim() !== '') ? viaje.clientes.rfc.trim() : "XAXX010101000",
-        tax_system: "616", address: { zip: viaje.clientes?.codigo_postal || "65000" }
-      },
-      items: [{ quantity: 1, product: { description: "Flete", product_key: "78101802", price: subtotal, taxes: [{ type: "IVA", rate: 0.16 }, { type: "IVA", rate: 0.04, withholding: true }] } }],
-      payment_form: "99", payment_method: "PPD", use: "G03",
-      complements: [{
-        type: "carta_porte",
-        data: {
-          IdCCP: viaje.id_ccp, TranspInternac: "No", TotalDistRec: parseFloat(viaje.distancia_km || 150),
-          Ubicaciones: [
-            { TipoUbicacion: "Origen", RFCRemitenteDestinatario: viaje.origen?.rfc_ubicacion || perfilEmisor?.rfc, FechaHoraSalidaLlegada: `${viaje.fecha_salida}T08:00:00`, Domicilio: { Calle: viaje.origen?.nombre_lugar, Estado: viaje.origen?.estado || "NLE", Pais: "MEX", CodigoPostal: viaje.origen?.codigo_postal } },
-            { TipoUbicacion: "Destino", RFCRemitenteDestinatario: viaje.destino?.rfc_ubicacion || viaje.clientes?.rfc || "XAXX010101000", DistanciaRecorrida: parseFloat(viaje.distancia_km || 150), FechaHoraSalidaLlegada: `${viaje.fecha_salida}T20:00:00`, Domicilio: { Calle: viaje.destino?.nombre_lugar, Estado: viaje.destino?.estado || "TAM", Pais: "MEX", CodigoPostal: viaje.destino?.codigo_postal } }
-          ],
-          Mercancias: {
-            PesoBrutoTotal: calcularPesoTotal() || parseFloat(viaje.peso_total_kg || 1000), 
-            UnidadPeso: "KGM", NumTotalMercancias: arregloMercanciasFacturapi.length || 1, Mercancia: arregloMercanciasFacturapi, 
-            Autotransporte: {
-              PermSCT: viaje.unidades?.permiso_sict || "TPAF01", NumPermisoSCT: viaje.unidades?.num_permiso_sict || "S/N",
-              IdentificacionVehicular: { 
-                ConfigVehicular: viaje.unidades?.configuracion_vehicular?.trim().toUpperCase() || "T3S2", 
-                PlacaVM: viaje.unidades?.placas?.replace(/[- ]/g, '') || "AAA000", AnioModeloVM: viaje.unidades?.anio_modelo || "2020", PesoBrutoVehicular: parseFloat(viaje.unidades?.peso_bruto_maximo || 30.00) 
-              },
-              Seguros: { AseguraRespCivil: viaje.unidades?.aseguradora_rc || "QUALITAS", PolizaRespCivil: viaje.unidades?.poliza_rc || "12345" }
-            }
-          },
-          FiguraTransporte: [{ TipoFigura: "01", RFCFigura: viaje.operadores?.rfc || "XAXX010101000", NumLicencia: viaje.operadores?.numero_licencia, NombreFigura: viaje.operadores?.nombre_completo }]
-        }
-      }]
-    };
-
-    setLoading(true);
     try {
+      if (!viaje.clientes?.rfc) throw new Error("Falta el RFC del Cliente. Revisa el catálogo de Clientes.");
+      if (!viaje.clientes?.codigo_postal) throw new Error("Falta el Código Postal del Cliente.");
+      if (!viaje.clientes?.regimen_fiscal) throw new Error("Falta el Régimen Fiscal del Cliente.");
+
+      const rfcOrigen = viaje.origen?.rfc_ubicacion || perfilEmisor?.rfc;
+      const rfcDestino = viaje.destino?.rfc_ubicacion || viaje.clientes?.rfc;
+      
+      if (!rfcOrigen) throw new Error(`Falta el RFC de la ubicación de origen: ${viaje.origen?.nombre_lugar}`);
+      if (!rfcDestino) throw new Error(`Falta el RFC de la ubicación de destino: ${viaje.destino?.nombre_lugar}`);
+      if (!viaje.origen?.codigo_postal) throw new Error(`Falta el C.P. en el origen: ${viaje.origen?.nombre_lugar}`);
+      if (!viaje.destino?.codigo_postal) throw new Error(`Falta el C.P. en el destino: ${viaje.destino?.nombre_lugar}`);
+      if (!viaje.origen?.estado) throw new Error(`Falta el Estado (Ej: NLE) en el origen: ${viaje.origen?.nombre_lugar}`);
+      if (!viaje.destino?.estado) throw new Error(`Falta el Estado (Ej: TAM) en el destino: ${viaje.destino?.nombre_lugar}`);
+
+      const u = viaje.unidades;
+      if (!u?.permiso_sict) throw new Error(`La unidad ${u?.numero_economico} NO tiene Tipo de Permiso SCT (Ej: TPAF01).`);
+      if (!u?.num_permiso_sict) throw new Error(`La unidad ${u?.numero_economico} NO tiene Número de Permiso SCT.`);
+      if (!u?.configuracion_vehicular) throw new Error(`La unidad ${u?.numero_economico} NO tiene Configuración Vehicular (Ej: T3S2).`);
+      if (!u?.placas) throw new Error(`La unidad ${u?.numero_economico} NO tiene Placas registradas.`);
+      if (!u?.anio_modelo) throw new Error(`La unidad ${u?.numero_economico} NO tiene Año Modelo.`);
+      if (!u?.aseguradora_rc) throw new Error(`La unidad ${u?.numero_economico} NO tiene Aseguradora registrada.`);
+      if (!u?.poliza_rc) throw new Error(`La unidad ${u?.numero_economico} NO tiene Póliza de Seguro registrada.`);
+
+      const op = viaje.operadores;
+      if (!op?.rfc) throw new Error(`El operador ${op?.nombre_completo} NO tiene RFC registrado.`);
+      if (!op?.numero_licencia) throw new Error(`El operador ${op?.nombre_completo} NO tiene Número de Licencia.`);
+
+      const arregloMercanciasFacturapi = (viaje.mercancias_detalle || []).map((item, index) => {
+        if (!item.clave_sat) throw new Error(`Falta la Clave SAT en el producto #${index + 1}`);
+        if (!item.descripcion) throw new Error(`Falta la Descripción en el producto #${index + 1}`);
+        if (!item.embalaje) throw new Error(`Falta el Embalaje (Clave Unidad) en el producto #${index + 1}`);
+        if (!item.peso_kg || parseFloat(item.peso_kg) <= 0) throw new Error(`Falta el Peso (KG) en el producto #${index + 1}`);
+
+        return {
+          BienesTransp: item.clave_sat,         
+          Descripcion: item.descripcion,        
+          Cantidad: parseFloat(item.cantidad),  
+          ClaveUnidad: item.embalaje,           
+          PesoEnKg: parseFloat(item.peso_kg),
+          MaterialPeligroso: item.material_peligroso ? "Sí" : "No"
+        };
+      });
+
+      setLoading(true);
+      
+      const facturapiKey = "sk_test_sBNjdoZ5A1UcJVmQ2KUisCQBpiD8MPFecYABBhRYci"; 
+      const subtotal = Number((Number(viaje.monto_flete || 0) / 1.16).toFixed(2));
+
+      const invoiceData = {
+        type: "I",
+        customer: {
+          legal_name: viaje.clientes.nombre,
+          tax_id: viaje.clientes.rfc,
+          tax_system: viaje.clientes.regimen_fiscal, 
+          address: { zip: viaje.clientes.codigo_postal }
+        },
+        items: [{ 
+          quantity: 1, 
+          product: { description: "Servicio de Transporte Nacional", product_key: "78101802", price: subtotal, taxes: [{ type: "IVA", rate: 0.16 }, { type: "IVA", rate: 0.04, withholding: true }] } 
+        }],
+        payment_form: "99", payment_method: "PPD", use: viaje.clientes.uso_cfdi || "G03",
+        complements: [{
+          type: "carta_porte",
+          data: {
+            IdCCP: viaje.id_ccp, TranspInternac: "No", TotalDistRec: parseFloat(viaje.distancia_km || 150),
+            Ubicaciones: [
+              { TipoUbicacion: "Origen", RFCRemitenteDestinatario: rfcOrigen, FechaHoraSalidaLlegada: `${viaje.fecha_salida}T08:00:00`, Domicilio: { Calle: viaje.origen.nombre_lugar, Estado: viaje.origen.estado, Pais: "MEX", CodigoPostal: viaje.origen.codigo_postal } },
+              { TipoUbicacion: "Destino", RFCRemitenteDestinatario: rfcDestino, DistanciaRecorrida: parseFloat(viaje.distancia_km || 150), FechaHoraSalidaLlegada: `${viaje.fecha_salida}T20:00:00`, Domicilio: { Calle: viaje.destino.nombre_lugar, Estado: viaje.destino.estado, Pais: "MEX", CodigoPostal: viaje.destino.codigo_postal } }
+            ],
+            Mercancias: {
+              PesoBrutoTotal: calcularPesoTotal(), UnidadPeso: "KGM", NumTotalMercancias: arregloMercanciasFacturapi.length, Mercancia: arregloMercanciasFacturapi, 
+              Autotransporte: {
+                PermSCT: u.permiso_sict, NumPermisoSCT: u.num_permiso_sict,
+                IdentificacionVehicular: { ConfigVehicular: u.configuracion_vehicular.trim().toUpperCase(), PlacaVM: u.placas.replace(/[- ]/g, ''), AnioModeloVM: u.anio_modelo.toString(), PesoBrutoVehicular: parseFloat(u.peso_bruto_maximo || 30.00) },
+                Seguros: { AseguraRespCivil: u.aseguradora_rc, PolizaRespCivil: u.poliza_rc }
+              }
+            },
+            FiguraTransporte: [{ TipoFigura: "01", RFCFigura: op.rfc, NumLicencia: op.numero_licencia, NombreFigura: op.nombre_completo }]
+          }
+        }]
+      };
+
       const response = await fetch('https://www.facturapi.io/v2/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${facturapiKey}` }, body: JSON.stringify(invoiceData) });
       const res = await response.json();
+      
       if (response.ok) {
         await supabase.from('viajes').update({ estatus: 'Emitido (Timbrado)', folio_fiscal: res.uuid, id_ccp: res.complements?.[0]?.data?.IdCCP || "Generado", sello_emisor: res.stamp?.signature, sello_sat: res.stamp?.sat_signature, cadena_original: res.stamp?.complement_string }).eq('id', viaje.id);
-        await supabase.from('facturas').update({ estatus_pago: 'Pendiente', facturapi_id: res.id, folio_fiscal: res.uuid }).eq('viaje_id', viaje.id);
+// Ahora sí, le pasamos los sellos también a la factura comercial
+        await supabase.from('facturas').update({ 
+          estatus_pago: 'Pendiente', 
+          facturapi_id: res.id, 
+          folio_fiscal: res.uuid,
+          sello_emisor: res.stamp?.signature, 
+          sello_sat: res.stamp?.sat_signature, 
+          cadena_original: res.stamp?.complement_string
+        }).eq('viaje_id', viaje.id);
         alert(`🎉 ¡CARTA PORTE TIMBRADA!\nUUID: ${res.uuid}`);
         obtenerViajes(sesion.user.id);
-      } else alert(traducirErrorFacturapi(res.message || JSON.stringify(res)));
-    } catch (err) { alert("Error de red"); } finally { setLoading(false); }
+      } else {
+        alert(traducirErrorFacturapi(res));
+      }
+
+    } catch (err) { alert(err.message); } finally { setLoading(false); }
   };
 
   const registrarViaje = async (e) => {
@@ -240,11 +311,12 @@ export default function ViajesPage() {
         const nuevoIdCCP = generarIdCCP();
         const { data: maxFolioData } = await supabase.from('viajes').select('folio_interno').eq('usuario_id', sesion.user.id).order('folio_interno', { ascending: false }).limit(1);
         let nuevoFolio = (maxFolioData?.[0]?.folio_interno || 0) + 1;
+
         const { data: nuevoViaje } = await supabase.from('viajes').insert([{ ...payloadComun, folio_interno: nuevoFolio, id_ccp: nuevoIdCCP, estatus: 'Borrador' }]).select().single();
 
         if (formData.monto_flete > 0 && formData.cliente_id) {
           const fechaVenc = new Date(formData.fecha_salida); fechaVenc.setDate(fechaVenc.getDate() + (clienteObj?.dias_credito || 0));
-          await supabase.from('facturas').insert([{ usuario_id: sesion.user.id, viaje_id: nuevoViaje.id, cliente: clienteObj.nombre, monto_total: parseFloat(formData.monto_flete), fecha_viaje: formData.fecha_salida, fecha_vencimiento: fechaVenc.toISOString().split('T')[0], estatus_pago: 'Pendiente', ruta: `Flete CCP (Multi-Carga)` }]);
+          await supabase.from('facturas').insert([{ usuario_id: sesion.user.id, viaje_id: nuevoViaje.id, cliente: clienteObj.nombre, monto_total: parseFloat(formData.monto_flete), fecha_viaje: formData.fecha_salida, fecha_vencimiento: fechaVenc.toISOString().split('T')[0], estatus_pago: 'Pendiente', ruta: `Flete CCP` }]);
         }
       }
 
@@ -288,36 +360,55 @@ export default function ViajesPage() {
                       </p>
                     </div>
                     
+                    {/* ==============================================
+                        LÓGICA VISUAL DE BOTONES (AQUÍ ESTÁ LA MAGIA)
+                        ============================================== */}
                     <div className="flex gap-2 ml-auto opacity-0 group-hover:opacity-100 transition-all">
                       
-                      {/* BOTONES SI ESTÁ EN BORRADOR */}
+                      {/* 🟢 SI ESTÁ EN BORRADOR: Timbrar, Editar, Eliminar */}
                       {v.estatus === 'Borrador' && (
                         <>
-                          <button onClick={() => timbrarCartaPorte(v)} disabled={loading} title="Timbrar Carta Porte" className="p-3 bg-blue-600/10 text-blue-500 hover:bg-blue-600 hover:text-white border border-blue-500/20 rounded-xl">
+                          <button onClick={() => timbrarCartaPorte(v)} disabled={loading} title="Timbrar Carta Porte" className="p-3 bg-blue-600/10 text-blue-500 hover:bg-blue-600 hover:text-white border border-blue-500/20 rounded-xl transition-colors">
                             {loading ? <Loader2 size={18} className="animate-spin"/> : <ShieldCheck size={18}/>}
                           </button>
-                          <button onClick={() => editarViaje(v)} title="Editar Viaje" className="p-3 bg-orange-500/10 text-orange-400 hover:bg-orange-500 hover:text-white rounded-xl transition-colors"><Edit2 size={18}/></button>
+                          <button onClick={() => editarViaje(v)} title="Editar Viaje" className="p-3 bg-orange-500/10 text-orange-400 hover:bg-orange-500 hover:text-white rounded-xl transition-colors">
+                            <Edit2 size={18}/>
+                          </button>
+                          <button onClick={() => eliminarViaje(v.id)} title="Eliminar Viaje" className="p-3 bg-slate-800 text-slate-400 hover:text-red-500 hover:bg-red-500/10 rounded-xl transition-colors">
+                            <Trash2 size={18}/>
+                          </button>
                         </>
                       )}
 
-                      {/* BOTONES SI ESTÁ TIMBRADO */}
+                      {/* 🔵 SI ESTÁ TIMBRADO: Factura, XML, Carta Porte, Cancelar */}
                       {v.estatus === 'Emitido (Timbrado)' && (
-                        <button onClick={() => cancelarViaje(v)} disabled={loading} title="Cancelar Carta Porte en el SAT" className="p-3 bg-red-600/10 text-red-500 hover:bg-red-600 hover:text-white border border-red-500/20 rounded-xl">
-                           <XCircle size={18}/>
-                        </button>
+                        <>
+                          <button onClick={() => router.push(`/facturas?viaje_id=${v.id}`)} title="Ver Factura (PDF Comercial)" className="p-3 bg-green-600/10 text-green-500 hover:bg-green-600 hover:text-white rounded-xl transition-colors">
+                            <Receipt size={18}/>
+                          </button>
+                        
+                          <button onClick={() => generarPDFCartaPorte(v, perfilEmisor)} title="Descargar Carta Porte (PDF SCT)" className="p-3 bg-blue-900 text-white-300 hover:bg-blue-400 hover:text-white rounded-xl transition-colors">
+                            <FileText size={18}/>
+                          </button>
+                          
+                          <button onClick={() => cancelarViaje(v)} disabled={loading} title="Cancelar Carta Porte en el SAT" className="p-3 bg-red-600/10 text-red-500 hover:bg-red-600 hover:text-white border border-red-500/20 rounded-xl transition-colors">
+                             <XCircle size={18}/>
+                          </button>
+                        </>
                       )}
 
-                      {/* BOTONES COMUNES */}
-                      <button onClick={() => router.push(`/facturas?viaje_id=${v.id}`)} title="Ver Factura" className="p-3 bg-green-600/10 text-green-500 hover:bg-green-600 hover:text-white rounded-xl"><Receipt size={18}/></button>
-                      <button onClick={() => generarPDFCartaPorte(v, perfilEmisor)} title="Descargar PDF" className="p-3 bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white rounded-xl"><FileText size={18}/></button>
-
-                      {/* ELIMINAR SOLO DISPONIBLE PARA BORRADORES O CANCELADOS */}
-                      {(v.estatus === 'Borrador' || v.estatus === 'Cancelado') && (
-                        <button onClick={() => eliminarViaje(v.id)} title="Eliminar Viaje" className="p-3 bg-slate-800 text-slate-400 hover:text-red-500 hover:bg-red-500/10 rounded-xl transition-colors">
-                          <Trash2 size={18}/>
-                        </button>
+                      {/* 🔴 SI ESTÁ CANCELADO: Solo ver PDF y Eliminar de la base de datos */}
+                      {v.estatus === 'Cancelado' && (
+                        <>
+                          <button onClick={() => generarPDFCartaPorte(v, perfilEmisor)} title="Ver Carta Porte Cancelada" className="p-3 bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white rounded-xl transition-colors">
+                            <FileText size={18}/>
+                          </button>
+                          <button onClick={() => eliminarViaje(v.id)} title="Eliminar Registro Permanente" className="p-3 bg-slate-800 text-slate-400 hover:text-red-500 hover:bg-red-500/10 rounded-xl transition-colors">
+                            <Trash2 size={18}/>
+                          </button>
+                        </>
                       )}
-                      
+
                     </div>
                   </div>
                 </div>
