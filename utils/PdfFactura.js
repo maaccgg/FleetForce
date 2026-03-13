@@ -25,10 +25,33 @@ export const generarFacturaPDF = async (factura, clienteData, perfilEmisor) => {
   let etiquetaEstatus = factura.estatus_pago === 'Pagado' ? 'PAGADO' : (esVencida ? 'ATRASADO' : 'PENDIENTE');
   let colorEstatus = factura.estatus_pago === 'Pagado' ? [34, 197, 94] : (esVencida ? [239, 68, 68] : [249, 115, 22]);
 
-  const fechaCreacion = factura.created_at ? new Date(factura.created_at) : new Date();
-  const horaFormateada = fechaCreacion.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  const fechaImpresion = `${factura.fecha_viaje || fechaCreacion.toLocaleDateString('es-MX')} a las ${horaFormateada}`;
+  // ==========================================
+  // LÓGICA DE HORA EXACTA (EXTRAÍDA DEL SAT)
+  // ==========================================
+  let fechaImpresion = `${factura.fecha_viaje || 'Borrador'}`;
 
+  // Extraemos la fecha y hora oficial directamente dentro de la Cadena Original del SAT
+  if (factura.cadena_original && factura.cadena_original.includes('T')) {
+    const partesCadena = factura.cadena_original.split('|');
+    // Buscamos el fragmento que parezca una fecha (Ej: 2024-03-12T14:35:10)
+    const fechaTimbre = partesCadena.find(p => p.includes('T') && p.includes('-') && p.includes(':'));
+    
+    if (fechaTimbre) {
+      const dateObj = new Date(fechaTimbre);
+      const hora = dateObj.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      const dia = dateObj.toLocaleDateString('es-MX');
+      fechaImpresion = `${dia} a las ${hora} hrs`;
+    }
+  } else if (factura.created_at) {
+    // Respaldo por si es un borrador sin timbrar
+    const fechaCreacion = new Date(factura.created_at);
+    const horaFormateada = fechaCreacion.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    fechaImpresion = `${factura.fecha_viaje || fechaCreacion.toLocaleDateString('es-MX')} a las ${horaFormateada}`;
+  }
+
+  // ==============================
+  // CABECERA Y LOGO
+  // ==============================
   if (perfilEmisor?.logo_base64) {
     const formato = perfilEmisor.logo_base64.includes('image/png') ? 'PNG' : 'JPEG';
     doc.addImage(perfilEmisor.logo_base64, formato, 14, 15, 35, 20);
@@ -62,7 +85,7 @@ export const generarFacturaPDF = async (factura, clienteData, perfilEmisor) => {
     startY: 22, margin: { left: 135, right: 14 },
     body: [
       ['Serie y Folio:', `F - ${factura.id.toString().slice(0, 5)}`],
-      ['Fecha Emisión:', fechaImpresion],
+      ['Fecha Emisión:', fechaImpresion], // <-- Aquí se imprime la hora oficial del SAT
       ['Uso CFDI:', clienteData?.uso_cfdi || 'G03 - Gastos en general']
     ],
     theme: 'plain', styles: { fontSize: 7, cellPadding: 1 }, 
@@ -100,25 +123,25 @@ export const generarFacturaPDF = async (factura, clienteData, perfilEmisor) => {
   doc.text(`Método: ${factura.metodo_pago || 'PPD'} | Forma: ${factura.forma_pago || '99'}`, 122, yReceptor + 12);
 
   let startYTabla = yReceptor + 14 + (lineasDirReceptor.length * 3.5) + 5;
-const subtotalFormateado = subtotal.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
-autoTable(doc, {
+  // Formateamos el subtotal para que SIEMPRE lleve la coma de los miles
+  const subtotalFormateado = subtotal.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
+  autoTable(doc, {
     startY: startYTabla,
-    head: [['Clave SAT', 'Cantidad', 'Unidad', 'Descripción / Concepto', 'Precio Unitario', 'Importe']],
-    // 2. Usamos el subtotal ya formateado con sus comas
+    head: [['Clave SAT', 'Cant.', 'Unidad', 'Descripción / Concepto', 'Precio Unitario', 'Importe']],
     body: [['78101802', '1', 'E48', factura.ruta || 'Servicio de flete nacional', `$${subtotalFormateado}`, `$${subtotalFormateado}`]],
     theme: 'grid', 
     headStyles: { fillColor: [40, 40, 40], textColor: [255, 255, 255], fontStyle: 'bold' },
     styles: { fontSize: 8, cellPadding: 3 }, 
     columnStyles: { 
       0: { halign: 'center', cellWidth: 20 }, 
-      1: { halign: 'center', cellWidth: 20 },
-      2: { halign: 'center', cellWidth: 20 },
-      3: { halign: 'center' }, // La descripción se ve mejor alineada a la izquierda
+      1: { halign: 'center', cellWidth: 12 },
+      2: { halign: 'center', cellWidth: 15 },
+      3: { halign: 'left' }, 
       4: { halign: 'right', cellWidth: 30 }, 
       5: { halign: 'right', cellWidth: 30 } 
     },
-    // 3. Este truco alinea los títulos de las últimas dos columnas a la derecha, igual que los números
     willDrawCell: function(data) {
       if (data.section === 'head' && (data.column.index === 4 || data.column.index === 5)) {
         data.cell.styles.halign = 'right';
@@ -183,7 +206,7 @@ autoTable(doc, {
       doc.addImage(base64QR, 'PNG', 14, footerY, 35, 35);
   } catch (e) {
       doc.setDrawColor(200); doc.rect(14, footerY, 35, 35);
-      doc.text("QR", 31.5, footerY + 17, { align: 'center' });
+      doc.text("QR SAT", 31.5, footerY + 17, { align: 'center' });
   }
   
   let textoY = footerY + 3;

@@ -19,7 +19,7 @@ export default function UnidadesPage() {
     placas: '',
     permiso_sict: 'TPAF01',
     num_permiso_sict: '',
-    configuracion_vehicular: 'T3S1',
+    configuracion_vehicular: '',
     anio_modelo: '',
     aseguradora_rc: '',
     poliza_rc: ''
@@ -74,7 +74,7 @@ export default function UnidadesPage() {
       placas: u.placas || '',
       permiso_sict: u.permiso_sict || 'TPAF01',
       num_permiso_sict: u.num_permiso_sict || '',
-      configuracion_vehicular: u.configuracion_vehicular || 'T3S1',
+      configuracion_vehicular: u.configuracion_vehicular || '',
       anio_modelo: u.anio_modelo || '',
       aseguradora_rc: u.aseguradora_rc || '', // Si es null, usa ''
       poliza_rc: u.poliza_rc || ''            // Si es null, usa ''
@@ -87,7 +87,7 @@ export default function UnidadesPage() {
     setEditandoId(null);
     setFormData({ 
       numero_economico: '', placas: '', permiso_sict: 'TPAF01', 
-      num_permiso_sict: '', configuracion_vehicular: 'T3S1', 
+      num_permiso_sict: '', configuracion_vehicular: '', 
       anio_modelo: '', aseguradora_rc: '', poliza_rc: '' 
     });
   };
@@ -162,11 +162,20 @@ export default function UnidadesPage() {
                       value={formData.placas} onChange={e => setFormData({...formData, placas: e.target.value})} />
                     <input placeholder="Año Modelo (Ej: 2022)" className="bg-slate-900 border border-slate-800 p-4 rounded-xl text-sm text-white"
                       value={formData.anio_modelo} onChange={e => setFormData({...formData, anio_modelo: e.target.value})} />
-                    <select className="bg-slate-900 border border-slate-800 p-4 rounded-xl text-sm text-white font-bold"
+                    
+                    {/* 👇 AQUÍ ESTÁ LA LISTA COMPLETA DE CAMIONES 👇 */}
+                    <select required className="bg-slate-900 border border-slate-800 p-4 rounded-xl text-sm text-white font-bold"
                       value={formData.configuracion_vehicular} onChange={e => setFormData({...formData, configuracion_vehicular: e.target.value})}>
-                      <option value="T3S1">T3S1 (Tráiler 6 ejes)</option>
-                      <option value="C2">C2 (Camión 2 ejes)</option>
-                      <option value="T2S2">T2S2 (Tráiler 4 ejes)</option>
+                      <option value="">-- Seleccionar Camión --</option>
+                      <option value="VL">VL (Vehículo Ligero / Pick-up / Estaquitas)</option>
+                      <option value="C2">C2 (Camión Rabón / 2 ejes)</option>
+                      <option value="C3">C3 (Camión Torton / 3 ejes)</option>
+                      <option value="C2R2">C2R2 (Camión Remolque / 4 ejes)</option>
+                      <option value="T2S1">T2S1 (Tractocamión con caja / 3 ejes)</option>
+                      <option value="T2S2">T2S2 (Tractocamión con caja / 4 ejes)</option>
+                      <option value="T3S1">T3S1 (Tractocamión con caja / 4 ejes)</option>
+                      <option value="T3S2">T3S2 (Tráiler Estándar / 5 ejes)</option>
+                      <option value="T3S2R4">T3S2R4 (Tráiler Full / Doble Remolque)</option>
                     </select>
                   </div>
 

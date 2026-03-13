@@ -5,14 +5,31 @@ export const generarPDFCartaPorte = async (viaje, perfilEmisor) => {
   const doc = new jsPDF('p', 'mm', 'a4');
   
   // ==========================================
+  // LÓGICA DE HORA EXACTA (EXTRAÍDA DEL SAT)
+  // ==========================================
+  let fechaEmisionCompleta = `${viaje.fecha_salida || 'Borrador'}`;
+
+  // Truco: Buscamos la fecha y hora oficial directamente dentro de la Cadena Original del SAT
+  if (viaje.cadena_original && viaje.cadena_original.includes('T')) {
+    const partesCadena = viaje.cadena_original.split('|');
+    // Buscamos el fragmento que parezca una fecha (Ej: 2024-03-12T14:35:10)
+    const fechaTimbre = partesCadena.find(p => p.includes('T') && p.includes('-') && p.includes(':'));
+    
+    if (fechaTimbre) {
+      const dateObj = new Date(fechaTimbre);
+      const hora = dateObj.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+      const dia = dateObj.toLocaleDateString('es-MX');
+      fechaEmisionCompleta = `${dia} a las ${hora} hrs`;
+    }
+  }
+
+  // ==========================================
   // 1. CABECERA (LOGO Y DATOS DEL EMISOR)
   // ==========================================
-if (perfilEmisor?.logo_base64) {
-    // Si hay logo, lo dibujamos calculando si es PNG o JPG
+  if (perfilEmisor?.logo_base64) {
     const formato = perfilEmisor.logo_base64.includes('image/png') ? 'PNG' : 'JPEG';
     doc.addImage(perfilEmisor.logo_base64, formato, 14, 15, 35, 20);
   } else {
-    // Si no hay logo, dibujamos el cuadrito gris como respaldo
     doc.setDrawColor(200); doc.rect(14, 15, 35, 20); 
     doc.setFontSize(8); doc.setTextColor(150);
     doc.text("SIN\nLOGO", 31.5, 24, { align: 'center' });
@@ -35,7 +52,7 @@ if (perfilEmisor?.logo_base64) {
     startY: 22, margin: { left: 135, right: 14 },
     body: [
       ['Folio Interno:', `#${String(viaje.folio_interno).padStart(5, '0')}`],
-      ['Fecha Emisión:', viaje.fecha_salida],
+      ['Fecha Emisión:', fechaEmisionCompleta], // <-- Usamos la hora extraída del SAT
       ['Folio Fiscal:', viaje.folio_fiscal?.slice(0,13) || 'POR ASIGNAR']
     ],
     theme: 'plain', styles: { fontSize: 7, cellPadding: 1 },
@@ -61,7 +78,6 @@ if (perfilEmisor?.logo_base64) {
     if (obj.calle_numero) parts.push(obj.calle_numero);
     if (obj.colonia) parts.push(`Col. ${obj.colonia}`);
     if (obj.municipio) parts.push(obj.municipio);
-    // No metemos el estado aquí porque ya se imprime aparte en la línea de abajo
     return parts.length > 0 ? parts.join(', ') : '---';
   };
 
@@ -76,29 +92,35 @@ if (perfilEmisor?.logo_base64) {
   doc.setFont("helvetica", "normal");
   let yLog = 79;
   
-  // Origen
-  doc.text(`Nombre/Ubicación: ${viaje.origen?.nombre_lugar || 'Domicilio Conocido'}`, 14, yLog);
-  const dirO = doc.splitTextToSize(`Dirección: ${formatDireccion(viaje.origen)}`, 85);
+  // --- ORIGEN ---
+  doc.setFont("helvetica", "bold");
+  doc.text(`Ubicación: ${viaje.origen?.nombre_lugar || 'Domicilio Conocido'}`, 14, yLog);
+  doc.setFont("helvetica", "normal");
+  
+  const dirO = doc.splitTextToSize(`Domicilio: ${formatDireccion(viaje.origen)}`, 85);
   doc.text(dirO, 14, yLog + 4);
   const saltoO = dirO.length * 4;
-  doc.text(`C.P.: ${viaje.origen?.codigo_postal || '00000'} | Estado: ${viaje.origen?.estado || 'NLE'}`, 14, yLog + saltoO + 4);
-  doc.text(`RFC: ${viaje.origen?.rfc_ubicacion || perfilEmisor?.rfc}`, 14, yLog + saltoO + 8);
   
-  // Destino
-  doc.text(`Nombre/Ubicación: ${viaje.destino?.nombre_lugar || 'Domicilio Conocido'}`, 110, yLog);
-  const dirD = doc.splitTextToSize(`Dirección: ${formatDireccion(viaje.destino)}`, 85);
+  doc.text(`C.P.: ${viaje.origen?.codigo_postal || '00000'} | Estado: ${viaje.origen?.estado || 'NLE'}`, 14, yLog + saltoO + 4);
+  doc.text(`RFC Remitente: ${viaje.origen?.rfc_ubicacion || perfilEmisor?.rfc || 'XEXX010101000'}`, 14, yLog + saltoO + 8);
+  
+  // --- DESTINO ---
+  doc.setFont("helvetica", "bold");
+  doc.text(`Ubicación: ${viaje.destino?.nombre_lugar || 'Domicilio Conocido'}`, 110, yLog);
+  doc.setFont("helvetica", "normal");
+  
+  const dirD = doc.splitTextToSize(`Domicilio: ${formatDireccion(viaje.destino)}`, 85);
   doc.text(dirD, 110, yLog + 4);
   const saltoD = dirD.length * 4;
+  
   doc.text(`C.P.: ${viaje.destino?.codigo_postal || '00000'} | Estado: ${viaje.destino?.estado || 'TAM'}`, 110, yLog + saltoD + 4);
-  doc.text(`RFC: ${viaje.destino?.rfc_ubicacion || viaje.clientes?.rfc}`, 110, yLog + saltoD + 8);
+  doc.text(`RFC Destinatario: ${viaje.destino?.rfc_ubicacion || viaje.clientes?.rfc || 'XAXX010101000'}`, 110, yLog + saltoD + 8);
 
   let startTablas = yLog + Math.max(saltoO, saltoD) + 14;
 
   // ==========================================
   // 4. TABLAS (MERCANCÍAS Y TRANSPORTE)
   // ==========================================
-  
-  // Soporte Dinámico: Carga el JSON de múltiples mercancías si existe, si no, usa el sistema viejo
   const filasMercancias = (viaje.mercancias_detalle || []).map(item => [
     item.cantidad,
     item.embalaje || 'KGM',
@@ -135,7 +157,6 @@ if (perfilEmisor?.logo_base64) {
   // ==========================================
   let footerY = 225;
   
-  // Protección anti-sobreescritura: Si las tablas están muy largas, pasa el QR a la sig. página
   if (doc.lastAutoTable.finalY > 215) {
      doc.addPage();
      footerY = 20;
@@ -144,7 +165,6 @@ if (perfilEmisor?.logo_base64) {
   doc.setDrawColor(0); doc.setLineWidth(0.5);
   doc.line(14, footerY - 3, 196, footerY - 3);
 
-  // Lógica del QR
   const uuid = viaje.folio_fiscal || '00000000-0000-0000-0000-000000000000';
   const rfcEmisor = perfilEmisor?.rfc || 'EKU9003173C9';
   const rfcReceptor = viaje.clientes?.rfc || 'URE180429TM6';
@@ -163,7 +183,6 @@ if (perfilEmisor?.logo_base64) {
     doc.setDrawColor(200); doc.rect(14, footerY, 35, 35); doc.text("QR SAT", 31.5, footerY + 17, { align: 'center' }); 
   }
 
-  // Textos Fiscales
   doc.setFontSize(6); doc.setFont("helvetica", "bold");
   doc.text(`IdCCP: ${viaje.id_ccp || 'POR ASIGNAR'}`, 52, footerY + 3);
   doc.text("Sello Digital del Emisor:", 52, footerY + 10);
