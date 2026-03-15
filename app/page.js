@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import TarjetaDato from '@/components/tarjetaDato';
 import Sidebar from '@/components/sidebar';
-import { Bell, Calendar, DollarSign, TrendingUp, AlertTriangle, ChevronRight, Search, ChevronDown } from 'lucide-react';
+import { Bell, Calendar, DollarSign, TrendingUp, AlertTriangle, ChevronRight, Search, ChevronDown, User } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 export default function Page() {
@@ -86,6 +86,26 @@ export default function Page() {
           });
         }
       });
+    });
+
+// Alertas Operadores (Licencias)
+    const { data: operadores } = await supabase.from('operadores').select('nombre_completo, vencimiento_licencia').eq('usuario_id', userId);
+    operadores?.forEach(op => {
+      if (!op.vencimiento_licencia) return;
+      const dias = Math.ceil((new Date(op.vencimiento_licencia + 'T00:00:00') - ahora) / (1000 * 60 * 60 * 24));
+      
+      if (dias <= 30) {
+        nuevasAlertas.push({
+          id: `OP-${op.nombre_completo}`,
+          titulo: `Licencia: ${op.nombre_completo}`,
+          subtitulo: dias < 0 ? `Vencida hace ${Math.abs(dias)} días` : `Vence en ${dias} días`,
+          dias, 
+          tipo: 'operador', 
+          urgencia: dias < 0 ? 'critica' : 'preventiva',
+          icono: <User size={18} />, 
+          ruta: '/sat' // O la ruta exacta donde tengas tu catálogo de operadores
+        });
+      }
     });
 
     // Alertas Facturas Agrupadas
@@ -213,8 +233,8 @@ export default function Page() {
                       className="bg-slate-900/50 border border-slate-800 rounded-full py-1.5 pl-8 pr-4 text-[9px] font-black uppercase outline-none focus:border-blue-500/50 transition-all w-32 focus:w-48" />
                   </div>
                 </div>
-                <div className="flex gap-2">
-                  {[{ id: 'todos', label: 'Todos' }, { id: 'unidad', label: 'Activos' }, { id: 'factura', label: 'Cobranza' }].map((f) => (
+<div className="flex gap-2">
+                  {[{ id: 'todos', label: 'Todos' }, { id: 'unidad', label: 'Unidades' }, { id: 'operador', label: 'Operadores' }, { id: 'factura', label: 'Cobranza' }].map((f) => (
                     <button key={f.id} onClick={() => setFiltroTipo(f.id)}
                       className={`px-4 py-1.5 rounded-full text-[8px] font-black uppercase tracking-widest transition-all border ${
                         filtroTipo === f.id ? 'bg-blue-600 border-blue-500 text-white' : 'bg-slate-900/50 border-slate-800 text-slate-500'
