@@ -11,6 +11,7 @@ export default function UnidadesPage() {
   const [sesion, setSesion] = useState(null);
   const [loading, setLoading] = useState(false);
   const [unidades, setUnidades] = useState([]);
+  const [empresaId, setEmpresaId] = useState(null);
   
   const [mostrarModal, setMostrarModal] = useState(false);
   const [unidadSeleccionada, setUnidadSeleccionada] = useState(null);
@@ -34,10 +35,35 @@ export default function UnidadesPage() {
     });
   }, []);
 
-  async function obtenerUnidades(userId) {
+async function obtenerUnidades(userId) {
     setLoading(true);
-    const { data } = await supabase.from('unidades').select('*').eq('usuario_id', userId).order('created_at');
-    setUnidades(data || []);
+
+    // 1. OBTENER EL ID DE LA INSTITUCIÓN
+    const { data: perfilData } = await supabase
+      .from('perfiles')
+      .select('empresa_id, rol')
+      .eq('id', userId)
+      .single();
+
+    // Si es admin, su empresa_id podría ser nulo, así que usa su propio ID. 
+    // Si es miembro, usará el ID del administrador.
+    const idInstitucion = perfilData?.empresa_id || userId; 
+    setEmpresaId(idInstitucion);
+
+    // 2. CARGAR EL CATÁLOGO COMPARTIDO
+    try {
+      const { data, error } = await supabase
+        .from('unidades')
+        .select('*')
+        .eq('usuario_id', idInstitucion) // <--- ESTA ES LA CLAVE
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setUnidades(data || []);
+    } catch (err) {
+      console.error("Error cargando unidades:", err.message);
+    }
+    
     setLoading(false);
   }
 
@@ -51,7 +77,7 @@ export default function UnidadesPage() {
     setLoading(true);
     const payload = { 
       ...formData, 
-      usuario_id: sesion.user.id, 
+      usuario_id: empresaId,
       placas: formData.placas.toUpperCase(),
       vencimiento_seguro: formData.vencimiento_seguro || null,
       vencimiento_sct: formData.tipo_placa === 'Estatal' ? null : (formData.vencimiento_sct || null)

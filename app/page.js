@@ -28,6 +28,7 @@ export default function Page() {
   
   const [fechaInicio, setFechaInicio] = useState(primerDiaMes);
   const [fechaFin, setFechaFin] = useState(ultimoDiaMes);
+  const [rolUsuario, setRolUsuario] = useState('miembro');
 
   const [sesion, setSesion] = useState(null);
   const [email, setEmail] = useState(""); 
@@ -50,6 +51,16 @@ export default function Page() {
     const ahora = new Date();
     const fIni = filtroActivo && fechaInicio ? new Date(fechaInicio + 'T00:00:00') : null;
     const fFinObj = filtroActivo && fechaFin ? new Date(fechaFin + 'T23:59:59') : null;
+
+    const { data: perfilData } = await supabase
+      .from('perfiles')
+      .select('rol')
+      .eq('id', userId)
+      .single();
+
+    if (perfilData?.rol) {
+      setRolUsuario(perfilData.rol);
+    }
     
     // 1. CONSTRUCCIÓN DE CONSULTAS (MÉTRICAS)
     let queryFacturas = supabase.from('facturas').select('monto_total').eq('usuario_id', userId).eq('estatus_pago', 'Pagado');
@@ -271,29 +282,31 @@ export default function Page() {
           </section>
 
           {/* GRID INFERIOR DE 2 COLUMNAS */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 border-t border-slate-800/50 pt-10">
+<div className={`grid grid-cols-1 ${rolUsuario === 'administrador' ? 'lg:grid-cols-2' : ''} gap-12 border-t border-slate-800/50 pt-10`}>
             
-            {/* BALANCE FINANCIERO */}
-            <section className="space-y-6">
-              <div className="flex items-center gap-3 mb-2">
-                <TrendingUp className="text-green-500" size={24} />
-                <h2 className="text-[20px] font-black text-slate-400 uppercase tracking-[0.2em]">Balance Financiero</h2>
-              </div>
-
-              <div className="grid grid-cols-1 gap-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <TarjetaDato titulo="Ingresos" valor={`$${metricas.ingresos.toLocaleString()}`} color="blue" />
-                  <TarjetaDato titulo="Gastos" valor={`$${metricas.gastos.toLocaleString()}`} color="blue" />
+            {/* BALANCE FINANCIERO (RESTRINGIDO A ADMINISTRADORES) */}
+            {rolUsuario === 'administrador' && (
+              <section className="space-y-6">
+                <div className="flex items-center gap-3 mb-2">
+                  <TrendingUp className="text-green-500" size={24} />
+                  <h2 className="text-[20px] font-black text-slate-400 uppercase tracking-[0.2em]">Balance Financiero</h2>
                 </div>
-                <div className="bg-green-600/10 border border-green-500/20 p-8 rounded-[2.5rem] relative overflow-hidden">
-                  <p className="font-black text-green-500 uppercase tracking-widest mb-1 text-[11px]">Ganancia Neta</p>
-                  <h3 className="text-4xl font-black text-white italic tracking-tighter">${metricas.ganancia.toLocaleString()}</h3>
-                  <div className="mt-4 h-1 w-full bg-slate-800 rounded-full overflow-hidden">
-                    <div className="h-full bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]" style={{ width: '100%' }}></div>
+
+                <div className="grid grid-cols-1 gap-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <TarjetaDato titulo="Ingresos" valor={`$${metricas.ingresos.toLocaleString()}`} color="blue" />
+                    <TarjetaDato titulo="Gastos" valor={`$${metricas.gastos.toLocaleString()}`} color="blue" />
+                  </div>
+                  <div className="bg-green-600/10 border border-green-500/20 p-8 rounded-[2.5rem] relative overflow-hidden">
+                    <p className="font-black text-green-500 uppercase tracking-widest mb-1 text-[11px]">Ganancia Neta</p>
+                    <h3 className="text-4xl font-black text-white italic tracking-tighter">${metricas.ganancia.toLocaleString()}</h3>
+                    <div className="mt-4 h-1 w-full bg-slate-800 rounded-full overflow-hidden">
+                      <div className="h-full bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]" style={{ width: '100%' }}></div>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </section>
+              </section>
+            )}
 
             {/* AVISOS DEL SISTEMA */}
             <section className="space-y-6">

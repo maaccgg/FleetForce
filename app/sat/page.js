@@ -63,6 +63,8 @@ export default function SATConfigPage() {
   const [keyFile, setKeyFile] = useState(null);
   const [csdPassword, setCsdPassword] = useState('');
   const [isUploadingCSD, setIsUploadingCSD] = useState(false);
+  const [empresaId, setEmpresaId] = useState(null); 
+  const [rolUsuario, setRolUsuario] = useState('miembro');
 
   // FORMULARIOS
   const [formDataOp, setFormDataOp] = useState({ nombre_completo: '', rfc: '', numero_licencia: '', vencimiento_licencia: '', telefono: '' });
@@ -84,26 +86,32 @@ export default function SATConfigPage() {
     });
   }, [activeTab]);
 
-  async function cargarDatos(userId) {
+async function cargarDatos(userId) {
     setLoading(true);
     try {
+      // 1. OBTENER ADN DE LA INSTITUCIÓN Y ROL
+      const { data: perfilData } = await supabase
+        .from('perfiles')
+        .select('empresa_id, rol')
+        .eq('id', userId)
+        .single();
+
+      const idInstitucion = perfilData?.empresa_id || userId;
+      setEmpresaId(idInstitucion);
+      if (perfilData?.rol) setRolUsuario(perfilData.rol);
+
+      // 2. CARGAR CATÁLOGOS USANDO EL ID DE LA INSTITUCIÓN
       if (activeTab === 'fiscal') {
-        const { data } = await supabase.from('perfil_emisor').select('*').eq('usuario_id', userId).single();
+        const { data } = await supabase.from('perfil_emisor').select('*').eq('usuario_id', idInstitucion).single();
         if (data) {
           setPerfilFiscal({
             ...data,
-            razon_social: data.razon_social || '',
-            rfc: data.rfc || '',
-            codigo_postal: data.codigo_postal || '',
-            calle_numero: data.calle_numero || '',
-            colonia: data.colonia || '',
-            municipio: data.municipio || '',
-            estado: data.estado || '',
-            no_certificado: data.no_certificado || ''
+            razon_social: data.razon_social || '', rfc: data.rfc || '', codigo_postal: data.codigo_postal || '',
+            calle_numero: data.calle_numero || '', colonia: data.colonia || '', municipio: data.municipio || '', estado: data.estado || ''
           });
         }
       } else {
-        const { data, error } = await supabase.from(activeTab).select('*').eq('usuario_id', userId).order('created_at');
+        const { data, error } = await supabase.from(activeTab).select('*').eq('usuario_id', idInstitucion).order('created_at');
         if (error) throw error;
         if (activeTab === 'operadores') setOperadores(data || []);
         if (activeTab === 'ubicaciones') setUbicaciones(data || []);
@@ -115,18 +123,21 @@ export default function SATConfigPage() {
     setLoading(false);
   }
 
-  const guardarRegistro = async (e) => {
+const guardarRegistro = async (e) => {
     e.preventDefault();
     setLoading(true);
     let payload = {};
 
-    if (activeTab === 'operadores') payload = { ...formDataOp, usuario_id: sesion.user.id, rfc: formDataOp.rfc.toUpperCase() };
-    if (activeTab === 'ubicaciones') payload = { ...formDataUb, usuario_id: sesion.user.id, rfc_ubicacion: formDataUb.rfc_ubicacion.toUpperCase() };
-    if (activeTab === 'mercancias') payload = { ...formDataMe, usuario_id: sesion.user.id };
-    if (activeTab === 'remolques') payload = { ...formDataRe, usuario_id: sesion.user.id, placas: formDataRe.placas.toUpperCase() };
-    if (activeTab === 'clientes') payload = { ...formDataCl, usuario_id: sesion.user.id, rfc: formDataCl.rfc.toUpperCase() };
+    // INYECCIÓN: Usamos empresaId para que todo le pertenezca a la cuenta matriz
+    if (activeTab === 'operadores') payload = { ...formDataOp, usuario_id: empresaId, rfc: formDataOp.rfc.toUpperCase() };
+    if (activeTab === 'ubicaciones') payload = { ...formDataUb, usuario_id: empresaId, rfc_ubicacion: formDataUb.rfc_ubicacion.toUpperCase() };
+    if (activeTab === 'mercancias') payload = { ...formDataMe, usuario_id: empresaId };
+    if (activeTab === 'remolques') payload = { ...formDataRe, usuario_id: empresaId, placas: formDataRe.placas.toUpperCase() };
+    if (activeTab === 'clientes') payload = { ...formDataCl, usuario_id: empresaId, rfc: formDataCl.rfc.toUpperCase() };
 
-    const { error } = editandoId ? await supabase.from(activeTab).update(payload).eq('id', editandoId) : await supabase.from(activeTab).insert([payload]);
+    const { error } = editandoId 
+      ? await supabase.from(activeTab).update(payload).eq('id', editandoId) 
+      : await supabase.from(activeTab).insert([payload]);
 
     if (error) alert("Error al guardar: " + error.message);
     else { cerrarModal(); cargarDatos(sesion.user.id); }
@@ -239,7 +250,17 @@ export default function SATConfigPage() {
           </header>
 
           <div className="flex flex-wrap gap-2 mb-10 bg-slate-900/50 p-1.5 rounded-2xl border border-slate-800 w-fit backdrop-blur-md">
-            {[ { id: 'operadores', label: 'Operadores', icon: User }, { id: 'remolques', label: 'Remolques', icon: Truck }, { id: 'ubicaciones', label: 'Ubicaciones', icon: MapPin }, { id: 'mercancias', label: 'Mercancías', icon: Package }, { id: 'clientes', label: 'Receptor (Clientes)', icon: Users }, { id: 'fiscal', label: 'Emisor Fiscal', icon: ShieldCheck } ].map((tab) => (
+            {[ 
+              { id: 'operadores', label: 'Operadores', icon: User },
+               { id: 'remolques', label: 'Remolques', icon: Truck }, 
+               { id: 'ubicaciones', label: 'Ubicaciones', icon: MapPin }, 
+               { id: 'mercancias', label: 'Mercancías', icon: Package }, 
+               { id: 'clientes', label: 'Receptor (Clientes)', icon: Users }, 
+               { id: 'fiscal', label: 'Emisor Fiscal', icon: ShieldCheck } ]
+
+// === BLINDAJE VISUAL CORREGIDO ===
+            .filter(tab => rolUsuario === 'administrador' || tab.id !== 'fiscal') 
+            .map((tab) => (
               <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex items-center gap-2 px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${ activeTab === tab.id ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20' : 'text-slate-500 hover:text-slate-300' }`}>
                 <tab.icon size={14} /> {tab.label}
               </button>

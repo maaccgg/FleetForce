@@ -28,6 +28,7 @@ function FacturasContenido() {
   const [historial, setHistorial] = useState([]);
   const [clientes, setClientes] = useState([]);
   const [perfilEmisor, setPerfilEmisor] = useState(null);
+  const [rolUsuario, setRolUsuario] = useState('miembro');
 
   const [formData, setFormData] = useState({ 
     cliente_id: '', monto_total: '', folio_fiscal: '', 
@@ -77,6 +78,18 @@ function FacturasContenido() {
   }
 
   async function obtenerDatos(userId) {
+
+const { data: perfilData } = await supabase
+      .from('perfiles')
+      .select('rol')
+      .eq('id', userId)
+      .single();
+
+    if (perfilData?.rol) {
+      setRolUsuario(perfilData.rol);
+    }
+
+
     setLoading(true);
     let query = supabase
       .from('facturas')
@@ -309,31 +322,33 @@ const timbrarFactura = async (factura) => {
 
               {/* BOTÓN DE CREAR FACTURA LIBRE */}
               <button onClick={() => setMostrarFormulario(true)} className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-2.5 rounded-xl font-black uppercase text-[10px] flex items-center gap-2 shadow-lg shadow-emerald-900/20 transition-all border border-emerald-500/50">
-                <PlusCircle size={16} /> Registrar
+                <PlusCircle size={16} /> Registrar Factura 
               </button>
             </div>
           </header>
 
           {/* TARJETAS DE RESUMEN (DISEÑO CORPORATIVO TIPO GASTOS) */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
-            <TarjetaDato 
-              titulo="Ingreso Cobrado" 
-              valor={`$${metricas.cobrado.toLocaleString('es-MX', {minimumFractionDigits: 2})}`} 
-              color="green" 
-            />
-            <TarjetaDato 
-              titulo="Por Cobrar" 
-              valor={`$${metricas.pendiente.toLocaleString('es-MX', {minimumFractionDigits: 2})}`} 
-              color="blue" 
-            />
-          </div>
+{rolUsuario === 'administrador' && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12 animate-in fade-in">
+              <TarjetaDato 
+                titulo="Ingreso Cobrado" 
+                valor={`$${metricas.cobrado.toLocaleString('es-MX', {minimumFractionDigits: 2})}`} 
+                color="emerald" 
+              />
+              <TarjetaDato 
+                titulo="Por Cobrar" 
+                valor={`$${metricas.pendiente.toLocaleString('es-MX', {minimumFractionDigits: 2})}`} 
+                color="blue" 
+              />
+            </div>
+          )}
 
           {/* TABLA DE HISTÓRICO (NUEVO DISEÑO) */}
-          <div className="bg-slate-900 border border-slate-800 rounded-[2rem] overflow-hidden shadow-2xl">
+          <div className="bg-slate-900 border border-slate-800 rounded-4xl overflow-hidden shadow-2xl">
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse text-[13px]">
                 <thead>
-                  <tr className="bg-slate-950/50 border-b border-slate-800 text-slate-400 text-[13px] font-semibold uppercase tracking-wider">
+                  <tr className="bg-slate-950/50 border-b border-slate-800 text-slate-400 text-[12px] font-semibold uppercase tracking-wider">
                     <th className="p-4 pl-8 font-normal w-12">Pago</th>
                     <th className="p-4 font-normal">Folio y Origen</th>
                     <th className="p-4 font-normal">Cliente Receptor</th>
@@ -464,14 +479,14 @@ const timbrarFactura = async (factura) => {
               <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-md" onClick={() => setMostrarFormulario(false)} />
               <div className="relative bg-slate-900 border border-slate-800 w-full max-w-3xl rounded-[3rem] p-10 shadow-2xl animate-in zoom-in-95 duration-200">
                 <button onClick={() => setMostrarFormulario(false)} className="absolute top-8 right-8 text-slate-500 hover:text-white"><X size={24} /></button>
-                <h2 className="text-2xl font-black text-white italic uppercase mb-8">Registrar <span className="text-emerald-500">Ingreso Libre</span></h2>
+                <h2 className="text-2xl font-black text-white italic uppercase mb-8">Registrar <span className="text-emerald-500">Factura</span></h2>
                 
                 <form onSubmit={registrarFactura} className="space-y-6">
                   {/* SECCIÓN 1: DATOS BÁSICOS */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="md:col-span-2">
                       <div className="flex justify-between items-center mb-2">
-                        <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Cliente Receptor</label>
+                        <label className="text-[12px] font-black text-slate-500 uppercase tracking-widest ml-1">Cliente Receptor</label>
                       </div>
                       <select required className="w-full bg-slate-950 border border-slate-800 p-4 rounded-2xl text-sm text-white outline-none focus:border-emerald-500"
                         value={formData.cliente_id} onChange={(e) => setFormData({...formData, cliente_id: e.target.value})}>
@@ -480,12 +495,12 @@ const timbrarFactura = async (factura) => {
                       </select>
                     </div>
                     <div>
-                      <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1">Monto Total con IVA ($)</label>
+                      <label className="text-[12px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1">Monto Total con IVA ($)</label>
                       <input required type="number" step="0.01" className="w-full bg-slate-950 border border-slate-800 p-4 rounded-2xl text-sm text-white font-mono outline-none focus:border-emerald-500" 
                         value={formData.monto_total} onChange={e => setFormData({...formData, monto_total: e.target.value})} placeholder="0.00" />
                     </div>
                     <div>
-                      <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1">Concepto / Referencia</label>
+                      <label className="text-[12px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1">Concepto / Referencia</label>
                       <input className="w-full bg-slate-950 border border-slate-800 p-4 rounded-2xl text-sm text-white outline-none focus:border-emerald-500" 
                         value={formData.ruta} onChange={e => setFormData({...formData, ruta: e.target.value})} placeholder="Ej. Flete Extra" />
                     </div>
@@ -493,10 +508,10 @@ const timbrarFactura = async (factura) => {
 
                   {/* SECCIÓN 2: OPCIONES FISCALES */}
                   <div className="p-6 bg-slate-950 border border-slate-800 rounded-2xl">
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2"><Settings size={12}/> Configuración SAT (CFDI 4.0)</p>
+                    <p className="text-[12px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2"><Settings size={12}/> Configuración SAT (CFDI 4.0)</p>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="text-[9px] font-black text-slate-500 uppercase mb-2 block ml-1">Método de Pago</label>
+                        <label className="text-[12px] font-black text-slate-500 uppercase mb-2 block ml-1">Método de Pago</label>
                         <select className="w-full bg-slate-900 border border-slate-800 p-3 rounded-xl text-xs text-white"
                           value={formData.metodo_pago} onChange={e => setFormData({...formData, metodo_pago: e.target.value})}>
                           <option value="PPD">PPD - Pago en Parcialidades o Diferido</option>
@@ -504,7 +519,7 @@ const timbrarFactura = async (factura) => {
                         </select>
                       </div>
                       <div>
-                        <label className="text-[9px] font-black text-slate-500 uppercase mb-2 block ml-1">Forma de Pago</label>
+                        <label className="text-[12px] font-black text-slate-500 uppercase mb-2 block ml-1">Forma de Pago</label>
                         <select className="w-full bg-slate-900 border border-slate-800 p-3 rounded-xl text-xs text-white"
                           value={formData.forma_pago} onChange={e => setFormData({...formData, forma_pago: e.target.value})} disabled={formData.metodo_pago === 'PPD'}>
                           <option value="99">99 - Por Definir (Obligatorio en PPD)</option>
@@ -519,19 +534,19 @@ const timbrarFactura = async (factura) => {
                   {/* SECCIÓN 3: FECHAS */}
                   <div className="grid grid-cols-2 gap-6">
                     <div>
-                      <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1">Fecha de Emisión</label>
+                      <label className="text-[12px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1">Fecha de Emisión</label>
                       <input type="date" required className="w-full bg-slate-950 border border-slate-800 p-4 rounded-2xl text-sm text-white" 
                         value={formData.fecha_viaje} onChange={e => setFormData({...formData, fecha_viaje: e.target.value})} />
                     </div>
                     <div>
-                      <label className="text-[9px] font-black text-orange-500 uppercase tracking-widest mb-2 block ml-1">Vencimiento Cobro</label>
+                      <label className="text-[12px] font-black text-orange-500 uppercase tracking-widest mb-2 block ml-1">Vencimiento Cobro</label>
                       <input type="date" readOnly className="w-full bg-slate-900 border border-slate-800 p-4 rounded-2xl text-sm text-slate-400 outline-none" 
                         value={formData.fecha_vencimiento} />
                     </div>
                   </div>
 
                   <button type="submit" disabled={loading || clientes.length === 0} className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-800 disabled:text-slate-600 text-white p-5 rounded-2xl font-black uppercase text-[11px] tracking-widest shadow-xl transition-all mt-4">
-                    {loading ? "Generando..." : "Registrar Factura Libre"}
+                    {loading ? "Generando..." : "Registrar Factura"}
                   </button>
                 </form>
               </div>

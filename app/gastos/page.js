@@ -17,6 +17,7 @@ export default function GastosOperativosPage() {
   const [unidades, setUnidades] = useState([]);
   const [historial, setHistorial] = useState([]);
   const [metricas, setMetricas] = useState({ totalPeriodo: 0, conteo: 0 });
+  const [rolUsuario, setRolUsuario] = useState('miembro');
 
   // Estados para el rango de fechas (Default: mes actual)
   const hoy = new Date();
@@ -43,6 +44,17 @@ export default function GastosOperativosPage() {
 
   async function obtenerDatos(userId) {
     setLoading(true);
+
+
+    const { data: perfilData } = await supabase
+      .from('perfiles')
+      .select('rol')
+      .eq('id', userId)
+      .single();
+
+    if (perfilData?.rol) {
+      setRolUsuario(perfilData.rol);
+    }
     
     // 1. Cargar catálogo de unidades
     const { data: unidadesBD } = await supabase.from('unidades').select('id, numero_economico').eq('usuario_id', userId);
@@ -140,10 +152,26 @@ export default function GastosOperativosPage() {
             </div>
           </header>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
-            <TarjetaDato titulo="Egreso en Rango" valor={`$${metricas.totalPeriodo.toLocaleString()}`} color="blue" />
-            <TarjetaDato titulo="Registros" valor={metricas.conteo.toString()} color="blue" />
-          </div>
+{/* TARJETAS DE RESUMEN (RESTRINGIDAS POR ROL) */}
+          {rolUsuario === 'administrador' && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12 animate-in fade-in">
+              <TarjetaDato 
+                titulo="Egreso en Rango" 
+                valor={`$${metricas.totalPeriodo.toLocaleString('es-MX', {minimumFractionDigits: 2})}`} 
+                color="blue" 
+              />
+            </div>
+          )}
+
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12 animate-in fade-in">
+
+              <TarjetaDato 
+                titulo="Registros" 
+                valor={metricas.conteo.toString()} 
+                color="blue" 
+              />
+            </div>
 
           {/* MODAL DE REGISTRO */}
           {mostrarFormulario && (
