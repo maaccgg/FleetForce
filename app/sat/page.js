@@ -100,7 +100,8 @@ async function cargarDatos(userId) {
       setEmpresaId(idInstitucion);
       if (perfilData?.rol) setRolUsuario(perfilData.rol);
 
-      // 2. CARGAR CATÁLOGOS USANDO EL ID DE LA INSTITUCIÓN
+
+// 2. CARGAR CATÁLOGOS USANDO EL ID DE LA EMPRESA
       if (activeTab === 'fiscal') {
         const { data } = await supabase.from('perfil_emisor').select('*').eq('usuario_id', idInstitucion).single();
         if (data) {
@@ -111,7 +112,14 @@ async function cargarDatos(userId) {
           });
         }
       } else {
-        const { data, error } = await supabase.from(activeTab).select('*').eq('usuario_id', idInstitucion).order('created_at');
+        // === FILTRO APLICADO: SOLO TRAER LOS ACTIVOS ===
+        const { data, error } = await supabase
+          .from(activeTab)
+          .select('*')
+          .eq('usuario_id', idInstitucion)
+          .eq('activo', true) 
+          .order('created_at');
+          
         if (error) throw error;
         if (activeTab === 'operadores') setOperadores(data || []);
         if (activeTab === 'ubicaciones') setUbicaciones(data || []);
@@ -119,6 +127,8 @@ async function cargarDatos(userId) {
         if (activeTab === 'remolques') setRemolques(data || []);
         if (activeTab === 'clientes') setClientes(data || []);
       }
+
+
     } catch (err) { console.error("Error al cargar datos:", err.message); }
     setLoading(false);
   }
@@ -188,10 +198,25 @@ const guardarRegistro = async (e) => {
     } catch (err) { alert("Error: " + err.message); } finally { setIsUploadingCSD(false); }
   };
 
-  const eliminarRegistro = async (id) => {
-    if (!confirm("¿Deseas eliminar este registro definitivamente?")) return;
-    const { error } = await supabase.from(activeTab).delete().eq('id', id);
-    if (error) alert(error.message); else cargarDatos(sesion.user.id);
+const eliminarRegistro = async (id) => {
+    if (!confirm("¿Deseas dar de baja (archivar) este registro? Ya no aparecerá para crear nuevos viajes, pero se conservará en tu historial contable.")) return;
+    
+    setLoading(true);
+    try {
+      // === ELIMINACIÓN LÓGICA: ACTUALIZAMOS EL ESTATUS A FALSO ===
+      const { error } = await supabase
+        .from(activeTab)
+        .update({ activo: false })
+        .eq('id', id);
+
+      if (error) throw error;
+      
+      cargarDatos(empresaId || sesion.user.id);
+    } catch (error) {
+      alert("Error al archivar: " + error.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const cerrarModal = () => {

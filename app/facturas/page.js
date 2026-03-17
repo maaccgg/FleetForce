@@ -100,8 +100,12 @@ function FacturasContenido() {
     if (data) setPerfilEmisor(data);
   }
 
-  async function obtenerClientes(idMaestro) {
-    const { data } = await supabase.from('clientes').select('*').eq('usuario_id', idMaestro).order('nombre');
+async function obtenerClientes(idMaestro) {
+    const { data } = await supabase.from('clientes')
+      .select('*')
+      .eq('usuario_id', idMaestro)
+      .eq('activo', true)
+      .order('nombre');
     setClientes(data || []);
   }
 

@@ -81,14 +81,14 @@ export default function ViajesPage() {
     if (data) setPerfilEmisor(data);
   }
 
-  async function cargarCatalogos(idMaestro) {
+async function cargarCatalogos(idMaestro) {
     const [u, o, ub, m, cl, r] = await Promise.all([
-      supabase.from('unidades').select('*').eq('usuario_id', idMaestro),
-      supabase.from('operadores').select('*').eq('usuario_id', idMaestro),
-      supabase.from('ubicaciones').select('*').eq('usuario_id', idMaestro),
-      supabase.from('mercancias').select('*').eq('usuario_id', idMaestro),
-      supabase.from('clientes').select('*').eq('usuario_id', idMaestro),
-      supabase.from('remolques').select('*').eq('usuario_id', idMaestro)
+      supabase.from('unidades').select('*').eq('usuario_id', idMaestro).eq('activo', true),
+      supabase.from('operadores').select('*').eq('usuario_id', idMaestro).eq('activo', true),
+      supabase.from('ubicaciones').select('*').eq('usuario_id', idMaestro).eq('activo', true),
+      supabase.from('mercancias').select('*').eq('usuario_id', idMaestro).eq('activo', true),
+      supabase.from('clientes').select('*').eq('usuario_id', idMaestro).eq('activo', true),
+      supabase.from('remolques').select('*').eq('usuario_id', idMaestro).eq('activo', true)
     ]);
     setCatalogos({ unidades: u.data || [], operadores: o.data || [], ubicaciones: ub.data || [], mercancias: m.data || [], remolques: r.data || [] });
     setClientes(cl.data || []);

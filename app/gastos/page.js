@@ -62,12 +62,18 @@ export default function GastosOperativosPage() {
     await obtenerDatos(idMaestro);
   }
 
-  async function obtenerDatos(idMaestro) {
+async function obtenerDatos(idMaestro) {
     setLoading(true);
     
-    const { data: unidadesBD } = await supabase.from('unidades').select('id, numero_economico').eq('usuario_id', idMaestro);
+    // 1. Cargar catálogo de unidades (SOLO ACTIVAS)
+    const { data: unidadesBD } = await supabase
+      .from('unidades')
+      .select('id, numero_economico')
+      .eq('usuario_id', idMaestro)
+      .eq('activo', true);
     setUnidades(unidadesBD || []);
 
+    // 2. Consulta con Rango de Fechas (CON ID DE LA EMPRESA)
     const { data: gastosBD, error } = await supabase
       .from('mantenimientos')
       .select(`*, unidades(numero_economico)`)
