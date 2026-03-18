@@ -190,6 +190,7 @@ export default function Page() {
 
   if (!sesion) return (
     <div className="flex items-center justify-center min-h-screen bg-slate-950 text-white p-6">
+
       <form onSubmit={(e) => { e.preventDefault(); supabase.auth.signInWithPassword({ email, password }); }} className="bg-slate-900 p-10 rounded-[2.5rem] border border-slate-800 w-full max-w-md shadow-2xl">
         <h2 className="text-3xl font-black mb-8 text-blue-500 italic uppercase text-center tracking-tighter">Inicia <span className="text-white">Sesión</span></h2>
         <div className="space-y-4">
@@ -198,6 +199,7 @@ export default function Page() {
           <button className="w-full bg-blue-600 hover:bg-blue-500 py-4 rounded-2xl font-black uppercase tracking-widest transition-all">Entrar</button>
         </div>
       </form>
+      
     </div>
   );
 

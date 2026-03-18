@@ -1,7 +1,8 @@
 'use client';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { supabase } from '@/lib/supabaseClient'; // IMPORTACIÓN CRÍTICA
+import { supabase } from '@/lib/supabaseClient'; 
 import { 
   LayoutDashboard, 
   Wrench, 
@@ -13,6 +14,11 @@ import {
   Truck,
   LogOut,
   TrendingUp,
+  Settings,
+  History,
+  ChevronDown,
+  ChevronUp,
+  Users
 } from 'lucide-react';
 
 const menuItems = [
@@ -27,10 +33,30 @@ const menuItems = [
 
 export default function Sidebar() {
   const pathname = usePathname();
+  
+  // NUEVOS ESTADOS PARA EL MENÚ DE CONFIGURACIÓN
+  const [isConfigOpen, setIsConfigOpen] = useState(false);
+  const [rolUsuario, setRolUsuario] = useState('miembro');
+
+  // EFECTO PARA OBTENER EL ROL DEL USUARIO
+  useEffect(() => {
+    const obtenerRol = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        const { data } = await supabase
+          .from('perfiles')
+          .select('rol')
+          .eq('id', session.user.id)
+          .single();
+        
+        if (data?.rol) setRolUsuario(data.rol);
+      }
+    };
+    obtenerRol();
+  }, []);
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
-    // Forzamos el refresco para limpiar estados de React y redirigir a la Bóveda
     window.location.href = '/'; 
   };
 
@@ -68,18 +94,49 @@ export default function Sidebar() {
         })}
       </div>
 
-      {/* SECCIÓN INFERIOR: MANTRA Y CIERRE */}
-      <div className="mt-auto pt-6 border-t border-slate-800/50 px-3 space-y-4">
-        <p className="text-[8px] text-slate-600 font-black uppercase tracking-widest italic leading-relaxed">
+      {/* SECCIÓN INFERIOR: MANTRA Y CONFIGURACIÓN */}
+      <div className="mt-auto pt-6 border-t border-slate-800/50 px-1 space-y-4 pb-2">
+        <p className="text-[8px] text-slate-600 font-black uppercase tracking-widest italic leading-relaxed px-2">
           "Version BETA 1.0.1"
         </p>
-        <button 
-          onClick={handleSignOut} 
-          className="w-full flex items-center justify-center gap-2 bg-slate-900 border border-slate-800 text-slate-500 hover:text-red-400 hover:border-red-900/50 px-4 py-3 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all"
-        >
-          <LogOut size={14} />
-          Cerrar Bóveda
-        </button>
+        
+        <div className="flex flex-col gap-2">
+          <button 
+            onClick={() => setIsConfigOpen(!isConfigOpen)} 
+            className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${isConfigOpen ? 'bg-slate-900 border border-slate-700 text-white' : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:border-slate-700'}`}
+          >
+            <div className="flex items-center gap-2">
+              <Settings size={14} className={isConfigOpen ? "text-blue-400" : ""} />
+              Configuración
+            </div>
+            {isConfigOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+          </button>
+
+          {/* SUBMENÚ DESPLEGABLE */}
+          {isConfigOpen && (
+            <div className="flex flex-col gap-1 pl-2 border-l-2 border-slate-800 ml-2 animate-in fade-in slide-in-from-top-2">
+              
+              {rolUsuario === 'administrador' && (
+                <>
+                  <Link href="/historico" className="flex items-center gap-2 text-slate-400 hover:text-blue-400 hover:bg-blue-600/10 px-3 py-2.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-colors">
+                    <History size={14} />
+                    Revisar Históricos
+                  </Link>
+                  <Link href="/equipo" className="flex items-center gap-2 text-slate-400 hover:text-blue-400 hover:bg-blue-600/10 px-3 py-2.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-colors">
+                    <Users size={14} />
+                    Gestionar Equipo
+                  </Link>
+                </>
+              )}
+              
+              <button onClick={handleSignOut} className="w-full flex items-center gap-2 text-slate-500 hover:text-red-400 hover:bg-red-500/10 px-3 py-2.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-colors">
+                <LogOut size={14} />
+                Cerrar Sesión
+              </button>
+              
+            </div>
+          )}
+        </div>
       </div>
     </nav>
   );
