@@ -14,14 +14,13 @@ export async function POST(request) {
 
     const token = authHeader.split(' ')[1];
 
-// Iniciamos el cliente conectando tu gafete a todas las peticiones internas
     const supabaseAuth = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
       {
         global: {
           headers: {
-            Authorization: `Bearer ${token}` // <--- EL CADENERO LLEVA EL GAFETE AL ARCHIVERO
+            Authorization: `Bearer ${token}` 
           }
         }
       }
@@ -36,7 +35,6 @@ export async function POST(request) {
     // ==========================================
     // FASE 2: VERIFICACIÓN DE RANGO (ADMIN)
     // ==========================================
-    // Ahora el archivero (RLS) sí nos dejará leer porque traemos el token
     const { data: perfilPeticionario, error: perfilError } = await supabaseAuth
       .from('perfiles')
       .select('rol, empresa_id')
@@ -48,48 +46,43 @@ export async function POST(request) {
     }
 
     // ==========================================
-    // FASE 3: CREACIÓN SEGURA (USANDO LLAVE MAESTRA)
+    // FASE 3: INVITACIÓN SEGURA (Sin pedir contraseña inicial)
     // ==========================================
     const body = await request.json();
-    const { email, password, nombre_completo, rol } = body;
     
-    // OBLIGATORIO: El nuevo usuario hereda la empresa del administrador. 
-    // Ignoramos el empresa_id del body para evitar inyecciones.
+    // ATENCIÓN: Ya no exigimos 'password' del body
+    const { email, nombre_completo, rol } = body; 
+    
     const idDeLaEmpresaFija = perfilPeticionario.empresa_id || user.id;
 
-    // Ahora sí, sacamos la llave maestra para operar
     const supabaseAdmin = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL,
       process.env.SUPABASE_SERVICE_ROLE_KEY,
       { auth: { autoRefreshToken: false, persistSession: false } }
     );
 
-    // 1. Crear credencial en Bóveda
-    const { data: authData, error: createAuthError } = await supabaseAdmin.auth.admin.createUser({
-      email: email,
-      password: password,
-      email_confirm: true 
-    });
+    // 1. Disparar el correo de invitación (Supabase genera el token)
+    const { data: authData, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(email);
 
-    if (createAuthError) throw createAuthError;
+    if (inviteError) throw inviteError;
 
-    // 2. Crear perfil operativo blindado
+    // 2. Crear el perfil con el estatus "registro_completado: false" por defecto
     const { error: insertPerfilError } = await supabaseAdmin.from('perfiles').insert([
       {
         id: authData.user.id,
         email: email,
         nombre_completo: nombre_completo,
-        rol: rol, // Aquí puedes confiar en el body porque ya verificaste que es un Admin quien lo manda
+        rol: rol,
         empresa_id: idDeLaEmpresaFija
       }
     ]);
 
     if (insertPerfilError) throw insertPerfilError;
 
-    return NextResponse.json({ success: true, message: 'Usuario creado y asegurado con éxito' }, { status: 200 });
+    return NextResponse.json({ success: true, message: 'Invitación enviada al correo del usuario.' }, { status: 200 });
 
   } catch (error) {
-    console.error("Falla en creación de usuario:", error);
+    console.error("Falla en creación de usuario/invitación:", error);
     return NextResponse.json({ error: error.message }, { status: 400 });
   }
 }
