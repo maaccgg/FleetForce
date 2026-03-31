@@ -17,7 +17,8 @@ const facturaSchema = z.object({
   monto_total: z.number().positive("El monto total debe ser estrictamente mayor a $0."),
   metodo_pago: z.enum(["PUE", "PPD"], { errorMap: () => ({ message: "Método de pago inválido detectado." }) }),
   forma_pago: z.string().min(2, "La forma de pago es obligatoria."),
-  fecha_viaje: z.string().min(10, "La fecha de emisión es obligatoria o tiene un formato incorrecto.")
+  fecha_viaje: z.string().min(10, "La fecha de emisión es obligatoria o tiene un formato incorrecto."),
+  referencia: z.string().optional() // <--- NUEVO: Permitimos la referencia opcional
 });
 
 function FacturasContenido() {
@@ -44,7 +45,8 @@ function FacturasContenido() {
   const [formData, setFormData] = useState({ 
     cliente_id: '', monto_total: '', folio_fiscal: '', 
     ruta: '', fecha_viaje: new Date().toISOString().split('T')[0],
-    fecha_vencimiento: '', forma_pago: '99', metodo_pago: 'PPD'
+    fecha_vencimiento: '', forma_pago: '99', metodo_pago: 'PPD',
+    referencia: '' // <--- NUEVO: Estado inicial
   });
 
   useEffect(() => {
@@ -269,7 +271,8 @@ const registrarFactura = async (e) => {
         monto_total: parseFloat(formData.monto_total),
         metodo_pago: formData.metodo_pago,
         forma_pago: formData.forma_pago,
-        fecha_viaje: formData.fecha_viaje
+        fecha_viaje: formData.fecha_viaje,
+        referencia: formData.referencia, // <--- NUEVO
       };
 
       // 2. PASAMOS POR EL DETECTOR DE METALES (SAFE PARSE)
@@ -294,12 +297,13 @@ const registrarFactura = async (e) => {
           forma_pago: validacion.data.forma_pago,
           metodo_pago: validacion.data.metodo_pago,
           estatus_pago: 'Pendiente',
-          usuario_id: empresaId
+          usuario_id: empresaId,
+          referencia: validacion.data.referencia
         }]);
 
       if (error) throw error;
       
-      setFormData({ cliente_id: '', monto_total: '', folio_fiscal: '', ruta: 'Ingreso Extraordinario', fecha_viaje: new Date().toISOString().split('T')[0], fecha_vencimiento: '', forma_pago: '99', metodo_pago: 'PPD' });
+      setFormData({ cliente_id: '', monto_total: '', folio_fiscal: '', ruta: 'Ingreso Extraordinario', fecha_viaje: new Date().toISOString().split('T')[0], fecha_vencimiento: '', forma_pago: '99', metodo_pago: 'PPD', referencia:'' });
       setMostrarFormulario(false);
       obtenerDatos(empresaId);
     } catch (error) {
@@ -465,8 +469,14 @@ const registrarFactura = async (e) => {
                           </div>
                         </td>
 
-                        <td className="p-4 align-middle max-w-[200px]">
+<td className="p-4 align-middle max-w-[200px]">
                           <span className="text-slate-300 text-[12px] truncate block" title={item.ruta}>{item.ruta || '---'}</span>
+                          {/* NUEVO: Mostramos la referencia debajo del concepto si existe */}
+                          {item.referencia && (
+                            <span className="text-emerald-500/80 text-[10px] uppercase font-bold tracking-widest truncate block mt-1" title={item.referencia}>
+                              REF: {item.referencia}
+                            </span>
+                          )}
                         </td>
 
                         <td className="p-4 align-middle">
@@ -555,6 +565,12 @@ const registrarFactura = async (e) => {
                       <input className="w-full bg-slate-950 border border-slate-800 p-4 rounded-2xl text-sm text-white outline-none focus:border-emerald-500" 
                         value={formData.ruta} onChange={e => setFormData({...formData, ruta: e.target.value})} placeholder="Ej. Flete Extra" />
                     </div>
+                  </div>
+{/* NUEVO CAMPO: Referencia del Cliente */}
+                  <div className="md:col-span-2">
+                     <label className="text-[12px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1">Referencia del Cliente (Opcional)</label>
+                     <input className="w-full bg-slate-950 border border-slate-800 p-4 rounded-2xl text-sm text-white outline-none focus:border-emerald-500" 
+                        value={formData.referencia} onChange={e => setFormData({...formData, referencia: e.target.value})} placeholder="Ej. Orden de Compra 4920-A" />
                   </div>
 
                   <div className="p-6 bg-slate-950 border border-slate-800 rounded-2xl">

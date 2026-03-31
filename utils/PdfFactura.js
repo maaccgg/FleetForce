@@ -56,8 +56,14 @@ export const generarFacturaPDF = async (factura, clienteData, perfilEmisor) => {
      fechaImpresion = `${formatFechaMty.format(ahora)} a las ${formatHoraMty.format(ahora)} hrs (Borrador)`;
   }
 
-  // EXTRACCIÓN DINÁMICA DE LA ORDEN DE COMPRA (PO)
-  const ordenCompra = factura.ruta && factura.ruta.includes('Ref:') ? factura.ruta.split('Ref:')[1].trim() : 'No especificada';
+  // ==========================================
+  // EXTRACCIÓN DINÁMICA DE LA ORDEN DE COMPRA / REFERENCIA
+  // ==========================================
+  let ordenCompra = factura.referencia || 'No especificada';
+  
+  if (ordenCompra === 'No especificada' && factura.ruta && factura.ruta.includes('Ref:')) {
+      ordenCompra = factura.ruta.split('Ref:')[1].trim();
+  }
 
   // ==========================================
   // 1. CABECERA Y LOGO
@@ -88,19 +94,18 @@ export const generarFacturaPDF = async (factura, clienteData, perfilEmisor) => {
   doc.setFontSize(9); doc.setFont("helvetica", "bold"); doc.setTextColor(255, 255, 255); 
   doc.text(`FACTURA CFDI 4.0 - ${etiquetaEstatus}`, 160.5, 20, { align: 'center' });
 
-
   doc.setTextColor(0); doc.setFontSize(8);
   autoTable(doc, {
-    startY: 22, margin: { left: 115, right: 14 }, // Le dimos 10mm más de espacio hacia la izquierda
+    startY: 22, margin: { left: 115, right: 14 }, 
     body: [
       ['Serie y Folio:', `F - ${String(factura.folio_interno || 'S/N').padStart(4, '0')}`],
       ['Folio Fiscal:', factura.folio_fiscal || 'POR ASIGNAR'],
       ['Fecha Emisión:', fechaImpresion],
-      ['Orden Compra:', ordenCompra],
+      ['Orden / Ref:', ordenCompra], // <--- SECCIÓN ACTUALIZADA
       ['Uso CFDI:', clienteData?.uso_cfdi || 'G03']
     ],
     theme: 'plain', styles: { fontSize: 7, cellPadding: 0.8 }, 
-    columnStyles: { 0: { fontStyle: 'bold', cellWidth: 22 }, 1: { halign: 'right', cellWidth: 59 } } // Celda derecha más ancha
+    columnStyles: { 0: { fontStyle: 'bold', cellWidth: 22 }, 1: { halign: 'right', cellWidth: 59 } } 
   });
 
   // ==========================================
@@ -114,7 +119,6 @@ export const generarFacturaPDF = async (factura, clienteData, perfilEmisor) => {
   doc.text("RECEPTOR (CLIENTE):", 14, startYReceptor);
   
   doc.setFontSize(9); doc.setFont("helvetica", "normal");
-  // BLINDAJE 1: Forzar String en el nombre del cliente
   doc.text(String(factura.cliente || 'CLIENTE NO REGISTRADO'), 14, startYReceptor + 5);
   
   doc.setFontSize(8);
@@ -149,14 +153,13 @@ export const generarFacturaPDF = async (factura, clienteData, perfilEmisor) => {
     theme: 'grid', 
     headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold' },
     styles: { fontSize: 8, cellPadding: 3 },
-
-columnStyles: { 
-      0: { halign: 'center', cellWidth: 20 }, // Clave SAT con más aire
-      1: { halign: 'center', cellWidth: 12 }, // Cantidad
-      2: { halign: 'center', cellWidth: 15 }, // Unidad
-      3: { halign: 'left' },                  // Descripción toma el espacio restante
-      4: { halign: 'right', cellWidth: 25 },  // Precio
-      5: { halign: 'right', cellWidth: 25 }   // Importe
+    columnStyles: { 
+      0: { halign: 'center', cellWidth: 20 }, 
+      1: { halign: 'center', cellWidth: 12 }, 
+      2: { halign: 'center', cellWidth: 15 }, 
+      3: { halign: 'left' },                  
+      4: { halign: 'right', cellWidth: 25 },  
+      5: { halign: 'right', cellWidth: 25 }   
     }
   });
 
@@ -233,7 +236,7 @@ columnStyles: {
   doc.text("No. Certificado SAT:", 135, textoY);
   doc.setFont("helvetica", "normal");
   doc.text(String(noCertificadoSAT), 162, textoY);
-  textoY += 5; // Salto de línea más grande antes del sello
+  textoY += 5; 
 
   // Sellos
   doc.setFont("helvetica", "bold");

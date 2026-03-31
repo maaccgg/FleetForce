@@ -24,10 +24,10 @@ import {
 
 const menuItems = [
   { name: 'Inicio', href: '/', icon: LayoutDashboard },
-  { name: 'Unidades', href: '/unidades', icon: Truck },
+  { name: 'Viajes', href: '/viajes', icon: FileCheck},
   { name: 'Facturas', href: '/facturas', icon: ReceiptText },
   { name: 'Gasto operativo', href: '/gastos', icon: TrendingUp },
-  { name: 'Viajes', href: '/viajes', icon: FileCheck},
+  { name: 'Unidades', href: '/unidades', icon: Truck },
   { name: 'Info - SAT Carta porte', href: '/sat', icon: Scale },
   { name: 'Rutas', href: '/rutas', icon: Map },
 ];
@@ -62,7 +62,7 @@ export default function Sidebar() {
   return (
     <nav className="w-64 h-screen p-6 border-r border-slate-800 bg-slate-950 flex flex-col gap-2 sticky top-0 overflow-y-auto">
       
-
+      {/* SECCIÓN DEL LOGOTIPO ACTUALIZADA */}
 {/* SECCIÓN DEL LOGOTIPO (CÓDIGO PURO) */}
       <div className="mb-8 px-2 flex flex-col items-start select-none">
         <div className="flex items-center gap-2 mb-1">
@@ -80,7 +80,6 @@ export default function Sidebar() {
           Gestión 2026
         </p>
       </div>
-
 
       <div className="flex flex-col gap-1 flex-1">
         {menuItems.map((item) => {

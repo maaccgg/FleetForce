@@ -149,17 +149,23 @@ export default function Page() {
     });
 
     const nuevasAlertas = [];
-    const evaluarAlerta = (fechaString) => {
-      const fVencimiento = new Date(fechaString + 'T00:00:00');
-      const dias = Math.ceil((fVencimiento - ahora) / (1000 * 60 * 60 * 24));
-      let entraEnFiltro = false;
-      if (filtroActivo && fIni && fFinObj) {
-        entraEnFiltro = (fVencimiento >= fIni && fVencimiento <= fFinObj);
-      } else {
-        entraEnFiltro = dias <= 30; 
-      }
-      return { entraEnFiltro, dias };
-    };
+const evaluarAlerta = (fechaString) => {
+    // Usamos T12:00:00 para evitar desfases de zona horaria
+    const fVencimiento = new Date(fechaString + 'T12:00:00'); 
+    const dias = Math.ceil((fVencimiento - ahora) / (1000 * 60 * 60 * 24));
+    let entraEnFiltro = false;
+
+    if (filtroActivo && fIni && fFinObj) {
+      // REGLA OPERATIVA: 
+      // (dias <= 30) atrapa lo vencido (negativos) y lo que vence pronto (0 a 30).
+      // Esto fuerza a que la alerta aparezca sin importar si el filtro es de este mes.
+      entraEnFiltro = (dias <= 30) || (fVencimiento >= fIni && fVencimiento <= fFinObj);
+    } else {
+      entraEnFiltro = dias <= 30; 
+    }
+    
+    return { entraEnFiltro, dias };
+  }; 
 
     unidades?.forEach(u => {
       const docs = [{ t: 'Seguro', f: u.vencimiento_seguro }, { t: 'Permiso SCT', f: u.vencimiento_sct }];
