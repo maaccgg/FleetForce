@@ -96,8 +96,12 @@ export async function POST(request) {
 
     return NextResponse.json(data);
 
-  } catch (error) {
+} catch (error) {
     console.error("Error en túnel seguro multi-tenant:", error);
-    return NextResponse.json({ error: 'Falla de comunicación interna.' }, { status: 500 });
+    return NextResponse.json({ 
+      error: 'Falla de comunicación interna.',
+      detalle_tecnico: error.message, // <--- ESTO REVELARÁ EL PROBLEMA EXACTO
+      linea: error.stack
+    }, { status: 500 });
   }
 }

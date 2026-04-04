@@ -24,7 +24,7 @@ export async function POST(request) {
           }
         }
       }
-    );
+    )
     
     const { data: { user }, error: authError } = await supabaseAuth.auth.getUser();
 
