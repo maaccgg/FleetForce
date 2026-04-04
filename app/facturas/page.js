@@ -287,20 +287,19 @@ const registrarFactura = async (e) => {
       }
 
       // 3. Si Zod aprueba (success: true), insertamos en Supabase con los datos ultra-limpios
-      const { error } = await supabase.from('facturas').insert([{ 
-          cliente: validacion.data.cliente,
-          monto_total: validacion.data.monto_total, 
-          folio_fiscal: formData.folio_fiscal,
-          ruta: formData.ruta,
-          fecha_viaje: validacion.data.fecha_viaje,
-          fecha_vencimiento: formData.fecha_vencimiento,
-          forma_pago: validacion.data.forma_pago,
-          metodo_pago: validacion.data.metodo_pago,
-          estatus_pago: 'Pendiente',
-          usuario_id: empresaId,
-          referencia: validacion.data.referencia
-        }]);
-
+const { error } = await supabase.from('facturas').insert([{ 
+    cliente: validacion.data.cliente,
+    monto_total: validacion.data.monto_total, 
+    folio_fiscal: formData.folio_fiscal,
+    ruta: formData.ruta,
+    fecha_viaje: validacion.data.fecha_viaje,
+    fecha_vencimiento: formData.fecha_vencimiento,
+    forma_pago: validacion.data.forma_pago,
+    metodo_pago: validacion.data.metodo_pago,
+    estatus_pago: 'Pendiente',
+    referencia: validacion.data.referencia
+    // Ya NO enviamos empresa_id ni usuario_id aquí, Supabase lo hará solo.
+}]);
       if (error) throw error;
       
       setFormData({ cliente_id: '', monto_total: '', folio_fiscal: '', ruta: 'Ingreso Extraordinario', fecha_viaje: new Date().toISOString().split('T')[0], fecha_vencimiento: '', forma_pago: '99', metodo_pago: 'PPD', referencia:'' });
