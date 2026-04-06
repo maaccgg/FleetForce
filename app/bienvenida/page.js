@@ -35,7 +35,7 @@ export default function Bienvenida() {
         // 3. Fallback: Si después de 1.5 segundos no detecta nada, el link expiró
         setTimeout(() => {
           setVerificando(false);
-        }, 1500);
+        }, 4000);
 
         return () => subscription.unsubscribe();
       }

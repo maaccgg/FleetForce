@@ -145,12 +145,13 @@ export default function Page() {
       queryViajes = queryViajes.gte('fecha_salida', fechaInicio).lte('fecha_salida', fechaFin);
     }
 
-    const [
+const [
       { data: facturasPagadas }, { data: gastosBD }, { data: viajesBD },
       { data: unidades }, { data: operadores }, { data: facturasPendientes }
     ] = await Promise.all([
       queryFacturas, queryGastos, queryViajes,
-      supabase.from('unidades').select('numero_economico, vencimiento_seguro, vencimiento_sct').eq('usuario_id', idMaestro),
+      // AQUÍ: Agregamos vencimiento_circulacion al select
+      supabase.from('unidades').select('numero_economico, vencimiento_seguro, vencimiento_sct, vencimiento_circulacion').eq('usuario_id', idMaestro),
       supabase.from('operadores').select('nombre_completo, vencimiento_licencia').eq('usuario_id', idMaestro),
       supabase.from('facturas').select('cliente, fecha_vencimiento, monto_total').eq('usuario_id', idMaestro).eq('estatus_pago', 'Pendiente')
     ]);
@@ -166,21 +167,29 @@ export default function Page() {
     });
 
     const nuevasAlertas = [];
-    const evaluarAlerta = (fechaString) => {
+
+const evaluarAlerta = (fechaString) => {
       const fVencimiento = new Date(fechaString + 'T12:00:00'); 
       const dias = Math.ceil((fVencimiento - ahora) / (1000 * 60 * 60 * 24));
       let entraEnFiltro = false;
 
       if (filtroActivo && fIni && fFinObj) {
-        entraEnFiltro = (dias <= 30) || (fVencimiento >= fIni && fVencimiento <= fFinObj);
+        // OBEDIENCIA ESTRICTA AL PERIODO: Solo muestra lo que venza dentro del rango seleccionado.
+        // También incluimos lo que ya está vencido (dias < 0) para que nunca se pierda un riesgo crítico.
+        entraEnFiltro = (fVencimiento >= fIni && fVencimiento <= fFinObj) || (dias < 0);
       } else {
-        entraEnFiltro = dias <= 30; 
+        // VISTA HISTÓRICA/TODOS: Muestra lo vencido y lo próximo a vencer (30 días).
+        entraEnFiltro = (dias <= 30) || (dias < 0); 
       }
       return { entraEnFiltro, dias };
-    }; 
+    };
 
     unidades?.forEach(u => {
-      const docs = [{ t: 'Seguro', f: u.vencimiento_seguro }, { t: 'Permiso SCT', f: u.vencimiento_sct }];
+const docs = [
+        { t: 'Seguro', f: u.vencimiento_seguro }, 
+        { t: 'Permiso SCT', f: u.vencimiento_sct },
+        { t: 'Tarjeta Circ.', f: u.vencimiento_circulacion }
+      ];
       docs.forEach(d => {
         if (!d.f) return;
         const { entraEnFiltro, dias } = evaluarAlerta(d.f);
@@ -241,6 +250,12 @@ export default function Page() {
     const cumpleFiltro = filtroTipo === "todos" || a.tipo === filtroTipo;
     return cumpleBusqueda && cumpleFiltro;
   });
+
+const resumenAlertas = [
+    { id: 'unidad', label: 'Flota', conteo: alertas.filter(a => a.tipo === 'unidad').length, icono: <Truck size={20}/>, colorText: 'text-blue-500', colorBg: 'bg-blue-500/10' },
+    { id: 'operador', label: 'Operadores', conteo: alertas.filter(a => a.tipo === 'operador').length, icono: <User size={20}/>, colorText: 'text-purple-500', colorBg: 'bg-purple-500/10' },
+    { id: 'factura', label: 'Cobranza', conteo: alertas.filter(a => a.tipo === 'factura').length, icono: <DollarSign size={20}/>, colorText: 'text-emerald-500', colorBg: 'bg-emerald-500/10' }
+  ];
 
   // Pantalla de Carga Estilizada
   if (loading && !sesion) return (
@@ -410,6 +425,7 @@ export default function Page() {
             )}
 
             <section className="space-y-6">
+              
               <div className="flex flex-col gap-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -434,22 +450,59 @@ export default function Page() {
                 </div>
               </div>
 
-              <div className="space-y-3 max-h-[450px] overflow-y-auto pr-2 custom-scrollbar">
-                {alertasFiltradas.length === 0 ? (
+<div className="space-y-3 max-h-[450px] overflow-y-auto pr-2 custom-scrollbar">
+                {alertas.length === 0 ? (
                   <div className="bg-slate-900/50 border border-slate-800 p-8 rounded-[2.5rem] text-center">
                     <p className="text-[10px] text-slate-600 font-black uppercase italic tracking-widest">Sin alertas pendientes</p>
                   </div>
+                ) : filtroTipo === "todos" && !busqueda ? (
+                  /* VISTA DE RESUMEN (Cuando "Todos" está seleccionado) */
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pb-2">
+                    {resumenAlertas.map((resumen) => (
+                      <div key={resumen.id} onClick={() => setFiltroTipo(resumen.id)}
+                        className="bg-slate-900 border border-slate-800 p-6 rounded-[2rem] hover:border-slate-700 transition-all cursor-pointer group flex flex-col justify-between min-h-[140px] shadow-lg">
+                        <div className="flex justify-between items-start mb-4">
+                          <div className={`${resumen.colorBg} ${resumen.colorText} p-3.5 rounded-2xl transition-transform group-hover:scale-110`}>
+                            {resumen.icono}
+                          </div>
+                          <ChevronRight size={18} className="text-slate-700 group-hover:text-white transition-colors" />
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">{resumen.label}</p>
+                          <div className="flex items-baseline gap-2">
+                            <h4 className="text-3xl font-black text-white italic tracking-tighter">{resumen.conteo}</h4>
+                            <span className="text-[11px] text-slate-500 font-bold uppercase tracking-widest">avisos</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    
+                    <div className="col-span-1 sm:col-span-3 bg-blue-900/10 border border-blue-500/20 p-5 rounded-[1.5rem] flex items-center gap-4 animate-in fade-in">
+                      <div className="bg-blue-500/20 p-2 rounded-xl">
+                        <Bell className="text-blue-400" size={18} />
+                      </div>
+                      <div>
+                        <p className="text-white text-sm font-bold">Tienes {alertas.length} avisos activos</p>
+                        <p className="text-[10px] text-slate-400 font-medium uppercase tracking-widest mt-0.5">Selecciona una categoría arriba para ver los detalles.</p>
+                      </div>
+                    </div>
+                  </div>
+                ) : alertasFiltradas.length === 0 ? (
+                  <div className="bg-slate-900/50 border border-slate-800 p-8 rounded-[2.5rem] text-center">
+                    <p className="text-[10px] text-slate-600 font-black uppercase italic tracking-widest">No hay resultados para esta categoría</p>
+                  </div>
                 ) : (
+                  /* VISTA DE LISTA DETALLADA (Cuando hay un filtro o búsqueda activa) */
                   alertasFiltradas.map((alerta) => (
                     <div key={alerta.id} onClick={() => router.push(alerta.ruta)}
-                      className={`bg-slate-900 border ${alerta.urgencia === 'critica' ? 'border-red-500/30' : 'border-orange-500/30'} p-5 rounded-[1.5rem] flex items-center gap-5 hover:bg-slate-800 transition-all cursor-pointer group`}>
+                      className={`bg-slate-900 border ${alerta.urgencia === 'critica' ? 'border-red-500/30 hover:border-red-500/50' : 'border-orange-500/30 hover:border-orange-500/50'} p-5 rounded-[1.5rem] flex items-center gap-5 hover:bg-slate-800/80 transition-all cursor-pointer group`}>
                       <div className={`${alerta.urgencia === 'critica' ? 'bg-red-500/10 text-red-500' : 'bg-orange-500/10 text-orange-500'} p-3 rounded-xl transition-transform group-hover:scale-110`}>
                         {alerta.icono}
                       </div>
                       <div className="flex-1">
                         <div className="flex justify-between items-center">
                           <h4 className="text-white font-black uppercase text-xs italic">{alerta.titulo}</h4>
-                          <ChevronRight size={14} className="text-slate-700" />
+                          <ChevronRight size={14} className="text-slate-700 group-hover:text-white transition-colors" />
                         </div>
                         <p className={`text-[10px] mt-0.5 font-bold tracking-tight ${alerta.urgencia === 'critica' ? 'text-red-400' : 'text-orange-400'}`}>
                           {alerta.subtitulo}

@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { 
   Truck, PlusCircle, Trash2, Edit2, X, 
-  ShieldCheck, Calendar, Wrench, AlertTriangle, CheckCircle, DollarSign, FileText
+  ShieldCheck, Calendar, Wrench, AlertTriangle, CheckCircle, DollarSign, FileText, CreditCard
 } from 'lucide-react';
 import Sidebar from '@/components/sidebar';
 
@@ -23,7 +23,7 @@ export default function UnidadesPage() {
   const [formData, setFormData] = useState({
     numero_economico: '', placas: '', tipo_placa: 'Federal', permiso_sict: 'TPAF01', num_permiso_sict: '',
     configuracion_vehicular: 'T3S1', anio_modelo: '', aseguradora_rc: '', poliza_rc: '',
-    vencimiento_seguro: '', vencimiento_sct: ''
+    vencimiento_seguro: '', vencimiento_sct: '', vencimiento_circulacion: ''
   });
 
   useEffect(() => {
@@ -38,24 +38,20 @@ export default function UnidadesPage() {
 async function obtenerUnidades(userId) {
     setLoading(true);
 
-    // 1. OBTENER EL ID DE LA INSTITUCIÓN
     const { data: perfilData } = await supabase
       .from('perfiles')
       .select('empresa_id, rol')
       .eq('id', userId)
       .single();
 
-    // Si es admin, su empresa_id podría ser nulo, así que usa su propio ID. 
-    // Si es miembro, usará el ID del administrador.
     const idInstitucion = perfilData?.empresa_id || userId; 
     setEmpresaId(idInstitucion);
 
-    // 2. CARGAR EL CATÁLOGO COMPARTIDO
     try {
       const { data, error } = await supabase
         .from('unidades')
         .select('*')
-        .eq('usuario_id', idInstitucion) // <--- ESTA ES LA CLAVE
+        .eq('usuario_id', idInstitucion) 
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -80,7 +76,8 @@ async function obtenerUnidades(userId) {
       usuario_id: empresaId,
       placas: formData.placas.toUpperCase(),
       vencimiento_seguro: formData.vencimiento_seguro || null,
-      vencimiento_sct: formData.tipo_placa === 'Estatal' ? null : (formData.vencimiento_sct || null)
+      vencimiento_sct: formData.tipo_placa === 'Estatal' ? null : (formData.vencimiento_sct || null),
+      vencimiento_circulacion: formData.vencimiento_circulacion || null
     };
 
     const { error } = unidadSeleccionada 
@@ -110,7 +107,8 @@ async function obtenerUnidades(userId) {
       permiso_sict: u.permiso_sict || 'TPAF01',
       num_permiso_sict: u.num_permiso_sict || '', configuracion_vehicular: u.configuracion_vehicular || 'T3S1',
       anio_modelo: u.anio_modelo || '', aseguradora_rc: u.aseguradora_rc || '', poliza_rc: u.poliza_rc || '',
-      vencimiento_seguro: u.vencimiento_seguro || '', vencimiento_sct: u.vencimiento_sct || ''
+      vencimiento_seguro: u.vencimiento_seguro || '', vencimiento_sct: u.vencimiento_sct || '',
+      vencimiento_circulacion: u.vencimiento_circulacion || ''
     });
     setTabExpediente('tecnica');
     cargarMantenimientos(u.id);
@@ -122,7 +120,7 @@ async function obtenerUnidades(userId) {
     setFormData({ 
       numero_economico: '', placas: '', tipo_placa: 'Federal', permiso_sict: 'TPAF01', 
       num_permiso_sict: '', configuracion_vehicular: 'T3S1', anio_modelo: '', aseguradora_rc: '', 
-      poliza_rc: '', vencimiento_seguro: '', vencimiento_sct: '' 
+      poliza_rc: '', vencimiento_seguro: '', vencimiento_sct: '', vencimiento_circulacion: '' 
     });
     setTabExpediente('tecnica');
     setMostrarModal(true);
@@ -179,8 +177,8 @@ async function obtenerUnidades(userId) {
           </header>
 <div className="bg-slate-900 border border-slate-800 rounded-[2rem] overflow-hidden shadow-2xl">
 
-  {unidades.length === 0 && <p className="text-slate-500 text-sm">No hay unidades registradas.</p>}
-            <div className="overflow-x-auto">
+  {unidades.length === 0 && <p className="text-slate-500 text-sm hidden">No hay unidades registradas.</p>}
+<div className="overflow-x-auto">
               <table className="w-full text-left border-collapse text-[13px]">
                 <thead>
                   <tr className="bg-slate-950/50 border-b border-slate-800 text-slate-400 text-[13px] font-semibold uppercase tracking-wider">
@@ -188,13 +186,15 @@ async function obtenerUnidades(userId) {
                     <th className="p-4 font-normal">Configuración</th>
                     <th className="p-4 font-normal">Seguro RC</th>
                     <th className="p-4 font-normal">Permiso SCT</th>
+                    <th className="p-4 font-normal">Tarjeta Circ.</th>
                     <th className="p-4 pr-8 text-right font-normal">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/50">
                   {unidades.length === 0 && (
                     <tr>
-                      <td colSpan="5" className="py-16 text-center">
+                      {/* Ajustamos el colSpan a 6 por la nueva columna */}
+                      <td colSpan="6" className="py-16 text-center">
                         <Truck size={32} className="mx-auto text-slate-700 mb-3" />
                         <p className="text-slate-500 uppercase tracking-widest text-sm">No hay unidades registradas</p>
                       </td>
@@ -203,6 +203,7 @@ async function obtenerUnidades(userId) {
                   
                   {unidades.map((u) => {
                     const vigSeguro = verificarVigencia(u.vencimiento_seguro);
+                    const vigCirculacion = verificarVigencia(u.vencimiento_circulacion);
                     const vigSct = u.tipo_placa === 'Estatal' 
                       ? { texto: 'No Aplica', color: 'text-slate-400', bg: 'bg-slate-900 border-slate-800' } 
                       : verificarVigencia(u.vencimiento_sct);
@@ -228,16 +229,25 @@ async function obtenerUnidades(userId) {
                         </td>
 
                         <td className="p-4 align-middle">
-                          <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border ${vigSeguro.bg}`}>
+                          <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border ${vigSeguro.bg} w-max`}>
                             <ShieldCheck size={14} className={vigSeguro.color} />
                             <span className={`text-[10px] font-bold uppercase tracking-widest ${vigSeguro.color}`}>{vigSeguro.texto}</span>
                           </div>
                         </td>
 
+                        {/* COLUMNA 1: PERMISO SCT */}
                         <td className="p-4 align-middle">
-                          <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border ${vigSct.bg}`}>
+                          <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border ${vigSct.bg} w-max`}>
                             <FileText size={14} className={vigSct.color} />
                             <span className={`text-[10px] font-bold uppercase tracking-widest ${vigSct.color}`}>{vigSct.texto}</span>
+                          </div>
+                        </td>
+
+                        {/* COLUMNA 2: TARJETA DE CIRCULACIÓN */}
+                        <td className="p-4 align-middle">
+                          <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border ${vigCirculacion.bg} w-max`}>
+                            <CreditCard size={14} className={vigCirculacion.color} />
+                            <span className={`text-[10px] font-bold uppercase tracking-widest ${vigCirculacion.color}`}>{vigCirculacion.texto}</span>
                           </div>
                         </td>
 
@@ -325,8 +335,9 @@ async function obtenerUnidades(userId) {
                         </select>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-4 p-6 bg-blue-900/10 rounded-2xl border border-blue-500/20">
-                        <div className="col-span-2 text-[9px] font-black text-blue-400 uppercase tracking-widest mb-2">Permisos, Seguros y Vigencias</div>
+                      {/* AQUÍ ESTÁ EL CAMBIO PRINCIPAL: Grid a 3 columnas */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-6 bg-blue-900/10 rounded-2xl border border-blue-500/20">
+                        <div className="col-span-1 md:col-span-3 text-[9px] font-black text-blue-400 uppercase tracking-widest mb-2">Permisos, Seguros y Vigencias</div>
                         
                         <div className="space-y-3">
                           <label className="text-[9px] text-slate-500 uppercase font-black ml-1">Seguro de Resp. Civil</label>
@@ -366,6 +377,24 @@ async function obtenerUnidades(userId) {
                             />
                           </div>
                         </div>
+
+                        {/* NUEVO BLOQUE: Tarjeta de Circulación */}
+                        <div className="space-y-3">
+                          <label className="text-[9px] text-slate-500 uppercase font-black ml-1">Tarjeta de Circulación</label>
+                          <div className="flex flex-col justify-end h-full">
+                            <span className="text-[9px] text-slate-500 font-bold mb-1 mt-auto">Vigencia Tarjeta:</span>
+                            <input 
+                              type="date" 
+                              className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white" 
+                              value={formData.vencimiento_circulacion} 
+                              onChange={e => setFormData({...formData, vencimiento_circulacion: e.target.value})} 
+                            />
+                            <p className="text-[9px] text-slate-500 italic mt-3 pr-2">
+                              * Asegúrate de tener el documento físico en la unidad correspondiente.
+                            </p>
+                          </div>
+                        </div>
+
                       </div>
 
                       <button type="submit" disabled={loading} className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black uppercase text-[11px] tracking-widest shadow-xl hover:bg-blue-500 transition-all flex justify-center items-center gap-2">
@@ -374,7 +403,6 @@ async function obtenerUnidades(userId) {
                     </form>
                   )}
 
-                  {/* TAB 2: HISTORIAL DE MANTENIMIENTO */}
                   {tabExpediente === 'mantenimientos' && unidadSeleccionada && (
                     <div className="space-y-8">
                       <form onSubmit={registrarMantenimiento} className="p-6 bg-orange-500/10 border border-orange-500/20 rounded-2xl grid grid-cols-12 gap-3 items-end">
