@@ -252,9 +252,14 @@ const guardarRegistro = async (e) => {
     setLoading(false);
   };
 
-  const guardarPerfilFiscal = async () => {
+const guardarPerfilFiscal = async () => {
     setLoading(true);
-    const { error } = await supabase.from('perfil_emisor').upsert({ ...perfilFiscal, usuario_id: sesion.user.id, rfc: perfilFiscal.rfc.toUpperCase(), updated_at: new Date() });
+    const { error } = await supabase.from('perfil_emisor').upsert({ 
+        ...perfilFiscal, 
+        usuario_id: sesion.user.id, 
+        rfc: perfilFiscal.rfc.toUpperCase(), 
+        updated_at: new Date().toISOString() // <-- CAMBIO AQUÍ
+    });
     if (error) alert(error.message); else alert("✅ Configuración Fiscal Guardada.");
     setLoading(false);
   };
@@ -280,22 +285,29 @@ const guardarRegistro = async (e) => {
     }
   };
 
-  const subirSellosCSD = async (e) => {
+const subirSellosCSD = async (e) => {
     e.preventDefault();
     if (!cerFile || !keyFile || !csdPassword) return alert("Por favor selecciona los archivos .cer, .key y escribe la contraseña.");
     if (!cerFile.name.toLowerCase().endsWith('.cer') || !keyFile.name.toLowerCase().endsWith('.key')) return alert("Archivos inválidos.");
 
     setIsUploadingCSD(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      const { error } = await supabase.from('perfil_emisor').upsert({ ...perfilFiscal, usuario_id: sesion.user.id, tiene_csd: true, updated_at: new Date() });
+      // Simulador de procesamiento (ya que la subida real la harás en Facturapi)
+      await new Promise(resolve => setTimeout(resolve, 2000)); 
+      
+      const { error } = await supabase.from('perfil_emisor').upsert({ 
+          ...perfilFiscal, 
+          usuario_id: sesion.user.id, 
+          tiene_csd: true, 
+          updated_at: new Date().toISOString() // <-- CAMBIO AQUÍ
+      });
       if (error) throw error;
       setPerfilFiscal({ ...perfilFiscal, tiene_csd: true });
-      alert("✅ ¡Sellos Digitales vinculados exitosamente!");
+      alert("✅ ¡Sellos Digitales vinculados exitosamente a FleetForce!");
       setCerFile(null); setKeyFile(null); setCsdPassword('');
     } catch (err) { alert("Error: " + err.message); } finally { setIsUploadingCSD(false); }
   };
-
+  
 const eliminarRegistro = async (id) => {
     if (!confirm("¿Deseas dar de baja (archivar) este registro? Ya no aparecerá para crear nuevos viajes, pero se conservará en tu historial contable.")) return;
     

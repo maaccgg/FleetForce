@@ -31,7 +31,6 @@ const menuItems = [
   { name: 'Gasto operativo', href: '/gastos', icon: TrendingUp, roles: ['administrador', 'operaciones', 'miembro'] },
   { name: 'Unidades', href: '/unidades', icon: Truck, roles: ['administrador', 'operaciones', 'facturacion', 'miembro'] },
   { name: 'Info - SAT', href: '/sat', icon: Scale, roles: ['administrador', 'operaciones', 'facturacion', 'miembro'] },
-  { name: 'Rutas', href: '/rutas', icon: Map, roles: ['administrador', 'operaciones', 'facturacion', 'miembro'] },
 ];
 
 export default function Sidebar() {

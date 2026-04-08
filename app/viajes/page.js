@@ -105,7 +105,7 @@ export default function ViajesPage() {
     setViajes(data || []);
   }
 
-  const generarIdCCP = () => crypto.randomUUID().toUpperCase();
+ const generarIdCCP = () => `CCC${crypto.randomUUID().substring(3).toUpperCase()}`;
 
   const agregarFilaMercancia = () => { setFormData({ ...formData, mercancias_detalle: [...formData.mercancias_detalle, { mercancia_id: '', cantidad: 1, peso_kg: '', valor: '', moneda: 'MXN' }] }); };
   const actualizarFilaMercancia = (index, campo, valor) => { const nuevasMercancias = [...formData.mercancias_detalle]; nuevasMercancias[index][campo] = valor; setFormData({ ...formData, mercancias_detalle: nuevasMercancias }); };
@@ -337,14 +337,15 @@ const timbrarCartaPorte = async (viaje) => {
           quantity: 1, product: { description: descripcionServicio, product_key: "78101802", price: subtotal, taxes: [{ type: "IVA", rate: 0.16 }, { type: "IVA", rate: 0.04, withholding: true }] } 
         }],
         payment_form: "99", payment_method: "PPD", use: viaje.clientes.uso_cfdi || "G03",
-        complements: [{
+complements: [{
           type: "carta_porte",
           data: {
-            IdCCP: viaje.id_ccp, TranspInternac: "No", TotalDistRec: parseFloat(viaje.distancia_km || 150),
+            IdCCP: viaje.id_ccp?.startsWith('CCC') ? viaje.id_ccp : `CCC${(viaje.id_ccp || crypto.randomUUID().toUpperCase()).substring(3)}`,
+            TranspInternac: "No", 
+            TotalDistRec: parseFloat(viaje.distancia_km || 150),
             Ubicaciones: [
               { TipoUbicacion: "Origen", RFCRemitenteDestinatario: rfcOrigen, FechaHoraSalidaLlegada: fechaHoraCFDI, Domicilio: { Calle: viaje.origen.nombre_lugar, Estado: viaje.origen.estado, Pais: "MEX", CodigoPostal: viaje.origen.codigo_postal } },
-              { TipoUbicacion: "Destino", RFCRemitenteDestinatario: rfcDestino, FechaHoraSalidaLlegada: fechaHoraLlegadaCFDI, Domicilio: { Calle: viaje.destino.nombre_lugar, Estado: viaje.destino.estado, Pais: "MEX", CodigoPostal: viaje.destino.codigo_postal } }
-            ],
+{ TipoUbicacion: "Destino", DistanciaRecorrida: parseFloat(viaje.distancia_km || 150), RFCRemitenteDestinatario: rfcDestino, FechaHoraSalidaLlegada: fechaHoraLlegadaCFDI, Domicilio: { Calle: viaje.destino.nombre_lugar, Estado: viaje.destino.estado, Pais: "MEX", CodigoPostal: viaje.destino.codigo_postal } }            ],
             Mercancias: {
               PesoBrutoTotal: pesoTotalTimbre, UnidadPeso: "KGM", NumTotalMercancias: arregloMercanciasFacturapi.length, Mercancia: arregloMercanciasFacturapi, 
               Autotransporte: autotransporteObj

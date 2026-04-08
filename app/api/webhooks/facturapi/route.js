@@ -10,6 +10,14 @@ const supabaseAdmin = createClient(
 
 export async function POST(req) {
   try {
+
+    // 1. EL ESCUDO DE SEGURIDAD
+    const url = new URL(req.url);
+    const token = url.searchParams.get('token');
+    
+    if (token !== process.env.WEBHOOK_SECRET_FACTURAPI) {
+      return NextResponse.json({ error: 'Acceso no autorizado al Webhook' }, { status: 401 });
+    }
     const payload = await req.json();
 
     // 1. EVENTO: FACTURA TIMBRADA
