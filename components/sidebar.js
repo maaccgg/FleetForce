@@ -28,7 +28,7 @@ const menuItems = [
   { name: 'Inicio', href: '/', icon: LayoutDashboard, roles: ['administrador', 'operaciones', 'facturacion', 'miembro'] },
   { name: 'Viajes', href: '/viajes', icon: FileCheck, roles: ['administrador', 'operaciones', 'miembro'] },
   { name: 'Facturas', href: '/facturas', icon: ReceiptText, roles: ['administrador', 'facturacion'] },
-  { name: 'Gasto operativo', href: '/gastos', icon: TrendingUp, roles: ['administrador', 'operaciones', 'miembro'] },
+  { name: 'Gasto operativo', href: '/gastos', icon: TrendingUp, roles: ['administrador',] },
   { name: 'Unidades', href: '/unidades', icon: Truck, roles: ['administrador', 'operaciones', 'facturacion', 'miembro'] },
   { name: 'Info - SAT', href: '/sat', icon: Scale, roles: ['administrador', 'operaciones', 'facturacion', 'miembro'] },
 ];

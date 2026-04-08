@@ -394,7 +394,14 @@ const eliminarRegistro = async (id) => {
                { id: 'fiscal', label: 'Emisor Fiscal', icon: ShieldCheck } ]
 
 // === BLINDAJE VISUAL CORREGIDO ===
-            .filter(tab => rolUsuario === 'administrador' || tab.id !== 'fiscal') 
+.filter(tab => {
+              // Definimos quién tiene el poder absoluto
+              const esAdmin = rolUsuario === 'administrador' || rolUsuario === 'admin';   
+              // Si es administrador, ve todo. 
+              if (esAdmin) return true;
+              // Si NO es administrador, ocultamos la pestaña Fiscal y la de Clientes
+              return tab.id !== 'fiscal' && tab.id !== 'clientes';
+            })
             .map((tab) => (
               <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex items-center gap-2 px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${ activeTab === tab.id ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20' : 'text-slate-500 hover:text-slate-300' }`}>
                 <tab.icon size={14} /> {tab.label}
@@ -467,7 +474,7 @@ const eliminarRegistro = async (id) => {
                       <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all"><button onClick={() => editarCliente(cl)} className="p-2 text-slate-500 hover:text-blue-500"><Edit2 size={14}/></button><button onClick={() => eliminarRegistro(cl.id)} className="p-2 text-slate-500 hover:text-red-500"><Trash2 size={14}/></button></div>
                     </div>
                   </div>
-                ))}
+                ))} 
 
                 {activeTab === 'remolques' && remolques.map(r => {
                   const catalogoSAT = { "CTR01": "Caja Seca (Camión)", "CTR02": "Caja Seca (Tráiler)", "CTR03": "Caja Refrigerada", "CTR04": "Plataforma", "CTR05": "Cama Baja", "CTR06": "Portacontenedor", "CTR08": "Tolva", "CTR10": "Tanque", "CTR12": "Góndola" };

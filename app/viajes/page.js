@@ -12,7 +12,7 @@ import { z } from 'zod';
 // === ESCUDO DE VALIDACIÓN ZOD PARA VIAJES ===
 const viajeSchema = z.object({
   distancia_km: z.number().positive("🛑 La distancia en KM debe ser estrictamente mayor a 0."),
-  monto_flete: z.number().positive( "🛑 El monto del flete no puede ser negativo o igual a 0."),
+  monto_flete: z.number().nonnegative("🛑 El monto del flete no puede ser negativo."), // <-- Cambio táctico
   fecha_salida: z.string().min(10, "🛑 La fecha de salida es obligatoria.")
 });
 
@@ -37,11 +37,14 @@ export default function ViajesPage() {
   const [empresaId, setEmpresaId] = useState(null);
   const [rolUsuario, setRolUsuario] = useState('miembro');
 
+  const puedeVerAdmin = rolUsuario === 'admin' || rolUsuario === 'administrador'; // Ajusta el texto según el rol exacto de tu BD
+
   const formInicial = {
     unidad_id: '', remolque_id: '', operador_id: '', origen_id: '', destino_id: '', 
     cliente_id: '', monto_flete: '', distancia_km: '', referencia: '', fecha_salida: new Date().toISOString().split('T')[0],
     mercancias_detalle: [{ mercancia_id: '', cantidad: 1, peso_kg: '', valor: '', moneda: 'MXN' }],
-    gasto_monto: '', gasto_descripcion: 'Viáticos de Ruta'
+    gasto_monto: '', gasto_descripcion: 'Viáticos de Ruta',
+    tag_casetas: '', tarjeta_gasolina: '' // <-- Agregado aquí
   };
 
   const [formData, setFormData] = useState(formInicial);
@@ -125,10 +128,11 @@ export default function ViajesPage() {
     if (detalle.length === 0) detalle = [{ mercancia_id: '', cantidad: 1, peso_kg: '', valor: '', moneda: 'MXN' }];
 
     setFormData({
-      unidad_id: viaje.unidad_id || '', remolque_id: viaje.remolque_id || '', operador_id: viaje.operador_id || '', origen_id: viaje.origen_id || '', destino_id: viaje.destino_id || '',
-      cliente_id: viaje.cliente_id || '', monto_flete: viaje.monto_flete || '', distancia_km: viaje.distancia_km || '', referencia: viaje.referencia || '',
-      fecha_salida: viaje.fecha_salida || new Date().toISOString().split('T')[0], mercancias_detalle: detalle
-    });
+     unidad_id: viaje.unidad_id || '', remolque_id: viaje.remolque_id || '', operador_id: viaje.operador_id || '', origen_id: viaje.origen_id || '', destino_id: viaje.destino_id || '',
+     cliente_id: viaje.cliente_id || '', monto_flete: viaje.monto_flete || '', distancia_km: viaje.distancia_km || '', referencia: viaje.referencia || '',
+     fecha_salida: viaje.fecha_salida || new Date().toISOString().split('T')[0], mercancias_detalle: detalle,
+     tag_casetas: viaje.tag_casetas || '', tarjeta_gasolina: viaje.tarjeta_gasolina || '' // <-- Agregado aquí
+      });
     setMostrarModal(true);
   };
 
@@ -400,7 +404,7 @@ const { data: { session } } = await supabase.auth.getSession();
         alert(traducirErrorFacturapi(res));
       }
     } catch (err) { alert(err.message); } finally { setLoading(false); }
-  };
+  }; 
 
   const registrarViaje = async (e) => {
     e.preventDefault();
@@ -430,7 +434,9 @@ const { data: { session } } = await supabase.auth.getSession();
         monto_flete: parseFloat(formData.monto_flete || 0), 
         referencia: formData.referencia || '', 
         fecha_salida: formData.fecha_salida, 
-        usuario_id: empresaId
+        usuario_id: empresaId,
+        tag_casetas: formData.tag_casetas, // <-- Agregado aquí
+        tarjeta_gasolina: formData.tarjeta_gasolina // <-- Agregado aquí
       };
 
 
@@ -693,15 +699,20 @@ if (formData.gasto_monto && parseFloat(formData.gasto_monto) > 0) {
                       <td className="p-4 pr-8 align-middle">
                         <div className="flex items-center justify-end gap-1.5 opacity-20 group-hover:opacity-100 transition-opacity">
                           
-                          {v.estatus === 'Borrador' && (
-                            <>
-                              <button onClick={() => eliminarViaje(v.id)} title="Eliminar Viaje" className="p-2 text-slate-500 hover:bg-red-500/10 hover:text-red-500 rounded-lg transition-colors"><Trash2 size={16}/></button>
-                              <button onClick={() => editarViaje(v)} title="Editar Viaje" className="p-2 text-slate-400 hover:bg-orange-500/10 hover:text-orange-400 rounded-lg transition-colors"><Edit2 size={16}/></button>
-                              <button onClick={() => timbrarCartaPorte(v)} disabled={loading} className="px-3 py-1.5 ml-2 bg-blue-600/10 text-blue-500 hover:bg-blue-600 hover:text-white border border-blue-500/20 rounded-lg uppercase tracking-widest text-[10px] flex items-center gap-1.5 transition-colors">
-                                {loading ? <Loader2 size={14} className="animate-spin"/> : <ShieldCheck size={14}/>} Timbrar
-                              </button>
-                            </>
-                          )}
+                      {v.estatus === 'Borrador' && (
+                        <>
+                          <button onClick={() => eliminarViaje(v.id)} title="Eliminar Viaje" className="p-2 text-slate-500 hover:bg-red-500/10 hover:text-red-500 rounded-lg transition-colors"><Trash2 size={16}/></button>
+                          <button onClick={() => editarViaje(v)} title="Editar Viaje" className="p-2 text-slate-400 hover:bg-orange-500/10 hover:text-orange-400 rounded-lg transition-colors mr-2"><Edit2 size={16}/></button> 
+                          {/* NUEVO BOTÓN: Previsualizar Borrador */}
+                          <button onClick={() => generarPDFCartaPorte(v, perfilEmisor)} title="Previsualizar PDF (Borrador)" className="p-2 bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white rounded-lg transition-colors mr-2">
+                            <FileText size={16}/>
+                          </button>
+                          
+                          <button onClick={() => timbrarCartaPorte(v)} disabled={loading} className="px-3 py-1.5 bg-blue-600/10 text-blue-500 hover:bg-blue-600 hover:text-white border border-blue-500/20 rounded-lg uppercase tracking-widest text-[10px] flex items-center gap-1.5 transition-colors">
+                            {loading ? <Loader2 size={14} className="animate-spin"/> : <ShieldCheck size={14}/>} Timbrar
+                          </button>
+                        </>
+                      )}
 
                           {v.estatus === 'Emitido (Timbrado)' && (
                             <>
@@ -819,24 +830,25 @@ if (formData.gasto_monto && parseFloat(formData.gasto_monto) > 0) {
                     <div className="text-right mt-2"><p className="text-[10px] text-slate-400 uppercase">Peso Total: <span className="text-white text-xs">{calcularPesoTotal().toLocaleString('es-MX', {minimumFractionDigits: 2})} KG</span></p></div>
                   </div>
 
+<div className="grid grid-cols-2 gap-4 mb-4">
+  <input type="text" placeholder="TAG de Casetas (Ejemplo: Pase-123)" className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white" value={formData.tag_casetas} onChange={e => setFormData({...formData, tag_casetas: e.target.value})} />
+  <input type="text" placeholder="Tarjeta de Gasolina (Ejemplo: Edenred-456)" className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white" value={formData.tarjeta_gasolina} onChange={e => setFormData({...formData, tarjeta_gasolina: e.target.value})} />
+</div>
+
+
                   <div className="grid grid-cols-3 gap-4">
                     <select required className="col-span-1 bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white" value={formData.cliente_id} onChange={e => setFormData({...formData, cliente_id: e.target.value})}>
                       <option value="">Cliente Factura...</option>
                       {clientes.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
                     </select>
                     <input type="text" placeholder="Orden de Compra / Referencia (Opcional)" className="col-span-1 bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white" value={formData.referencia} onChange={e => setFormData({...formData, referencia: e.target.value})} />
+{puedeVerAdmin && (
                     <input type="number" placeholder="Monto Flete ($)" className="col-span-1 bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white" value={formData.monto_flete} onChange={e => setFormData({...formData, monto_flete: e.target.value})} />
+                                        )}
                   </div>
-<div className="p-4 border border-orange-500/20 bg-orange-900/10 rounded-2xl">
-                    <p className="text-[10px] text-orange-400 uppercase tracking-widest mb-4 font-bold flex items-center gap-2"><DollarSign size={12}/> Gasto Operativo / Viáticos (Opcional)</p>
-                    <div className="grid grid-cols-2 gap-4">
-                      <input type="number" step="0.01" placeholder="Monto del Gasto Inicial ($)" className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white" 
-                        value={formData.gasto_monto} onChange={e => setFormData({...formData, gasto_monto: e.target.value})} />
-                      <input type="text" placeholder="Concepto (Ej. Viáticos)" className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white" 
-                        value={formData.gasto_descripcion} onChange={e => setFormData({...formData, gasto_descripcion: e.target.value})} />
-                    </div>
-                  </div>
-                  
+                   
+
+                                      
                   <button type="submit" disabled={loading} className={`w-full py-5 rounded-2xl uppercase text-sm tracking-widest transition-all ${editandoId ? 'bg-orange-500 hover:bg-orange-400' : 'bg-blue-600 hover:bg-blue-500'} text-white`}>
                     {loading ? "Procesando..." : (editandoId ? "Guardar Cambios" : "Confirmar Viaje")}
                   </button>
