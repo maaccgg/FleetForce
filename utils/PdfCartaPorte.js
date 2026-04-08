@@ -15,6 +15,24 @@ const formatDireccion = (obj) => {
 export const generarPDFCartaPorte = async (viaje, perfilEmisor) => {
   const doc = new jsPDF('p', 'mm', 'a4');
   
+  // === DETECTOR DE MODO ===
+  const isBorrador = viaje.estatus === 'Borrador';
+
+  // Función interna para imprimir la marca de agua en cada página
+  const imprimirMarcaDeAgua = () => {
+    if (isBorrador) {
+      doc.setTextColor(225, 225, 225); // Gris muy claro
+      doc.setFontSize(70);
+      doc.setFont("helvetica", "bold");
+      doc.text("BORRADOR", 105, 140, { align: 'center', angle: 45 });
+      doc.setFontSize(25);
+      doc.text("SIN VALIDEZ FISCAL", 105, 160, { align: 'center', angle: 45 });
+      doc.setTextColor(0); // Regresamos el pincel a negro
+    }
+  };
+
+  imprimirMarcaDeAgua(); // Imprimimos en la primera página
+  
   let fechaEmisionCompleta = `${viaje.fecha_salida || 'Borrador'}`;
 
   if (viaje.cadena_original && viaje.cadena_original.includes('T')) {
@@ -26,10 +44,7 @@ export const generarPDFCartaPorte = async (viaje, perfilEmisor) => {
       const [year, month, day] = fechaPart.split('-');
       const [horas, minutos, segundos] = horaPart.split(':');
       
-      // Creamos un objeto Date local con los datos exactos de la cadena del PAC
       const dateObj = new Date(year, month - 1, day, horas, minutos, segundos || 0);
-      
-      // Restamos 1 hora matemáticamente para corregir el desfase del servidor del PAC
       dateObj.setHours(dateObj.getHours() - 1);
       
       const finalDia = String(dateObj.getDate()).padStart(2, '0');
@@ -41,16 +56,11 @@ export const generarPDFCartaPorte = async (viaje, perfilEmisor) => {
       fechaEmisionCompleta = `${finalDia}/${finalMes}/${finalAño} a las ${finalHora}:${finalMin} hrs`;
     }
   } else {
-     // Si es borrador, forzamos la hora actual de Monterrey
      const ahora = new Date();
      const formatHoraMty = new Intl.DateTimeFormat('en-GB', { timeZone: 'America/Monterrey', hour: '2-digit', minute: '2-digit', hour12: false });
      const formatFechaMty = new Intl.DateTimeFormat('es-MX', { timeZone: 'America/Monterrey', year: 'numeric', month: '2-digit', day: '2-digit' });
      fechaEmisionCompleta = `${formatFechaMty.format(ahora)} a las ${formatHoraMty.format(ahora)} hrs (Borrador)`;
   }
-
-  // ==========================================
-  // 1. CABECERA (LOGO Y DATOS DEL EMISOR)
-  // ... (el resto del código continúa igual)
 
   // ==========================================
   // 1. CABECERA (LOGO Y DATOS DEL EMISOR)
@@ -77,7 +87,8 @@ export const generarPDFCartaPorte = async (viaje, perfilEmisor) => {
   // Bloque Derecho (Folios y Fechas)
   doc.setFillColor(15, 23, 42); doc.rect(125, 15, 71, 7, 'F'); 
   doc.setTextColor(255); doc.setFontSize(9); doc.setFont("helvetica", "bold");
-  doc.text("INGRESO / CARTA PORTE 3.1", 160.5, 20, { align: 'center' });
+  // Ajuste táctico: Cambiar el título si es borrador
+  doc.text(isBorrador ? "PREVISUALIZACIÓN DE VIAJE" : "INGRESO / CARTA PORTE 3.1", 160.5, 20, { align: 'center' });
   
   doc.setTextColor(0); doc.setFontSize(8);
   autoTable(doc, {
@@ -85,7 +96,7 @@ export const generarPDFCartaPorte = async (viaje, perfilEmisor) => {
     body: [
       ['Folio Interno:', `V - ${String(viaje.folio_interno).padStart(4, '0')}`],
       ['Fecha Emisión:', fechaEmisionCompleta],
-      ['Folio Fiscal:', viaje.folio_fiscal || 'POR ASIGNAR'],
+      ['Folio Fiscal:', isBorrador ? 'DOCUMENTO NO TIMBRADO' : (viaje.folio_fiscal || 'POR ASIGNAR')],
       ['Orden Compra:', viaje.referencia || '---']
     ],
     theme: 'plain', styles: { fontSize: 7, cellPadding: 0.8 },
@@ -104,18 +115,17 @@ export const generarPDFCartaPorte = async (viaje, perfilEmisor) => {
   doc.text(`RFC: ${viaje.clientes?.rfc || 'XAXX010101000'}`, 14, startYCliente + 16);
   doc.text(`Uso CFDI: ${viaje.clientes?.uso_cfdi || 'G01'} | Régimen: ${viaje.clientes?.regimen_fiscal || '601'}`, 14, startYCliente + 20);
 
-  // Inyección táctica de cumplimiento fiscal
   doc.setFont("helvetica", "bold");
   doc.text("Servicio Amparado (CFDI):", 14, startYCliente + 25);
   doc.setFont("helvetica", "normal");
-  doc.setTextColor(80, 80, 80); // Tono gris oscuro para diferenciar la nota de seguridad
+  doc.setTextColor(80, 80, 80);
   doc.text("Servicio de Flete Nacional (Clave SAT: 78101802)   |   Importe: - ", 56, startYCliente + 25);
-  doc.setTextColor(0); // Retornamos el pincel a color negro
+  doc.setTextColor(0);
 
   // ==========================================
   // 3. SECCIÓN: LOGÍSTICA (ORIGEN Y DESTINO)
   // ==========================================
-  let startYLogistica = startYCliente + 31; // Margen ampliado para acomodar la nueva línea
+  let startYLogistica = startYCliente + 31;
   doc.setFillColor(245, 245, 245); doc.rect(14, startYLogistica, 182, 6, 'F');
   doc.setFont("helvetica", "bold"); 
   doc.text("REMITENTE (ORIGEN)", 16, startYLogistica + 4.5);
@@ -163,7 +173,6 @@ export const generarPDFCartaPorte = async (viaje, perfilEmisor) => {
       item.clave_sat,
       descripcionAmpliacion,
       `${item.peso_kg} kg`
-      // NOTA: Se ha eliminado la declaración de valor por seguridad
     ];
   });
 
@@ -209,6 +218,7 @@ export const generarPDFCartaPorte = async (viaje, perfilEmisor) => {
   let footerY = 225;
   if (doc.lastAutoTable.finalY > 215) {
      doc.addPage();
+     imprimirMarcaDeAgua(); // Imprimimos marca de agua en la nueva página si hay salto
      footerY = 20;
   }
 
@@ -217,33 +227,40 @@ export const generarPDFCartaPorte = async (viaje, perfilEmisor) => {
 
   const idCcp = viaje.id_ccp || 'POR-ASIGNAR';
 
-  // SOLO URL del QR 2 (Carta Porte IdCCP Exclusivo)
-  const qrCcpUrl = `https://verificaccp.facturaelectronica.sat.gob.mx/default.aspx?idccp=${idCcp}`;
-  const qrCcpApi = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(qrCcpUrl)}`;
-
-  try {
-    // Generar e imprimir QR CCP (A la izquierda)
-    const resp2 = await fetch(qrCcpApi);
-    const blob2 = await resp2.blob();
-    const base64_2 = await new Promise(r => { const reader = new FileReader(); reader.onloadend = () => r(reader.result); reader.readAsDataURL(blob2); });
-    doc.addImage(base64_2, 'PNG', 14, footerY, 28, 28);
-    doc.setFontSize(5); doc.setFont("helvetica", "bold");
-    doc.text("QR CARTA PORTE", 28, footerY + 31, { align: 'center' });
-  } catch (e) { 
+  // Ajuste táctico: Si es borrador, no buscamos el QR para evitar errores de red
+  if (isBorrador) {
     doc.setDrawColor(200); 
-    doc.rect(14, footerY, 28, 28); doc.text("QR CCP", 28, footerY + 14, { align: 'center' }); 
+    doc.rect(14, footerY, 28, 28); 
+    doc.setFontSize(6); doc.setTextColor(150);
+    doc.text("BORRADOR\nSIN QR", 28, footerY + 14, { align: 'center' }); 
+    doc.setTextColor(0);
+  } else {
+    const qrCcpUrl = `https://verificaccp.facturaelectronica.sat.gob.mx/default.aspx?idccp=${idCcp}`;
+    const qrCcpApi = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(qrCcpUrl)}`;
+
+    try {
+      const resp2 = await fetch(qrCcpApi);
+      const blob2 = await resp2.blob();
+      const base64_2 = await new Promise(r => { const reader = new FileReader(); reader.onloadend = () => r(reader.result); reader.readAsDataURL(blob2); });
+      doc.addImage(base64_2, 'PNG', 14, footerY, 28, 28);
+      doc.setFontSize(5); doc.setFont("helvetica", "bold");
+      doc.text("QR CARTA PORTE", 28, footerY + 31, { align: 'center' });
+    } catch (e) { 
+      doc.setDrawColor(200); 
+      doc.rect(14, footerY, 28, 28); doc.text("QR CCP", 28, footerY + 14, { align: 'center' }); 
+    }
   }
 
-  // Textos y Sellos a la derecha del QR único (x = 46 a 196)
+  // Textos y Sellos a la derecha del QR único
   let textoY = footerY + 2;
   doc.setFontSize(6); doc.setFont("helvetica", "bold");
-  doc.text(`IdCCP: ${idCcp}`, 46, textoY);
+  doc.text(`IdCCP: ${isBorrador ? 'DOCUMENTO EN BORRADOR' : idCcp}`, 46, textoY);
   
   textoY += 6;
   doc.text("Sello Digital del Emisor:", 46, textoY);
   doc.setFont("helvetica", "normal");
-  // Expandimos el texto del sello al no estar acorralado por el segundo QR
-  const lineasSelloEmisor = doc.splitTextToSize(viaje.sello_emisor || 'Pendiente...', 145); 
+  const textoSelloEmisor = isBorrador ? 'DOCUMENTO EN BORRADOR - SIN EFECTOS FISCALES' : (viaje.sello_emisor || 'Pendiente...');
+  const lineasSelloEmisor = doc.splitTextToSize(textoSelloEmisor, 145); 
   doc.text(lineasSelloEmisor, 46, textoY + 3);
   
   textoY += 3 + (lineasSelloEmisor.length * 2.5) + 3;
@@ -251,20 +268,24 @@ export const generarPDFCartaPorte = async (viaje, perfilEmisor) => {
   doc.setFont("helvetica", "bold");
   doc.text("Sello Digital del SAT:", 46, textoY);
   doc.setFont("helvetica", "normal");
-  const lineasSelloSat = doc.splitTextToSize(viaje.sello_sat || 'Pendiente...', 145);
+  const textoSelloSat = isBorrador ? 'DOCUMENTO EN BORRADOR - SIN EFECTOS FISCALES' : (viaje.sello_sat || 'Pendiente...');
+  const lineasSelloSat = doc.splitTextToSize(textoSelloSat, 145);
   doc.text(lineasSelloSat, 46, textoY + 3);
   
   textoY += 3 + (lineasSelloSat.length * 2.5) + 3;
   
   doc.setFont("helvetica", "bold"); doc.text("Cadena Original:", 46, textoY);
   doc.setFont("helvetica", "normal");
-  const lineasCadena = doc.splitTextToSize(viaje.cadena_original || '||Pendiente...||', 145);
+  const textoCadena = isBorrador ? '||DOCUMENTO EN BORRADOR - SIN EFECTOS FISCALES||' : (viaje.cadena_original || '||Pendiente...||');
+  const lineasCadena = doc.splitTextToSize(textoCadena, 145);
   doc.text(lineasCadena, 46, textoY + 3);
   
   // ==========================================
   // 6. ANEXO LEGAL
   // ==========================================
   doc.addPage();
+  imprimirMarcaDeAgua(); // Imprimimos la marca de agua en la página legal también
+
   doc.setFontSize(10); doc.setFont("helvetica", "bold");
   doc.text("CONDICIONES DE PRESTACIÓN DE SERVICIOS QUE AMPARA EL COMPLEMENTO CARTA PORTE", 105, 20, { align: 'center' });
   
@@ -287,5 +308,6 @@ export const generarPDFCartaPorte = async (viaje, perfilEmisor) => {
   doc.setFont("helvetica", "bold"); doc.text("FIRMA DE CONFORMIDAD DEL CLIENTE / REMITENTE", 105, yLegal + 30, { align: 'center' });
   doc.line(65, yLegal + 25, 145, yLegal + 25);
 
-  doc.save(`CartaPorte_${viaje.folio_interno || '0000'}.pdf`);
+  const nombreArchivo = isBorrador ? `PREVISUALIZACION_Borrador_V${viaje.folio_interno || '0000'}.pdf` : `CartaPorte_${viaje.folio_interno || '0000'}.pdf`;
+  doc.save(nombreArchivo);
 };

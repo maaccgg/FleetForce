@@ -8,6 +8,7 @@ import {
 import Sidebar from '@/components/sidebar';
 import { generarPDFCartaPorte } from '@/utils/PdfCartaPorte'; 
 import { z } from 'zod';
+import * as XLSX from 'xlsx';
 
 // === ESCUDO DE VALIDACIÓN ZOD PARA VIAJES ===
 const viajeSchema = z.object({
@@ -33,6 +34,9 @@ export default function ViajesPage() {
   const [catalogos, setCatalogos] = useState({ unidades: [], operadores: [], ubicaciones: [], mercancias: [], remolques: [] });
   const [clientes, setClientes] = useState([]);
   const [perfilEmisor, setPerfilEmisor] = useState(null);
+  
+  const [filtroOrigen, setFiltroOrigen] = useState('');
+  const [filtroDestino, setFiltroDestino] = useState('');
 
   const [empresaId, setEmpresaId] = useState(null);
   const [rolUsuario, setRolUsuario] = useState('miembro');
@@ -547,7 +551,13 @@ if (formData.gasto_monto && parseFloat(formData.gasto_monto) > 0) {
     ];
   };
 
-  const viajesFiltrados = viajesDelPeriodo.filter(v => filtroEstatus === 'Todos' || v.estatus === filtroEstatus);
+  const viajesFiltrados = viajesDelPeriodo.filter(v => {
+    const pasaEstatus = filtroEstatus === 'Todos' || v.estatus === filtroEstatus;
+    const pasaOrigen = filtroOrigen === '' || v.origen_id === filtroOrigen;
+    const pasaDestino = filtroDestino === '' || v.destino_id === filtroDestino;
+    
+    return pasaEstatus && pasaOrigen && pasaDestino;
+  });
 
   if (!sesion) return null;
 
@@ -563,21 +573,53 @@ if (formData.gasto_monto && parseFloat(formData.gasto_monto) > 0) {
     );
   }
   
+  const exportarExcelViajes = () => {
+    const datosParaExcel = viajesFiltrados.map(v => ({
+      Folio: `V-${String(v.folio_interno).padStart(4, '0')}`,
+      Fecha: v.fecha_salida,
+      Estatus: v.estatus,
+      Cliente: v.clientes?.nombre || 'N/A',
+      Referencia: v.referencia || '',
+      Origen: v.origen?.nombre_lugar || '',
+      Destino: v.destino?.nombre_lugar || '',
+      Unidad: v.unidades?.numero_economico || '',
+      Operador: v.operadores?.nombre_completo || '',
+      Peso_KG: v.peso_total_kg,
+      Monto_Flete: v.monto_flete || 0,
+      ID_CartaPorte: v.id_ccp || ''
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(datosParaExcel);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Viajes Filtrados");
+    XLSX.writeFile(wb, `Reporte_Viajes_FleetForce_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+
+
   return (
     <div className="flex bg-slate-950 min-h-screen text-slate-200">
       <Sidebar />
       <main className="flex-1 p-8 overflow-y-auto">
         <div className="max-w-7xl mx-auto">
           
-          <header className="mb-8 flex justify-between items-end">
-            <div>
-              <h1 className="text-3xl font-black tracking-tighter uppercase italic text-white leading-none">Logística <span className="text-blue-500">Operativa</span></h1>
-              <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mt-2">Histórico de Despachos y Carta Porte</p>
-            </div>
-            <button onClick={() => setMostrarModal(true)} className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-2xl font-black uppercase text-[10px] flex items-center gap-2 shadow-lg shadow-blue-900/20 transition-all">
-              <PlusCircle size={16} /> Crear Despacho
-            </button>
-          </header>
+<header className="mb-8 flex justify-between items-end">
+  {/* HIJO 1: El texto (se queda a la izquierda) */}
+  <div>
+    <h1 className="text-3xl font-black tracking-tighter uppercase italic text-white leading-none">
+      Logística <span className="text-blue-500">Operativa</span>
+    </h1>
+    <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mt-2">
+      Histórico de Despachos y Carta Porte
+    </p>
+  </div>
+
+  {/* HIJO 2: El contenedor de botones (se van juntos a la derecha) */}
+  <div className="flex gap-3 items-center">
+    <button 
+      onClick={() => setMostrarModal(true)} className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-2xl font-black uppercase text-[10px] flex items-center gap-2 shadow-lg shadow-blue-900/20 transition-all"><PlusCircle size={16} /> Crear Despacho
+    </button>
+  </div>
+</header>
 
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8 border-b border-slate-800 pb-4">
             
@@ -591,42 +633,89 @@ if (formData.gasto_monto && parseFloat(formData.gasto_monto) > 0) {
               ))}
             </div>
 
-            <div className="relative shrink-0">
-              <button 
-                onClick={() => setMostrarFiltro(!mostrarFiltro)}
-                className={`flex items-center gap-3 border px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all
-                  ${filtroActivo ? 'bg-blue-600/10 border-blue-500/30 text-blue-400' : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'}`}
-              >
-                <Calendar size={14} className={filtroActivo ? 'text-blue-500' : 'text-slate-500'} />
-                {filtroActivo ? 'Filtro Activo' : 'Periodo'}
-                <ChevronDown size={14} className={`transition-transform duration-200 ${mostrarFiltro ? 'rotate-180' : ''}`} />
-              </button>
+<div className="relative shrink-0">
+  <button 
+    onClick={() => setMostrarFiltro(!mostrarFiltro)}
+    className={`flex items-center gap-3 border px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all
+      ${filtroActivo ? 'bg-blue-600/10 border-blue-500/30 text-blue-400' : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'}`}
+  >
+    <Calendar size={14} className={filtroActivo ? 'text-blue-500' : 'text-slate-500'} />
+    {filtroActivo ? 'Filtro Activo' : 'Periodo'}
+    <ChevronDown size={14} className={`transition-transform duration-200 ${mostrarFiltro ? 'rotate-180' : ''}`} />
+  </button>
 
-              {mostrarFiltro && (
-                <div className="absolute right-0 mt-2 w-72 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden z-20 p-5">
-                  <div className="mb-4">
-                    <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 block">Desde (Fecha Viaje)</label>
-                    <input type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 text-white text-sm rounded-xl p-3 outline-none focus:border-blue-500" />
-                  </div>
-                  <div className="mb-6">
-                    <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 block">Hasta (Fecha Viaje)</label>
-                    <input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 text-white text-sm rounded-xl p-3 outline-none focus:border-blue-500" />
-                  </div>
-                  <button onClick={() => { setFiltroActivo(true); setMostrarFiltro(false); }}
-                    className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black text-[10px] uppercase tracking-widest py-3 rounded-xl transition-colors mb-2">
-                    Aplicar Filtro
-                  </button>
-                  {filtroActivo && (
-                    <button onClick={() => { setFiltroActivo(false); setFechaInicio(''); setFechaFin(''); setMostrarFiltro(false); }}
-                      className="w-full bg-slate-800 hover:bg-slate-700 text-slate-400 font-black text-[10px] uppercase tracking-widest py-2.5 rounded-xl transition-colors">
-                      Limpiar
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
+  {mostrarFiltro && (
+    <div className="absolute right-0 mt-2 w-80 bg-slate-900 border border-slate-800 rounded-[1.5rem] shadow-2xl overflow-hidden z-20 p-6 animate-in fade-in zoom-in-95 duration-200">
+      
+      {/* Título del Menú */}
+      <p className="text-[10px] font-black text-white uppercase tracking-[0.2em] mb-5 border-b border-slate-800 pb-3">
+        Filtros de Búsqueda
+      </p>
+
+      {/* SECCIÓN: TIEMPO (Dos columnas para simetría) */}
+      <div className="grid grid-cols-2 gap-3 mb-4">
+        <div>
+          <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1">Desde</label>
+          <input type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)}
+            className="w-full bg-slate-950 border border-slate-800 text-white text-[11px] rounded-xl p-3 outline-none focus:border-blue-500 transition-colors" />
+        </div>
+        <div>
+          <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1">Hasta</label>
+          <input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)}
+            className="w-full bg-slate-950 border border-slate-800 text-white text-[11px] rounded-xl p-3 outline-none focus:border-blue-500 transition-colors" />
+        </div>
+      </div>
+
+      {/* SECCIÓN: RUTA (Campos completos) */}
+      <div className="space-y-4 mb-6">
+        <div>
+          <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1">Origen de Ruta</label>
+          <select value={filtroOrigen} onChange={(e) => setFiltroOrigen(e.target.value)} 
+            className="w-full bg-slate-950 border border-slate-800 text-white text-xs rounded-xl p-3 outline-none focus:border-blue-500 appearance-none">
+            <option value="">Todos los Orígenes</option>
+            {catalogos.ubicaciones.map(ub => <option key={ub.id} value={ub.id}>{ub.nombre_lugar}</option>)}
+          </select>
+        </div>
+
+        <div>
+          <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1">Destino de Ruta</label>
+          <select value={filtroDestino} onChange={(e) => setFiltroDestino(e.target.value)} 
+            className="w-full bg-slate-950 border border-slate-800 text-white text-xs rounded-xl p-3 outline-none focus:border-blue-500 appearance-none">
+            <option value="">Todos los Destinos</option>
+            {catalogos.ubicaciones.map(ub => <option key={ub.id} value={ub.id}>{ub.nombre_lugar}</option>)}
+          </select>
+        </div>
+      </div>
+
+      {/* ACCIONES */}
+      <div className="space-y-2 pt-4 border-t border-slate-800">
+        <button onClick={() => { setFiltroActivo(true); setMostrarFiltro(false); }}
+          className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black text-[10px] uppercase tracking-widest py-3.5 rounded-xl transition-all shadow-lg shadow-blue-900/20">
+          Aplicar Filtros
+        </button>
+        
+        <div className="grid grid-cols-2 gap-2">
+          {filtroActivo && (
+            <button onClick={() => { setFiltroActivo(false); setFechaInicio(''); setFechaFin(''); setFiltroOrigen(''); setFiltroDestino(''); setMostrarFiltro(false); }}
+              className="bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white font-black text-[9px] uppercase tracking-widest py-2.5 rounded-xl transition-colors">
+              Limpiar
+            </button>
+          )}
+          
+          {puedeVerAdmin && (
+            <button 
+              onClick={exportarExcelViajes} 
+              className={`${filtroActivo ? '' : 'col-span-2'} flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white font-black text-[9px] uppercase tracking-widest py-2.5 rounded-xl transition-colors`}
+            >
+              <FileText size={12} /> Excel
+            </button>
+          )}
+        </div>
+      </div>
+
+    </div>
+  )}
+</div>
 
           </div>
 
@@ -704,14 +793,18 @@ if (formData.gasto_monto && parseFloat(formData.gasto_monto) > 0) {
                           <button onClick={() => eliminarViaje(v.id)} title="Eliminar Viaje" className="p-2 text-slate-500 hover:bg-red-500/10 hover:text-red-500 rounded-lg transition-colors"><Trash2 size={16}/></button>
                           <button onClick={() => editarViaje(v)} title="Editar Viaje" className="p-2 text-slate-400 hover:bg-orange-500/10 hover:text-orange-400 rounded-lg transition-colors mr-2"><Edit2 size={16}/></button> 
                           {/* NUEVO BOTÓN: Previsualizar Borrador */}
+
+                         {puedeVerAdmin && (
                           <button onClick={() => generarPDFCartaPorte(v, perfilEmisor)} title="Previsualizar PDF (Borrador)" className="p-2 bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white rounded-lg transition-colors mr-2">
                             <FileText size={16}/>
-                          </button>
-                          
+                          </button>  )}
+                          {puedeVerAdmin && (
                           <button onClick={() => timbrarCartaPorte(v)} disabled={loading} className="px-3 py-1.5 bg-blue-600/10 text-blue-500 hover:bg-blue-600 hover:text-white border border-blue-500/20 rounded-lg uppercase tracking-widest text-[10px] flex items-center gap-1.5 transition-colors">
                             {loading ? <Loader2 size={14} className="animate-spin"/> : <ShieldCheck size={14}/>} Timbrar
-                          </button>
+                          </button>  )}
+                           
                         </>
+                         
                       )}
 
                           {v.estatus === 'Emitido (Timbrado)' && (
@@ -722,7 +815,6 @@ if (formData.gasto_monto && parseFloat(formData.gasto_monto) > 0) {
                               <button onClick={() => generarPDFCartaPorte(v, perfilEmisor)} title="Descargar Carta Porte" className="p-2 bg-blue-600/10 text-blue-500 hover:bg-blue-600 hover:text-white rounded-lg transition-colors"><FileText size={16}/></button>
                             </>
                           )}
-
                           {v.estatus === 'Cancelado' && (
                             <>
                               <button onClick={() => eliminarViaje(v.id)} title="Eliminar Definitivamente" className="p-2 text-slate-500 hover:bg-red-500/10 hover:text-red-500 rounded-lg transition-colors mr-2"><Trash2 size={16}/></button>

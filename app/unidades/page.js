@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { 
   Truck, PlusCircle, Trash2, Edit2, X, 
-  ShieldCheck, Calendar, Wrench, AlertTriangle, CheckCircle, DollarSign, FileText, CreditCard
+  ShieldCheck, Calendar, Wrench, AlertTriangle, CheckCircle, DollarSign, FileText, CreditCard, UploadCloud
 } from 'lucide-react';
 import Sidebar from '@/components/sidebar';
 
@@ -23,7 +23,11 @@ export default function UnidadesPage() {
   const [formData, setFormData] = useState({
     numero_economico: '', placas: '', tipo_placa: 'Federal', permiso_sict: 'TPAF01', num_permiso_sict: '',
     configuracion_vehicular: 'T3S1', anio_modelo: '', aseguradora_rc: '', poliza_rc: '',
-    vencimiento_seguro: '', vencimiento_sct: '', vencimiento_circulacion: ''
+    vencimiento_seguro: '', vencimiento_sct: '', vencimiento_circulacion: '',
+    kilometraje_actual: 0, 
+    alerta_aviso: '',
+    doc_poliza: '',             // Para la bóveda
+    doc_tarjeta_circulacion: '' // Para la bóveda
   });
 
   useEffect(() => {
@@ -108,7 +112,11 @@ async function obtenerUnidades(userId) {
       num_permiso_sict: u.num_permiso_sict || '', configuracion_vehicular: u.configuracion_vehicular || 'T3S1',
       anio_modelo: u.anio_modelo || '', aseguradora_rc: u.aseguradora_rc || '', poliza_rc: u.poliza_rc || '',
       vencimiento_seguro: u.vencimiento_seguro || '', vencimiento_sct: u.vencimiento_sct || '',
-      vencimiento_circulacion: u.vencimiento_circulacion || ''
+      vencimiento_circulacion: u.vencimiento_circulacion || '',
+      kilometraje_actual: u.kilometraje_actual || 0,
+      alerta_aviso: u.alerta_aviso || '',
+      doc_poliza: u.doc_poliza || '',
+      doc_tarjeta_circulacion: u.doc_tarjeta_circulacion || ''
     });
     setTabExpediente('tecnica');
     cargarMantenimientos(u.id);
@@ -120,7 +128,11 @@ async function obtenerUnidades(userId) {
     setFormData({ 
       numero_economico: '', placas: '', tipo_placa: 'Federal', permiso_sict: 'TPAF01', 
       num_permiso_sict: '', configuracion_vehicular: 'T3S1', anio_modelo: '', aseguradora_rc: '', 
-      poliza_rc: '', vencimiento_seguro: '', vencimiento_sct: '', vencimiento_circulacion: '' 
+      poliza_rc: '', vencimiento_seguro: '', vencimiento_sct: '', vencimiento_circulacion: '',
+      kilometraje_actual: 0,
+      alerta_aviso: '',
+      doc_poliza: '',
+      doc_tarjeta_circulacion: ''
     });
     setTabExpediente('tecnica');
     setMostrarModal(true);
@@ -175,10 +187,9 @@ async function obtenerUnidades(userId) {
               <PlusCircle size={16} /> Alta de Unidad
             </button>
           </header>
-<div className="bg-slate-900 border border-slate-800 rounded-[2rem] overflow-hidden shadow-2xl">
-
-  {unidades.length === 0 && <p className="text-slate-500 text-sm hidden">No hay unidades registradas.</p>}
-<div className="overflow-x-auto">
+          
+          <div className="bg-slate-900 border border-slate-800 rounded-[2rem] overflow-hidden shadow-2xl">
+            <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse text-[13px]">
                 <thead>
                   <tr className="bg-slate-950/50 border-b border-slate-800 text-slate-400 text-[13px] font-semibold uppercase tracking-wider">
@@ -193,7 +204,6 @@ async function obtenerUnidades(userId) {
                 <tbody className="divide-y divide-slate-800/50">
                   {unidades.length === 0 && (
                     <tr>
-                      {/* Ajustamos el colSpan a 6 por la nueva columna */}
                       <td colSpan="6" className="py-16 text-center">
                         <Truck size={32} className="mx-auto text-slate-700 mb-3" />
                         <p className="text-slate-500 uppercase tracking-widest text-sm">No hay unidades registradas</p>
@@ -209,8 +219,7 @@ async function obtenerUnidades(userId) {
                       : verificarVigencia(u.vencimiento_sct);
 
                     return (
-                      <tr key={u.id} className="hover:bg-slate-800/30 transition-colors group">
-                        
+                      <tr key={u.id} className="hover:bg-slate-800/30 transition-colors group">                       
                         <td className="p-4 pl-8 align-middle">
                           <div className="flex flex-col items-start gap-1">
                             <span className="text-[14px] text-white font-mono font-medium">ECO: {u.numero_economico}</span>
@@ -235,7 +244,6 @@ async function obtenerUnidades(userId) {
                           </div>
                         </td>
 
-                        {/* COLUMNA 1: PERMISO SCT */}
                         <td className="p-4 align-middle">
                           <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border ${vigSct.bg} w-max`}>
                             <FileText size={14} className={vigSct.color} />
@@ -243,7 +251,6 @@ async function obtenerUnidades(userId) {
                           </div>
                         </td>
 
-                        {/* COLUMNA 2: TARJETA DE CIRCULACIÓN */}
                         <td className="p-4 align-middle">
                           <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border ${vigCirculacion.bg} w-max`}>
                             <CreditCard size={14} className={vigCirculacion.color} />
@@ -261,7 +268,6 @@ async function obtenerUnidades(userId) {
                             </button>
                           </div>
                         </td>
-                        
                       </tr>
                     );
                   })}
@@ -280,121 +286,181 @@ async function obtenerUnidades(userId) {
                     <h2 className="text-2xl font-black text-white italic uppercase leading-none">
                       {unidadSeleccionada ? `Expediente: ECO ${unidadSeleccionada.numero_economico}` : 'Alta de Nueva Unidad'}
                     </h2>
-                    {unidadSeleccionada && <p className="text-slate-400 text-[11px] font-mono mt-2">PLACAS: {unidadSeleccionada.placas}</p>}
+                    {unidadSeleccionada && <p className="text-slate-400 text-[11px] font-mono mt-2 text-blue-400 font-bold tracking-widest">PLACAS: {unidadSeleccionada.placas}</p>}
                   </div>
                   <button onClick={cerrarModal} className="text-slate-500 hover:text-white bg-slate-950 p-2 rounded-full"><X size={20} /></button>
                 </div>
 
                 {unidadSeleccionada && (
-                  <div className="flex px-8 border-b border-slate-800 bg-slate-950 shrink-0">
-                    <button onClick={() => setTabExpediente('tecnica')} className={`py-4 px-6 text-[10px] font-black uppercase tracking-widest transition-all border-b-2 flex items-center gap-2 ${tabExpediente === 'tecnica' ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-500 hover:text-slate-300'}`}>
+                  <div className="flex px-8 border-b border-slate-800 bg-slate-950 shrink-0 overflow-x-auto">
+                    <button onClick={() => setTabExpediente('tecnica')} className={`py-4 px-6 text-[10px] font-black uppercase tracking-widest transition-all border-b-2 flex items-center gap-2 shrink-0 ${tabExpediente === 'tecnica' ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-500 hover:text-slate-300'}`}>
                       <Truck size={14}/> Ficha Técnica
                     </button>
-                    <button onClick={() => setTabExpediente('mantenimientos')} className={`py-4 px-6 text-[10px] font-black uppercase tracking-widest transition-all border-b-2 flex items-center gap-2 ${tabExpediente === 'mantenimientos' ? 'border-orange-500 text-orange-400' : 'border-transparent text-slate-500 hover:text-slate-300'}`}>
-                      <Wrench size={14}/> Historial de Mantenimiento
+                    <button onClick={() => setTabExpediente('mantenimientos')} className={`py-4 px-6 text-[10px] font-black uppercase tracking-widest transition-all border-b-2 flex items-center gap-2 shrink-0 ${tabExpediente === 'mantenimientos' ? 'border-orange-500 text-orange-400' : 'border-transparent text-slate-500 hover:text-slate-300'}`}>
+                      <Wrench size={14}/> Mantenimiento
+                    </button>
+                    <button onClick={() => setTabExpediente('boveda')} className={`py-4 px-6 text-[10px] font-black uppercase tracking-widest transition-all border-b-2 flex items-center gap-2 shrink-0 ${tabExpediente === 'boveda' ? 'border-purple-500 text-purple-400' : 'border-transparent text-slate-500 hover:text-slate-300'}`}>
+                      <UploadCloud size={14}/> Bóveda Digital
                     </button>
                   </div>
                 )}
 
                 <div className="p-8 overflow-y-auto bg-slate-900 flex-1">
                   
+                  {/* TAB 1: FICHA TÉCNICA */}
                   {tabExpediente === 'tecnica' && (
                     <form onSubmit={guardarUnidad} className="space-y-6">
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-6 bg-slate-950 rounded-2xl border border-slate-800">
-                        <div className="col-span-2 md:col-span-4 text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2">Identificación Vehicular</div>
-                        <input required placeholder="Número Económico" className="col-span-2 bg-slate-900 border border-slate-800 p-4 rounded-xl text-sm text-white font-bold" value={formData.numero_economico} onChange={e => setFormData({...formData, numero_economico: e.target.value})} />
-                        
-                        <div className="col-span-2 flex gap-2">
-                          <select className="bg-slate-900 border border-slate-800 p-4 rounded-xl text-sm text-white font-bold w-1/3"
-                            value={formData.tipo_placa} 
-                            onChange={e => {
-                               const val = e.target.value;
-                               setFormData({
-                                 ...formData, 
-                                 tipo_placa: val,
-                                 permiso_sict: val === 'Estatal' ? 'TPXX00' : 'TPAF01',
-                                 num_permiso_sict: val === 'Estatal' ? 'N/A' : (formData.num_permiso_sict === 'N/A' ? '' : formData.num_permiso_sict),
-                                 vencimiento_sct: val === 'Estatal' ? '' : formData.vencimiento_sct
-                               });
-                            }}>
-                            <option value="Federal">Placa Federal</option>
-                            <option value="Estatal">Placa Estatal</option>
-                          </select>
-                          <input required placeholder="Número de Placas" className="flex-1 bg-slate-900 border border-slate-800 p-4 rounded-xl text-sm text-white uppercase font-mono" value={formData.placas} onChange={e => setFormData({...formData, placas: e.target.value})} />
+                      
+                      {/* Bloque 1: Identificación Vehicular */}
+                      <div className="p-6 bg-slate-950 rounded-2xl border border-slate-800">
+                        <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-4 border-b border-slate-800 pb-2">Identificación Vehicular</p>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div>
+                            <label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1">No. Económico</label>
+                            <input required placeholder="Ej. CAJA-01" className="w-full bg-slate-900 border border-slate-800 p-4 rounded-xl text-sm text-white font-bold" value={formData.numero_economico} onChange={e => setFormData({...formData, numero_economico: e.target.value})} />
+                          </div>
+                          <div>
+                            <label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1">Año Modelo</label>
+                            <input placeholder="Ej. 2021" className="w-full bg-slate-900 border border-slate-800 p-4 rounded-xl text-sm text-white" value={formData.anio_modelo} onChange={e => setFormData({...formData, anio_modelo: e.target.value})} />
+                          </div>
+                          <div>
+                            <label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1">Configuración SAT</label>
+                            <select required className="w-full bg-slate-900 border border-slate-800 p-4 rounded-xl text-sm text-white font-bold" value={formData.configuracion_vehicular} onChange={e => setFormData({...formData, configuracion_vehicular: e.target.value})}>
+                              <option value="">-- Seleccionar --</option>
+                              <option value="VL">VL (Ligero / Pick-up)</option>
+                              <option value="C2">C2 (Rabón / 2 ejes)</option>
+                              <option value="C3">C3 (Torton / 3 ejes)</option>
+                              <option value="T2S1">T2S1 (Tracto / 3 ejes)</option>
+                              <option value="T3S1">T3S1 (Tracto / 4 ejes)</option>
+                              <option value="T3S2">T3S2 (Tráiler / 5 ejes)</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1">Jurisdicción (Tipo Placa)</label>
+                            <select className="w-full bg-slate-900 border border-slate-800 p-4 rounded-xl text-sm text-white font-bold"
+                              value={formData.tipo_placa} 
+                              onChange={e => {
+                                 const val = e.target.value;
+                                 setFormData({
+                                   ...formData, 
+                                   tipo_placa: val,
+                                   permiso_sict: val === 'Estatal' ? 'TPXX00' : 'TPAF01',
+                                   num_permiso_sict: val === 'Estatal' ? 'N/A' : (formData.num_permiso_sict === 'N/A' ? '' : formData.num_permiso_sict),
+                                   vencimiento_sct: val === 'Estatal' ? '' : formData.vencimiento_sct
+                                 });
+                              }}>
+                              <option value="Federal">Federal (SCT)</option>
+                              <option value="Estatal">Estatal / Local</option>
+                            </select>
+                          </div>
+                          <div className="md:col-span-2">
+                            <label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1">Número de Placas</label>
+                            <input required placeholder="Ej. 123-AB-4" className="w-full bg-slate-900 border border-slate-800 p-4 rounded-xl text-sm text-white uppercase font-mono tracking-widest" value={formData.placas} onChange={e => setFormData({...formData, placas: e.target.value})} />
+                          </div>
                         </div>
-
-                        <input placeholder="Año Modelo" className="col-span-2 bg-slate-900 border border-slate-800 p-4 rounded-xl text-sm text-white" value={formData.anio_modelo} onChange={e => setFormData({...formData, anio_modelo: e.target.value})} />
-                        <select required className="col-span-2 bg-slate-900 border border-slate-800 p-4 rounded-xl text-sm text-white font-bold" value={formData.configuracion_vehicular} onChange={e => setFormData({...formData, configuracion_vehicular: e.target.value})}>
-                          <option value="">-- Configuración SAT --</option>
-                          <option value="VL">VL (Ligero / Pick-up)</option>
-                          <option value="C2">C2 (Rabón / 2 ejes)</option>
-                          <option value="C3">C3 (Torton / 3 ejes)</option>
-                          <option value="T2S1">T2S1 (Tracto / 3 ejes)</option>
-                          <option value="T3S1">T3S1 (Tracto / 4 ejes)</option>
-                          <option value="T3S2">T3S2 (Tráiler / 5 ejes)</option>
-                        </select>
                       </div>
 
-                      {/* AQUÍ ESTÁ EL CAMBIO PRINCIPAL: Grid a 3 columnas */}
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-6 bg-blue-900/10 rounded-2xl border border-blue-500/20">
-                        <div className="col-span-1 md:col-span-3 text-[9px] font-black text-blue-400 uppercase tracking-widest mb-2">Permisos, Seguros y Vigencias</div>
+                      {/* Bloque 2: Permisos, Seguros y Vigencias */}
+                      <div className="p-6 bg-blue-900/10 rounded-2xl border border-blue-500/20">
+                        <p className="text-[9px] font-black text-blue-400 uppercase tracking-widest mb-4 border-b border-blue-500/20 pb-2">Seguros, Permisos y Vigencias</p>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                          
+                          <div className="space-y-4">
+                            <div className="flex items-center gap-2 mb-2"><ShieldCheck size={14} className="text-blue-500"/><span className="text-[10px] font-black text-white uppercase">Seguro RC</span></div>
+                            <div>
+                              <label className="text-[9px] font-black text-slate-500 block mb-1.5 ml-1">Aseguradora</label>
+                              <input placeholder="Nombre Compañía" className="w-full bg-slate-950 border border-slate-800 p-3.5 rounded-xl text-sm text-white " value={formData.aseguradora_rc} onChange={e => setFormData({...formData, aseguradora_rc: e.target.value})} />
+                            </div>
+                            <div>
+                              <label className="text-[9px] font-black text-slate-500 uppercase block mb-1.5 ml-1">No. Póliza</label>
+                              <input placeholder="00000000" className="w-full bg-slate-950 border border-slate-800 p-3.5 rounded-xl text-sm text-white font-mono" value={formData.poliza_rc} onChange={e => setFormData({...formData, poliza_rc: e.target.value})} />
+                            </div>
+                            <div>
+                              <label className="text-[9px] font-black text-slate-500 uppercase block mb-1.5 ml-1">Vencimiento Seguro</label>
+                              <input type="date" className="w-full bg-slate-950 border border-slate-800 p-3.5 rounded-xl text-sm text-white" value={formData.vencimiento_seguro} onChange={e => setFormData({...formData, vencimiento_seguro: e.target.value})} />
+                            </div>
+                          </div>
+
+                          <div className="space-y-4">
+                            <div className="flex items-center gap-2 mb-2"><FileText size={14} className="text-blue-500"/><span className="text-[10px] font-black text-white uppercase">Permiso SCT</span></div>
+                            <div>
+                              <label className="text-[9px] font-black text-slate-500 uppercase block mb-1.5 ml-1">Clave Permiso</label>
+                              <select 
+                                className={`w-full p-3.5 rounded-xl text-sm text-white transition-colors ${formData.tipo_placa === 'Estatal' ? 'bg-slate-900 border border-slate-700 text-slate-500 cursor-not-allowed' : 'bg-slate-950 border border-slate-800'}`} 
+                                value={formData.permiso_sict} 
+                                disabled={formData.tipo_placa === 'Estatal'}
+                                onChange={e => setFormData({...formData, permiso_sict: e.target.value})}>
+                                <option value="TPAF01">TPAF01 - Autotransporte Federal</option>
+                                <option value="TPXX00">TPXX00 - No Requerido (Estatal)</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label className="text-[9px] font-black text-slate-500 uppercase block mb-1.5 ml-1">Número de Permiso</label>
+                              <input 
+                                placeholder="S/N" 
+                                className={`w-full p-3.5 rounded-xl text-sm text-white font-mono transition-colors ${formData.tipo_placa === 'Estatal' ? 'bg-slate-900 border border-slate-700 text-slate-500 cursor-not-allowed' : 'bg-slate-950 border border-slate-800'}`} 
+                                value={formData.num_permiso_sict} 
+                                readOnly={formData.tipo_placa === 'Estatal'}
+                                onChange={e => setFormData({...formData, num_permiso_sict: e.target.value})} 
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[9px] font-black text-slate-500 uppercase block mb-1.5 ml-1">Vencimiento SCT</label>
+                              <input 
+                                type="date" 
+                                className={`w-full p-3.5 rounded-xl text-sm text-white transition-colors ${formData.tipo_placa === 'Estatal' ? 'bg-slate-900 border border-slate-700 text-slate-500 cursor-not-allowed' : 'bg-slate-950 border border-slate-800'}`} 
+                                value={formData.vencimiento_sct} 
+                                disabled={formData.tipo_placa === 'Estatal'}
+                                onChange={e => setFormData({...formData, vencimiento_sct: e.target.value})} 
+                              />
+                            </div>
+                          </div>
+
+                          <div className="space-y-4">
+                            <div className="flex items-center gap-2 mb-2"><CreditCard size={14} className="text-blue-500"/><span className="text-[10px] font-black text-white uppercase">Tarjeta Circulación</span></div>
+                            <div>
+                              <label className="text-[9px] font-black text-slate-500 uppercase block mb-1.5 ml-1">Vencimiento Tarjeta</label>
+                              <input type="date" className="w-full bg-slate-950 border border-slate-800 p-3.5 rounded-xl text-sm text-white" value={formData.vencimiento_circulacion} onChange={e => setFormData({...formData, vencimiento_circulacion: e.target.value})} />
+                            </div>
+                            <div className="bg-slate-950 border border-slate-800 p-4 rounded-xl">
+                              <p className="text-[9px] text-slate-500 italic leading-relaxed text-center">
+                                Las revisiones de Guardia Nacional requieren que la Tarjeta de Circulación original o copia certificada viaje siempre en la unidad.
+                              </p>
+                            </div>
+                          </div>
+
+                        </div>
+                      </div>
+
+                      {/* Bloque 3: Kilometraje y Alertas */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-6 bg-orange-500/5 border border-orange-500/20 rounded-2xl">
+                        <div className="col-span-1 md:col-span-2 text-[9px] font-black text-orange-400 uppercase tracking-widest mb-2 flex items-center gap-2 border-b border-orange-500/20 pb-2">
+                          <AlertTriangle size={14}/> Estado de Operación y Desgaste
+                        </div>
                         
-                        <div className="space-y-3">
-                          <label className="text-[9px] text-slate-500 uppercase font-black ml-1">Seguro de Resp. Civil</label>
-                          <input placeholder="Aseguradora" className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white uppercase" value={formData.aseguradora_rc} onChange={e => setFormData({...formData, aseguradora_rc: e.target.value})} />
-                          <input placeholder="Número de Póliza" className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white" value={formData.poliza_rc} onChange={e => setFormData({...formData, poliza_rc: e.target.value})} />
-                          <div className="flex flex-col">
-                            <span className="text-[9px] text-slate-500 font-bold mb-1">Vencimiento Póliza:</span>
-                            <input type="date" className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white" value={formData.vencimiento_seguro} onChange={e => setFormData({...formData, vencimiento_seguro: e.target.value})} />
+                        <div>
+                          <label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1">Kilometraje Actual</label>
+                          <div className="relative">
+                            <input 
+                              type="number" 
+                              placeholder="0" 
+                              className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white font-mono" 
+                              value={formData.kilometraje_actual} 
+                              onChange={e => setFormData({...formData, kilometraje_actual: e.target.value})} 
+                            />
+                            <span className="absolute right-4 top-4 text-[10px] text-slate-600 font-black">KM</span>
                           </div>
                         </div>
 
-                        <div className="space-y-3">
-                          <label className="text-[9px] text-slate-500 uppercase font-black ml-1">Permiso SCT (Federal)</label>
-                          <select 
-                            className={`w-full p-4 rounded-xl text-sm text-white transition-colors ${formData.tipo_placa === 'Estatal' ? 'bg-slate-900 border border-slate-700 text-slate-500 cursor-not-allowed' : 'bg-slate-950 border border-slate-800'}`} 
-                            value={formData.permiso_sict} 
-                            disabled={formData.tipo_placa === 'Estatal'}
-                            onChange={e => setFormData({...formData, permiso_sict: e.target.value})}>
-                            <option value="TPAF01">Autotransporte Federal Carga</option>
-                            <option value="TPXX00">Permiso No Requerido (Estatal / Local)</option>
-                          </select>
+                        <div>
+                          <label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1">Aviso Crítico (Dashboard)</label>
                           <input 
-                            placeholder="Núm. Permiso SCT" 
-                            className={`w-full p-4 rounded-xl text-sm text-white transition-colors ${formData.tipo_placa === 'Estatal' ? 'bg-slate-900 border border-slate-700 text-slate-500 cursor-not-allowed' : 'bg-slate-950 border border-slate-800'}`} 
-                            value={formData.num_permiso_sict} 
-                            readOnly={formData.tipo_placa === 'Estatal'}
-                            onChange={e => setFormData({...formData, num_permiso_sict: e.target.value})} 
+                            placeholder="Ej: Revisar sistema de frenos" 
+                            className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white focus:border-orange-500 transition-colors" 
+                            value={formData.alerta_aviso} 
+                            onChange={e => setFormData({...formData, alerta_aviso: e.target.value})} 
                           />
-                          <div className="flex flex-col">
-                            <span className="text-[9px] text-slate-500 font-bold mb-1">Vigencia Permiso:</span>
-                            <input 
-                              type="date" 
-                              className={`w-full p-4 rounded-xl text-sm text-white transition-colors ${formData.tipo_placa === 'Estatal' ? 'bg-slate-900 border border-slate-700 text-slate-500 cursor-not-allowed' : 'bg-slate-950 border border-slate-800'}`} 
-                              value={formData.vencimiento_sct} 
-                              disabled={formData.tipo_placa === 'Estatal'}
-                              onChange={e => setFormData({...formData, vencimiento_sct: e.target.value})} 
-                            />
-                          </div>
                         </div>
-
-                        {/* NUEVO BLOQUE: Tarjeta de Circulación */}
-                        <div className="space-y-3">
-                          <label className="text-[9px] text-slate-500 uppercase font-black ml-1">Tarjeta de Circulación</label>
-                          <div className="flex flex-col justify-end h-full">
-                            <span className="text-[9px] text-slate-500 font-bold mb-1 mt-auto">Vigencia Tarjeta:</span>
-                            <input 
-                              type="date" 
-                              className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white" 
-                              value={formData.vencimiento_circulacion} 
-                              onChange={e => setFormData({...formData, vencimiento_circulacion: e.target.value})} 
-                            />
-                            <p className="text-[9px] text-slate-500 italic mt-3 pr-2">
-                              * Asegúrate de tener el documento físico en la unidad correspondiente.
-                            </p>
-                          </div>
-                        </div>
-
                       </div>
 
                       <button type="submit" disabled={loading} className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black uppercase text-[11px] tracking-widest shadow-xl hover:bg-blue-500 transition-all flex justify-center items-center gap-2">
@@ -403,15 +469,61 @@ async function obtenerUnidades(userId) {
                     </form>
                   )}
 
+                  {/* TAB 2: BÓVEDA DOCUMENTAL */}
+                  {tabExpediente === 'boveda' && unidadSeleccionada && (
+                    <div className="space-y-6 animate-in fade-in">
+                      <div className="bg-purple-500/5 border border-purple-500/20 p-8 rounded-[2rem] text-center">
+                        <UploadCloud className="text-purple-500 mx-auto mb-4" size={40} />
+                        <h4 className="text-white font-black uppercase tracking-widest mb-2">Bóveda Digital del Activo</h4>
+                        <p className="text-[11px] text-slate-400 leading-relaxed max-w-lg mx-auto">
+                          Respaldo en la nube de la documentación oficial de la unidad ECO-{unidadSeleccionada.numero_economico}. Selecciona los archivos PDF o JPG correspondientes.
+                        </p>
+                        
+                        <div className="mt-10 grid grid-cols-1 md:grid-cols-2 gap-6 text-left">
+                          
+                          <div className="border border-dashed border-slate-700 bg-slate-950 rounded-2xl p-6 hover:border-purple-500/50 transition-colors flex flex-col justify-between">
+                            <div>
+                              <p className="text-[11px] font-black text-white uppercase tracking-widest mb-1">Póliza de Seguro RC</p>
+                              <p className="text-[9px] text-slate-500 uppercase tracking-wider mb-6">Formato PDF o Imagen</p>
+                            </div>
+                            
+                            <label className="w-full flex items-center justify-center p-4 rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 cursor-pointer transition-all">
+                              <span className="text-[10px] font-black text-white uppercase tracking-widest flex items-center gap-2">
+                                <UploadCloud size={14} /> Seleccionar Archivo
+                              </span>
+                              {/* El input file se conectará a Supabase Storage en el próximo paso */}
+                              <input type="file" className="hidden" accept=".pdf, image/jpeg, image/png" />
+                            </label>
+                          </div>
+
+                          <div className="border border-dashed border-slate-700 bg-slate-950 rounded-2xl p-6 hover:border-purple-500/50 transition-colors flex flex-col justify-between">
+                            <div>
+                              <p className="text-[11px] font-black text-white uppercase tracking-widest mb-1">Tarjeta de Circulación</p>
+                              <p className="text-[9px] text-slate-500 uppercase tracking-wider mb-6">Formato PDF o Imagen</p>
+                            </div>
+                            
+                            <label className="w-full flex items-center justify-center p-4 rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 cursor-pointer transition-all">
+                              <span className="text-[10px] font-black text-white uppercase tracking-widest flex items-center gap-2">
+                                <UploadCloud size={14} /> Seleccionar Archivo
+                              </span>
+                              <input type="file" className="hidden" accept=".pdf, image/jpeg, image/png" />
+                            </label>
+                          </div>
+
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {/* TAB 3: MANTENIMIENTOS */}
                   {tabExpediente === 'mantenimientos' && unidadSeleccionada && (
                     <div className="space-y-8">
                       <form onSubmit={registrarMantenimiento} className="p-6 bg-orange-500/10 border border-orange-500/20 rounded-2xl grid grid-cols-12 gap-3 items-end">
                         <div className="col-span-12 mb-2"><h3 className="text-[10px] font-black text-orange-400 uppercase tracking-widest flex items-center gap-2"><PlusCircle size={14}/> Registrar Servicio</h3></div>
-                        <div className="col-span-12 md:col-span-3"><label className="text-[9px] text-slate-400 uppercase font-bold block mb-1">Fecha</label><input type="date" required className="w-full bg-slate-950 border border-slate-800 p-3 rounded-xl text-xs text-white" value={nuevoMantenimiento.fecha} onChange={e => setNuevoMantenimiento({...nuevoMantenimiento, fecha: e.target.value})} /></div>
-                        <div className="col-span-12 md:col-span-3"><label className="text-[9px] text-slate-400 uppercase font-bold block mb-1">Tipo</label><select className="w-full bg-slate-950 border border-slate-800 p-3 rounded-xl text-xs text-white" value={nuevoMantenimiento.tipo} onChange={e => setNuevoMantenimiento({...nuevoMantenimiento, tipo: e.target.value})}><option value="Preventivo">Preventivo (Afinación, Llantas)</option><option value="Correctivo">Correctivo (Falla, Choque)</option></select></div>
-                        <div className="col-span-12 md:col-span-4"><label className="text-[9px] text-slate-400 uppercase font-bold block mb-1">Descripción del Taller</label><input required placeholder="Ej. Cambio de aceite" className="w-full bg-slate-950 border border-slate-800 p-3 rounded-xl text-xs text-white" value={nuevoMantenimiento.descripcion} onChange={e => setNuevoMantenimiento({...nuevoMantenimiento, descripcion: e.target.value})} /></div>
-                        <div className="col-span-12 md:col-span-2"><label className="text-[9px] text-slate-400 uppercase font-bold block mb-1">Costo ($)</label><input required type="number" placeholder="0.00" className="w-full bg-slate-950 border border-slate-800 p-3 rounded-xl text-xs text-white text-center font-mono" value={nuevoMantenimiento.costo} onChange={e => setNuevoMantenimiento({...nuevoMantenimiento, costo: e.target.value})} /></div>
-                        <div className="col-span-12 mt-2"><button type="submit" disabled={loading} className="w-full bg-orange-600 hover:bg-orange-500 text-white py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors">Guardar Registro</button></div>
+                        <div className="col-span-12 md:col-span-3"><label className="text-[9px] text-slate-400 uppercase font-bold block mb-1 ml-1">Fecha</label><input type="date" required className="w-full bg-slate-950 border border-slate-800 p-3.5 rounded-xl text-xs text-white" value={nuevoMantenimiento.fecha} onChange={e => setNuevoMantenimiento({...nuevoMantenimiento, fecha: e.target.value})} /></div>
+                        <div className="col-span-12 md:col-span-3"><label className="text-[9px] text-slate-400 uppercase font-bold block mb-1 ml-1">Tipo de Tarea</label><select className="w-full bg-slate-950 border border-slate-800 p-3.5 rounded-xl text-xs text-white" value={nuevoMantenimiento.tipo} onChange={e => setNuevoMantenimiento({...nuevoMantenimiento, tipo: e.target.value})}><option value="Preventivo">Preventivo (Afinación)</option><option value="Correctivo">Correctivo (Falla)</option></select></div>
+                        <div className="col-span-12 md:col-span-4"><label className="text-[9px] text-slate-400 uppercase font-bold block mb-1 ml-1">Descripción del Taller</label><input required placeholder="Ej. Cambio de balatas" className="w-full bg-slate-950 border border-slate-800 p-3.5 rounded-xl text-xs text-white" value={nuevoMantenimiento.descripcion} onChange={e => setNuevoMantenimiento({...nuevoMantenimiento, descripcion: e.target.value})} /></div>
+                        <div className="col-span-12 md:col-span-2"><label className="text-[9px] text-slate-400 uppercase font-bold block mb-1 ml-1">Costo ($)</label><input required type="number" placeholder="0.00" className="w-full bg-slate-950 border border-slate-800 p-3.5 rounded-xl text-xs text-white text-center font-mono" value={nuevoMantenimiento.costo} onChange={e => setNuevoMantenimiento({...nuevoMantenimiento, costo: e.target.value})} /></div>
+                        <div className="col-span-12 mt-2"><button type="submit" disabled={loading} className="w-full bg-orange-600 hover:bg-orange-500 text-white py-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors shadow-lg shadow-orange-900/20">Guardar Registro</button></div>
                       </form>
 
                       <div className="bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden">
@@ -433,13 +545,16 @@ async function obtenerUnidades(userId) {
                       </div>
                       
                       <div className="flex justify-end">
-                         <div className="bg-slate-950 border border-slate-800 px-6 py-4 rounded-2xl">
+                         <div className="bg-slate-950 border border-slate-800 px-6 py-4 rounded-2xl text-right">
                            <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest mb-1">Gasto Total Histórico</p>
                            <p className="text-xl font-mono font-black text-white">${mantenimientos.reduce((sum, m) => sum + Number(m.costo), 0).toLocaleString('es-MX', {minimumFractionDigits: 2})}</p>
                          </div>
                       </div>
                     </div>
                   )}
+
+
+
                 </div>
               </div>
             </div>
