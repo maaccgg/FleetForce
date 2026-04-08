@@ -172,6 +172,93 @@ async function obtenerUnidades(userId) {
 
   if (!sesion) return null;
 
+ // 1. MODIFICACIÓN: Guardamos el PATH (la ruta), no la URL pública
+  const subirDocumentoUnidad = async (e, campo) => {
+    const file = e.target.files[0];
+    if (!file || !unidadSeleccionada) return;
+
+    setLoading(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${unidadSeleccionada.numero_economico}/${campo}_${Date.now()}.${fileExt}`;
+      const filePath = `${fileName}`; // Ruta limpia
+
+      // Subir al bucket privado
+      const { error: uploadError } = await supabase.storage
+        .from('expedientes')
+        .upload(filePath, file, { upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      // ACTUALIZAMOS LA DB CON EL PATH (Ej: "ECO-01/doc_poliza_123.pdf")
+      const { error: updateError } = await supabase
+        .from('unidades')
+        .update({ [campo]: filePath })
+        .eq('id', unidadSeleccionada.id);
+
+      if (updateError) throw updateError;
+
+      setFormData({ ...formData, [campo]: filePath });
+      obtenerUnidades(sesion.user.id);
+      alert("✅ Guardado en búnker privado.");
+
+    } catch (error) {
+      alert("❌ Error de seguridad/subida: " + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 2. NUEVA FUNCIÓN: Para generar el link temporal al hacer clic en "Ver"
+  const verArchivoPrivado = async (path) => {
+    if (!path) return;
+    
+    const { data, error } = await supabase.storage
+      .from('expedientes')
+      .createSignedUrl(path, 60); // El link solo dura 60 segundos
+
+    if (error) {
+      alert("Error al generar acceso: " + error.message);
+    } else {
+      window.open(data.signedUrl, '_blank');
+    }
+  };
+
+const borrarDocumentoUnidad = async (campo) => {
+    if (!confirm("¿Seguro que deseas eliminar este documento? El archivo será borrado de la nube.")) return;
+    
+    setLoading(true);
+    try {
+      const filePath = formData[campo];
+      
+      // 1. Borrar el archivo físico del Storage
+      if (filePath) {
+        const { error: removeError } = await supabase.storage
+          .from('expedientes')
+          .remove([filePath]);
+          
+        if (removeError) console.warn("Aviso al borrar de storage:", removeError.message);
+      }
+
+      // 2. Actualizar la base de datos (dejar el campo vacío)
+      const { error: updateError } = await supabase
+        .from('unidades')
+        .update({ [campo]: null })
+        .eq('id', unidadSeleccionada.id);
+
+      if (updateError) throw updateError;
+
+      // 3. Reflejar cambios en la interfaz
+      setFormData({ ...formData, [campo]: '' });
+      obtenerUnidades(sesion.user.id);
+      
+    } catch (error) {
+      alert("❌ Error al eliminar documento: " + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="flex bg-slate-950 min-h-screen text-slate-200">
       <Sidebar />
@@ -300,7 +387,7 @@ async function obtenerUnidades(userId) {
                       <Wrench size={14}/> Mantenimiento
                     </button>
                     <button onClick={() => setTabExpediente('boveda')} className={`py-4 px-6 text-[10px] font-black uppercase tracking-widest transition-all border-b-2 flex items-center gap-2 shrink-0 ${tabExpediente === 'boveda' ? 'border-purple-500 text-purple-400' : 'border-transparent text-slate-500 hover:text-slate-300'}`}>
-                      <UploadCloud size={14}/> Bóveda Digital
+                      <UploadCloud size={14}/> Documentos (Bóveda)
                     </button>
                   </div>
                 )}
@@ -470,50 +557,85 @@ async function obtenerUnidades(userId) {
                   )}
 
                   {/* TAB 2: BÓVEDA DOCUMENTAL */}
-                  {tabExpediente === 'boveda' && unidadSeleccionada && (
-                    <div className="space-y-6 animate-in fade-in">
-                      <div className="bg-purple-500/5 border border-purple-500/20 p-8 rounded-[2rem] text-center">
-                        <UploadCloud className="text-purple-500 mx-auto mb-4" size={40} />
-                        <h4 className="text-white font-black uppercase tracking-widest mb-2">Bóveda Digital del Activo</h4>
-                        <p className="text-[11px] text-slate-400 leading-relaxed max-w-lg mx-auto">
-                          Respaldo en la nube de la documentación oficial de la unidad ECO-{unidadSeleccionada.numero_economico}. Selecciona los archivos PDF o JPG correspondientes.
-                        </p>
-                        
-                        <div className="mt-10 grid grid-cols-1 md:grid-cols-2 gap-6 text-left">
-                          
-                          <div className="border border-dashed border-slate-700 bg-slate-950 rounded-2xl p-6 hover:border-purple-500/50 transition-colors flex flex-col justify-between">
-                            <div>
-                              <p className="text-[11px] font-black text-white uppercase tracking-widest mb-1">Póliza de Seguro RC</p>
-                              <p className="text-[9px] text-slate-500 uppercase tracking-wider mb-6">Formato PDF o Imagen</p>
-                            </div>
-                            
-                            <label className="w-full flex items-center justify-center p-4 rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 cursor-pointer transition-all">
-                              <span className="text-[10px] font-black text-white uppercase tracking-widest flex items-center gap-2">
-                                <UploadCloud size={14} /> Seleccionar Archivo
-                              </span>
-                              {/* El input file se conectará a Supabase Storage en el próximo paso */}
-                              <input type="file" className="hidden" accept=".pdf, image/jpeg, image/png" />
-                            </label>
-                          </div>
+{/* TAB 3: BÓVEDA DOCUMENTAL */}
+{tabExpediente === 'boveda' && unidadSeleccionada && (
+  <div className="space-y-6 animate-in fade-in">
+    <div className="bg-purple-500/5 border border-purple-500/20 p-8 rounded-[2rem] text-center">
+      <UploadCloud className="text-purple-500 mx-auto mb-4" size={40} />
+      <h4 className="text-white font-black uppercase tracking-widest mb-2">Bóveda Digital del Activo</h4>
+      <p className="text-[11px] text-slate-400 leading-relaxed max-w-lg mx-auto">
+        Respaldo en la nube de la documentación oficial de la unidad ECO-{unidadSeleccionada.numero_economico}.
+      </p>
+      
+      <div className="mt-10 grid grid-cols-1 md:grid-cols-2 gap-6 text-left">
+        
+{/* DOCUMENTO: PÓLIZA */}
+        <div className="border border-dashed border-slate-700 bg-slate-950 rounded-2xl p-6 hover:border-purple-500/50 transition-colors flex flex-col justify-between">
+          <div>
+            <div className="flex justify-between items-start mb-1">
+              <p className="text-[11px] font-black text-white uppercase tracking-widest">Póliza de Seguro RC</p>
+              {formData.doc_poliza && <CheckCircle size={14} className="text-emerald-500" />}
+            </div>
+            <p className="text-[9px] text-slate-500 uppercase tracking-wider mb-6">Formato PDF o Imagen</p>
+          </div>
+          
+          <div className="space-y-3">
+            {formData.doc_poliza ? (
+              <div className="flex gap-2">
+                <button onClick={() => verArchivoPrivado(formData.doc_poliza)} className="flex-1 flex items-center justify-center gap-2 p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400 text-[10px] font-black uppercase hover:bg-purple-500 hover:text-white transition-all">
+                  <FileText size={14}/> Ver Seguro
+                </button>
+                <button onClick={() => borrarDocumentoUnidad('doc_poliza')} disabled={loading} title="Eliminar Documento" className="px-4 flex items-center justify-center rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500 hover:text-white transition-all">
+                  <Trash2 size={14}/>
+                </button>
+              </div>
+            ) : (
+              <label className="w-full flex items-center justify-center p-3.5 rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 cursor-pointer transition-all">
+                <span className="text-[10px] font-black text-white uppercase tracking-widest flex items-center gap-2">
+                  <UploadCloud size={14} /> Subir Archivo
+                </span>
+                <input type="file" className="hidden" accept=".pdf, image/*" onChange={(e) => subirDocumentoUnidad(e, 'doc_poliza')} disabled={loading} />
+              </label>
+            )}
+          </div>
+        </div>
 
-                          <div className="border border-dashed border-slate-700 bg-slate-950 rounded-2xl p-6 hover:border-purple-500/50 transition-colors flex flex-col justify-between">
-                            <div>
-                              <p className="text-[11px] font-black text-white uppercase tracking-widest mb-1">Tarjeta de Circulación</p>
-                              <p className="text-[9px] text-slate-500 uppercase tracking-wider mb-6">Formato PDF o Imagen</p>
-                            </div>
-                            
-                            <label className="w-full flex items-center justify-center p-4 rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 cursor-pointer transition-all">
-                              <span className="text-[10px] font-black text-white uppercase tracking-widest flex items-center gap-2">
-                                <UploadCloud size={14} /> Seleccionar Archivo
-                              </span>
-                              <input type="file" className="hidden" accept=".pdf, image/jpeg, image/png" />
-                            </label>
-                          </div>
+        {/* DOCUMENTO: TARJETA CIRCULACIÓN */}
+        <div className="border border-dashed border-slate-700 bg-slate-950 rounded-2xl p-6 hover:border-purple-500/50 transition-colors flex flex-col justify-between">
+          <div>
+            <div className="flex justify-between items-start mb-1">
+              <p className="text-[11px] font-black text-white uppercase tracking-widest">Tarjeta de Circulación</p>
+              {formData.doc_tarjeta_circulacion && <CheckCircle size={14} className="text-emerald-500" />}
+            </div>
+            <p className="text-[9px] text-slate-500 uppercase tracking-wider mb-6">Formato PDF o Imagen</p>
+          </div>
+          
+          <div className="space-y-3">
+            {formData.doc_tarjeta_circulacion ? (
+              <div className="flex gap-2">
+                <button onClick={() => verArchivoPrivado(formData.doc_tarjeta_circulacion)} className="flex-1 flex items-center justify-center gap-2 p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400 text-[10px] font-black uppercase hover:bg-purple-500 hover:text-white transition-all">
+                  <FileText size={14}/> Ver Tarjeta
+                </button>
+                <button onClick={() => borrarDocumentoUnidad('doc_tarjeta_circulacion')} disabled={loading} title="Eliminar Documento" className="px-4 flex items-center justify-center rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500 hover:text-white transition-all">
+                  <Trash2 size={14}/>
+                </button>
+              </div>
+            ) : (
+              <label className="w-full flex items-center justify-center p-3.5 rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 cursor-pointer transition-all">
+                <span className="text-[10px] font-black text-white uppercase tracking-widest flex items-center gap-2">
+                  <UploadCloud size={14} /> Subir Archivo
+                </span>
+                <input type="file" className="hidden" accept=".pdf, image/*" onChange={(e) => subirDocumentoUnidad(e, 'doc_tarjeta_circulacion')} disabled={loading} />
+              </label>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
 
-                        </div>
-                      </div>
-                    </div>
-                  )}
+
                   {/* TAB 3: MANTENIMIENTOS */}
                   {tabExpediente === 'mantenimientos' && unidadSeleccionada && (
                     <div className="space-y-8">
