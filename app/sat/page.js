@@ -685,56 +685,12 @@ export default function SATConfigPage() {
 
               </div>
 
-              {/* FILA 2: SELLOS DIGITALES */}
-              <div className="bg-slate-900 border border-slate-800 p-8 rounded-[2.5rem] relative overflow-hidden">
-                <FileKey className="text-purple-500 mb-5" size={32} />
-                <h3 className="text-xl font-black text-white italic uppercase mb-1">Sellos <span className="text-purple-500">Digitales (CSD)</span></h3>
-                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-6">Requisito para Timbrar en Producción</p>
-                
-                {perfilFiscal.tiene_csd ? (
-                  <div className="bg-green-500/10 border border-green-500/30 p-6 rounded-2xl text-center max-w-lg mx-auto">
-                    <CheckCircle className="text-green-500 mx-auto mb-3" size={32} />
-                    <h4 className="text-white font-bold uppercase text-sm mb-1">Sellos Activos</h4>
-                    <p className="text-[10px] text-slate-400">Tu cuenta está lista para timbrar ante el SAT.</p>
-                    <button type="button" onClick={() => setPerfilFiscal({...perfilFiscal, tiene_csd: false})} className="mt-4 text-[9px] text-blue-400 uppercase font-bold hover:text-white">Actualizar Sellos</button>
-                  </div>
-                ) : (
-                  <form onSubmit={subirSellosCSD} className="space-y-4 max-w-2xl">
-                    <div className="bg-blue-900/20 border border-blue-500/20 p-3 rounded-xl flex items-start gap-3">
-                      <AlertTriangle size={14} className="text-blue-500 shrink-0 mt-0.5" />
-                      <p className="text-[9px] text-blue-200/80 leading-relaxed">Asegúrate de subir tus archivos de <strong>Facturación (CSD)</strong>. El SAT rechazará los timbres si subes los de e.firma (FIEL).</p>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="bg-slate-950 border border-slate-800 p-3 rounded-2xl">
-                        <label className="text-[9px] font-black text-slate-500 uppercase ml-2 mb-1 block">Archivo .CER</label>
-                        <input type="file" accept=".cer" required onChange={handleCargaCer} className="w-full text-[10px] text-slate-300 file:mr-4 file:py-1.5 file:px-4 file:rounded-xl file:border-0 file:text-[9px] file:font-bold file:uppercase file:bg-slate-800 file:text-white hover:file:bg-slate-700" />
-                      </div>
-                      
-                      <div className="bg-slate-950 border border-slate-800 p-3 rounded-2xl">
-                        <label className="text-[9px] font-black text-slate-500 uppercase ml-2 mb-1 block">Archivo .KEY</label>
-                        <input type="file" accept=".key" required onChange={e => setKeyFile(e.target.files[0])} className="w-full text-[10px] text-slate-300 file:mr-4 file:py-1.5 file:px-4 file:rounded-xl file:border-0 file:text-[9px] file:font-bold file:uppercase file:bg-slate-800 file:text-white hover:file:bg-slate-700" />
-                      </div>
-
-                      <div className="md:col-span-2">
-                        <label className="text-[9px] font-black text-slate-500 uppercase ml-1 mb-2 block flex items-center gap-1"><Lock size={10}/> Contraseña del Sello</label>
-                        <input type="password" required value={csdPassword} onChange={e => setCsdPassword(e.target.value)} className="w-full bg-slate-950 border border-slate-800 p-3.5 rounded-2xl text-sm text-white outline-none focus:border-purple-500" placeholder="••••••••" />
-                      </div>
-                    </div>
-
-                    <button type="submit" disabled={isUploadingCSD} className={`w-full py-4 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-xl flex justify-center items-center gap-2 transition-all ${isUploadingCSD ? 'bg-slate-800 text-slate-500 cursor-not-allowed' : 'bg-purple-600 text-white hover:bg-purple-500'}`}>
-                      <Lock size={14}/> {isUploadingCSD ? "Validando en el SAT..." : "Vincular Sellos CSD"}
-                    </button>
-                  </form>
-                )}
-              </div>
-
               {/* BOTÓN GIGANTE */}
               <div className="mt-4">
                 <button type="button" onClick={guardarPerfilFiscal} disabled={loading} 
                   className={`w-full py-6 rounded-[2rem] font-black uppercase text-sm tracking-[0.2em] shadow-2xl flex justify-center items-center gap-3 transition-all 
                   ${loading ? 'bg-slate-800 text-slate-500 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-500'}`}>
-                  <Save size={20}/> {loading ? "Sincronizando..." : "Guardar Datos Maestros"}
+                  <Save size={20}/> {loading ? "Sincronizando..." : "Guardar Datos"}
                 </button>
               </div>
 
