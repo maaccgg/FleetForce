@@ -42,28 +42,51 @@ export default function Page() {
   // =====================================================================
   // 1. INICIALIZACIÓN Y DETECCIÓN DE SESIÓN
   // =====================================================================
-  useEffect(() => {
+useEffect(() => {
+    const verificarPasoObligatorio = async (session) => {
+      if (session) {
+        // Consultamos el expediente del usuario en la tabla de perfiles
+        const { data: perfil, error } = await supabase
+          .from('perfiles')
+          .select('registro_completado')
+          .eq('id', session.user.id)
+          .single();
+
+        // SI HAY SESIÓN PERO NO HA COMPLETADO EL REGISTRO (PASSWORD) -> REBOTE
+        if (perfil && perfil.registro_completado === false) {
+          console.log("🛡️ Filtro de Seguridad: Registro incompleto. Redirigiendo a Bienvenida.");
+          router.push('/bienvenida');
+          return;
+        }
+        
+        setSesion(session);
+      }
+      setLoading(false);
+    };
+
+    // Revisar sesión inicial
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setSesion(session);
-      setLoading(false); 
+      verificarPasoObligatorio(session);
     });
 
+    // Escuchar cambios de estado (Login/Logout/Invite)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSesion(session);
-      if (!session) setLoading(false);
+      verificarPasoObligatorio(session);
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [router]); // Agregamos router a las dependencias
 
   // =====================================================================
-  // 2. CARGA DEL DASHBOARD (SOLO SI HAY SESIÓN)
+  // 2. CARGA DEL DASHBOARD (SOLO SI HAY SESIÓN Y REGISTRO COMPLETO)
   // =====================================================================
   useEffect(() => {
     if (sesion) {
       obtenerDashboard(sesion.user.id);
     }
   }, [sesion, fechaInicio, fechaFin, filtroActivo]);
+
+
 
   // =====================================================================
   // 3. MANEJADOR DE LOGIN (DISEÑO ACTUALIZADO)
