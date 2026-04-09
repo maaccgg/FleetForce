@@ -9,6 +9,18 @@ import {
 import Sidebar from '@/components/sidebar';
 import * as XLSX from 'xlsx';
 
+// Mapa Operativo de Documentos de Bóveda para Operadores
+const DOCS_OPERADOR = [
+  { id: 'doc_ine', label: 'INE / Identificación', icon: User },
+  { id: 'doc_licencia', label: 'Licencia de Conducir', icon: ShieldCheck },
+  { id: 'doc_comprobante_domicilio', label: 'Comprobante de Domicilio', icon: MapPin },
+  { id: 'doc_estudios', label: 'Comprobante de Estudios', icon: FileText },
+  { id: 'doc_acta_nacimiento', label: 'Acta de Nacimiento', icon: FileText },
+  { id: 'doc_curp', label: 'CURP', icon: FileKey },
+  { id: 'doc_rfc', label: 'RFC (Constancia)', icon: Building2 },
+  { id: 'doc_nss', label: '# Seguro Social (NSS)', icon: Lock },
+];
+
 // Función para extraer el número de serie de un archivo .cer del SAT
 const extraerSerieCER = async (archivoCer) => {
   return new Promise((resolve, reject) => {
@@ -68,7 +80,11 @@ export default function SATConfigPage() {
   const [rolUsuario, setRolUsuario] = useState('miembro');
 
   // FORMULARIOS
-  const [formDataOp, setFormDataOp] = useState({ nombre_completo: '', rfc: '', numero_licencia: '', vencimiento_licencia: '', telefono: '' });
+  const [formDataOp, setFormDataOp] = useState({ 
+    nombre_completo: '', rfc: '', numero_licencia: '', vencimiento_licencia: '', telefono: '',
+    doc_ine: '', doc_licencia: '', doc_comprobante_domicilio: '', doc_estudios: '',
+    doc_acta_nacimiento: '', doc_curp: '', doc_rfc: '', doc_nss: ''
+  });
   const [formDataUb, setFormDataUb] = useState({ nombre_lugar: '', rfc_ubicacion: '', codigo_postal: '', estado: '', municipio: '', calle_numero: '', colonia: '' });
   const [formDataMe, setFormDataMe] = useState({ descripcion: '', clave_sat: '', clave_unidad: 'KGM', peso_unitario_kg: '', clave_embalaje: '4G', material_peligroso: false });
   const [formDataRe, setFormDataRe] = useState({ numero_economico: '', placas: '', tipo_placa: 'Federal', subtipo_remolque: 'CTR02' });
@@ -79,7 +95,7 @@ export default function SATConfigPage() {
 
   const [editandoId, setEditandoId] = useState(null);
 
-// === INICIO DE LÓGICA DE IMPORTACIÓN MASIVA (EXCEL MULTI-TAB) ===
+  // === INICIO DE LÓGICA DE IMPORTACIÓN MASIVA (EXCEL MULTI-TAB) ===
   const [importingInfo, setImportingInfo] = useState(false);
 
   // Genera un Excel real (.xlsx) con todas las pestañas necesarias
@@ -134,7 +150,6 @@ export default function SATConfigPage() {
 
         // Inyectamos ADN Institucional y estandarizamos datos críticos
         const payloadMasivo = registros.map(reg => {
-          // Normalizamos las claves para evitar errores si el usuario puso espacios en los títulos de las columnas
           let limpio = { usuario_id: empresaId, activo: true };
           for (const key in reg) {
             limpio[key.trim()] = String(reg[key]).trim(); 
@@ -172,9 +187,9 @@ export default function SATConfigPage() {
       e.target.value = null;
     };
 
-    reader.readAsArrayBuffer(file); // Leemos como binario para que la librería XLSX funcione
+    reader.readAsArrayBuffer(file);
   };
-  // === FIN DE LÓGICA DE IMPORTACIÓN MASIVA (EXCEL MULTI-TAB) ===
+  // === FIN DE LÓGICA DE IMPORTACIÓN MASIVA ===
 
   const tituloSingular = { operadores: 'Operador', remolques: 'Remolque', ubicaciones: 'Ubicación', mercancias: 'Mercancía', clientes: 'Cliente' };
 
@@ -184,7 +199,7 @@ export default function SATConfigPage() {
     });
   }, [activeTab]);
 
-async function cargarDatos(userId) {
+  async function cargarDatos(userId) {
     setLoading(true);
     try {
       // 1. OBTENER ADN DE LA INSTITUCIÓN Y ROL
@@ -198,8 +213,7 @@ async function cargarDatos(userId) {
       setEmpresaId(idInstitucion);
       if (perfilData?.rol) setRolUsuario(perfilData.rol);
 
-
-// 2. CARGAR CATÁLOGOS USANDO EL ID DE LA EMPRESA
+      // 2. CARGAR CATÁLOGOS USANDO EL ID DE LA EMPRESA
       if (activeTab === 'fiscal') {
         const { data } = await supabase.from('perfil_emisor').select('*').eq('usuario_id', idInstitucion).single();
         if (data) {
@@ -210,7 +224,6 @@ async function cargarDatos(userId) {
           });
         }
       } else {
-        // === FILTRO APLICADO: SOLO TRAER LOS ACTIVOS ===
         const { data, error } = await supabase
           .from(activeTab)
           .select('*')
@@ -226,17 +239,15 @@ async function cargarDatos(userId) {
         if (activeTab === 'clientes') setClientes(data || []);
       }
 
-
     } catch (err) { console.error("Error al cargar datos:", err.message); }
     setLoading(false);
   }
 
-const guardarRegistro = async (e) => {
+  const guardarRegistro = async (e) => {
     e.preventDefault();
     setLoading(true);
     let payload = {};
 
-    // INYECCIÓN: Usamos empresaId para que todo le pertenezca a la cuenta matriz
     if (activeTab === 'operadores') payload = { ...formDataOp, usuario_id: empresaId, rfc: formDataOp.rfc.toUpperCase() };
     if (activeTab === 'ubicaciones') payload = { ...formDataUb, usuario_id: empresaId, rfc_ubicacion: formDataUb.rfc_ubicacion.toUpperCase() };
     if (activeTab === 'mercancias') payload = { ...formDataMe, usuario_id: empresaId };
@@ -252,24 +263,23 @@ const guardarRegistro = async (e) => {
     setLoading(false);
   };
 
-const guardarPerfilFiscal = async () => {
+  const guardarPerfilFiscal = async () => {
     setLoading(true);
     const { error } = await supabase.from('perfil_emisor').upsert({ 
         ...perfilFiscal, 
         usuario_id: sesion.user.id, 
         rfc: perfilFiscal.rfc.toUpperCase(), 
-        updated_at: new Date().toISOString() // <-- CAMBIO AQUÍ
+        updated_at: new Date().toISOString()
     });
     if (error) alert(error.message); else alert("✅ Configuración Fiscal Guardada.");
     setLoading(false);
   };
 
-  // NUEVA FUNCIÓN: INTERCEPTA EL ARCHIVO .CER Y EXTRAE EL NÚMERO
   const handleCargaCer = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
-    setCerFile(file); // Guardamos el archivo para el submit
+    setCerFile(file);
 
     try {
       const numeroCertificado = await extraerSerieCER(file);
@@ -280,26 +290,25 @@ const guardarPerfilFiscal = async () => {
       alert(`✅ Certificado leído correctamente.\nNo. de Serie: ${numeroCertificado}`);
     } catch (error) {
       alert(`❌ ${error.message}`);
-      e.target.value = null; // Limpiamos el input
+      e.target.value = null;
       setCerFile(null);
     }
   };
 
-const subirSellosCSD = async (e) => {
+  const subirSellosCSD = async (e) => {
     e.preventDefault();
     if (!cerFile || !keyFile || !csdPassword) return alert("Por favor selecciona los archivos .cer, .key y escribe la contraseña.");
     if (!cerFile.name.toLowerCase().endsWith('.cer') || !keyFile.name.toLowerCase().endsWith('.key')) return alert("Archivos inválidos.");
 
     setIsUploadingCSD(true);
     try {
-      // Simulador de procesamiento (ya que la subida real la harás en Facturapi)
       await new Promise(resolve => setTimeout(resolve, 2000)); 
       
       const { error } = await supabase.from('perfil_emisor').upsert({ 
           ...perfilFiscal, 
           usuario_id: sesion.user.id, 
           tiene_csd: true, 
-          updated_at: new Date().toISOString() // <-- CAMBIO AQUÍ
+          updated_at: new Date().toISOString()
       });
       if (error) throw error;
       setPerfilFiscal({ ...perfilFiscal, tiene_csd: true });
@@ -308,19 +317,17 @@ const subirSellosCSD = async (e) => {
     } catch (err) { alert("Error: " + err.message); } finally { setIsUploadingCSD(false); }
   };
   
-const eliminarRegistro = async (id) => {
+  const eliminarRegistro = async (id) => {
     if (!confirm("¿Deseas dar de baja (archivar) este registro? Ya no aparecerá para crear nuevos viajes, pero se conservará en tu historial contable.")) return;
     
     setLoading(true);
     try {
-      // === ELIMINACIÓN LÓGICA: ACTUALIZAMOS EL ESTATUS A FALSO ===
       const { error } = await supabase
         .from(activeTab)
         .update({ activo: false })
         .eq('id', id);
 
       if (error) throw error;
-      
       cargarDatos(empresaId || sesion.user.id);
     } catch (error) {
       alert("Error al archivar: " + error.message);
@@ -331,7 +338,11 @@ const eliminarRegistro = async (id) => {
 
   const cerrarModal = () => {
     setMostrarModal(false); setEditandoId(null); setTabOperador('ficha');
-    setFormDataOp({ nombre_completo: '', rfc: '', numero_licencia: '', vencimiento_licencia: '', telefono: '' });
+    setFormDataOp({ 
+      nombre_completo: '', rfc: '', numero_licencia: '', vencimiento_licencia: '', telefono: '',
+      doc_ine: '', doc_licencia: '', doc_comprobante_domicilio: '', doc_estudios: '',
+      doc_acta_nacimiento: '', doc_curp: '', doc_rfc: '', doc_nss: '' 
+    });
     setFormDataUb({ nombre_lugar: '', rfc_ubicacion: '', codigo_postal: '', estado: '', municipio: '', calle_numero: '', colonia: '' });
     setFormDataMe({ descripcion: '', clave_sat: '', clave_unidad: 'KGM', peso_unitario_kg: '', clave_embalaje: '4G', material_peligroso: false });
     setFormDataRe({ numero_economico: '', placas: '', subtipo_remolque: 'CTR02' });
@@ -350,7 +361,12 @@ const eliminarRegistro = async (id) => {
   
   const editarOperador = (op) => { 
     setEditandoId(op.id); 
-    setFormDataOp({ nombre_completo: op.nombre_completo || '', rfc: op.rfc || '', numero_licencia: op.numero_licencia || '', vencimiento_licencia: op.vencimiento_licencia || '', telefono: op.telefono || '' }); 
+    setFormDataOp({ 
+      nombre_completo: op.nombre_completo || '', rfc: op.rfc || '', numero_licencia: op.numero_licencia || '', vencimiento_licencia: op.vencimiento_licencia || '', telefono: op.telefono || '',
+      doc_ine: op.doc_ine || '', doc_licencia: op.doc_licencia || '', doc_comprobante_domicilio: op.doc_comprobante_domicilio || '',
+      doc_estudios: op.doc_estudios || '', doc_acta_nacimiento: op.doc_acta_nacimiento || '', doc_curp: op.doc_curp || '',
+      doc_rfc: op.doc_rfc || '', doc_nss: op.doc_nss || ''
+    }); 
     setTabOperador('ficha');
     setMostrarModal(true); 
   };
@@ -359,7 +375,59 @@ const eliminarRegistro = async (id) => {
   const editarUbicacion = (ub) => { setEditandoId(ub.id); setFormDataUb({ nombre_lugar: ub.nombre_lugar || '', rfc_ubicacion: ub.rfc_ubicacion || '', codigo_postal: ub.codigo_postal || '', estado: ub.estado || '', municipio: ub.municipio || '', calle_numero: ub.calle_numero || '', colonia: ub.colonia || '' }); setMostrarModal(true); };
   const editarMercancia = (me) => { setEditandoId(me.id); setFormDataMe({ descripcion: me.descripcion || '', clave_sat: me.clave_sat || '', clave_unidad: me.clave_unidad || 'KGM', peso_unitario_kg: me.peso_unitario_kg || '', clave_embalaje: me.clave_embalaje || '4G', material_peligroso: me.material_peligroso || false }); setMostrarModal(true); };
 
-  // HELPER PARA VIGENCIA DE LICENCIAS
+  // ==========================================
+  // FUNCIONES BÓVEDA PRIVADA (OPERADORES)
+  // ==========================================
+  const verArchivoPrivado = async (path) => {
+    if (!path) return;
+    const { data, error } = await supabase.storage.from('expedientes').createSignedUrl(path, 60);
+    if (error) alert("Error al generar acceso: " + error.message);
+    else window.open(data.signedUrl, '_blank');
+  };
+
+  const gestionarDocOperador = async (e, campo, accion) => {
+    if (!editandoId) {
+      alert("⚠️ Primero debes guardar la Ficha de Identidad del operador antes de subir documentos.");
+      return;
+    }
+
+    if (accion === 'borrar') {
+      if (!confirm("¿Seguro que deseas eliminar este documento de la bóveda?")) return;
+      setLoading(true);
+      try {
+        const path = formDataOp[campo];
+        if (path) await supabase.storage.from('expedientes').remove([path]);
+        await supabase.from('operadores').update({ [campo]: null }).eq('id', editandoId);
+        setFormDataOp({ ...formDataOp, [campo]: '' });
+        cargarDatos(sesion.user.id);
+      } catch (err) { alert("Error al borrar: " + err.message); }
+      setLoading(false);
+      return;
+    }
+
+    const file = e.target.files[0];
+    if (!file) return;
+    setLoading(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const safeRfc = formDataOp.rfc ? formDataOp.rfc : 'SIN_RFC';
+      const fileName = `operadores/${safeRfc}/${campo}_${Date.now()}.${fileExt}`;
+      
+      const { error: uploadError } = await supabase.storage.from('expedientes').upload(fileName, file, { upsert: true });
+      if (uploadError) throw uploadError;
+
+      const { error: updateError } = await supabase.from('operadores').update({ [campo]: fileName }).eq('id', editandoId);
+      if (updateError) throw updateError;
+
+      setFormDataOp({ ...formDataOp, [campo]: fileName });
+      cargarDatos(sesion.user.id);
+      alert("✅ Documento archivado correctamente en el búnker.");
+    } catch (err) { 
+      alert("Error al subir: " + err.message); 
+    }
+    setLoading(false);
+  };
+
   const verificarVigencia = (fecha) => {
     if (!fecha) return { texto: 'Sin registro', color: 'text-slate-500', bg: 'bg-slate-800' };
     const hoy = new Date();
@@ -392,14 +460,9 @@ const eliminarRegistro = async (id) => {
                { id: 'mercancias', label: 'Mercancías', icon: Package }, 
                { id: 'clientes', label: 'Receptor (Clientes)', icon: Users }, 
                { id: 'fiscal', label: 'Emisor Fiscal', icon: ShieldCheck } ]
-
-// === BLINDAJE VISUAL CORREGIDO ===
-.filter(tab => {
-              // Definimos quién tiene el poder absoluto
+            .filter(tab => {
               const esAdmin = rolUsuario === 'administrador' || rolUsuario === 'admin';   
-              // Si es administrador, ve todo. 
               if (esAdmin) return true;
-              // Si NO es administrador, ocultamos la pestaña Fiscal y la de Clientes
               return tab.id !== 'fiscal' && tab.id !== 'clientes';
             })
             .map((tab) => (
@@ -416,7 +479,6 @@ const eliminarRegistro = async (id) => {
     <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">Gestión de {activeTab}</h3>
     
 <div className="flex items-center gap-3">
-      {/* Botones Estratégicos de Excel */}
       <button onClick={descargarPlantillaMaestra} className="text-slate-500 hover:text-emerald-400 font-black uppercase text-[9px] tracking-widest transition-colors flex items-center gap-1" title="Descargar plantilla general con todas las pestañas">
         <FileText size={14}/> Plantilla general (.xlsx)
       </button>
@@ -424,11 +486,9 @@ const eliminarRegistro = async (id) => {
       <label className={`cursor-pointer bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2 rounded-xl text-[9px] font-black uppercase flex items-center gap-2 transition-all border border-slate-700 ${importingInfo ? 'opacity-50 pointer-events-none' : ''}`}>
         {importingInfo ? <Loader2 size={14} className="animate-spin" /> : <UploadCloud size={14} />}
         {importingInfo ? 'Procesando...' : 'Subir Excel'}
-        {/* Cambiamos el accept a .xlsx */}
         <input type="file" accept=".xlsx" className="hidden" onChange={handleFileUploadExcel} disabled={importingInfo} />
       </label>
 
-      {/* Botón de Registro Manual Original */}
       <button onClick={() => setMostrarModal(true)} className="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2 rounded-xl text-[9px] font-black uppercase flex items-center gap-2 transition-all shadow-lg shadow-blue-900/20">
         <PlusCircle size={14} /> Registrar {tituloSingular[activeTab]}
       </button>
@@ -706,7 +766,7 @@ const eliminarRegistro = async (id) => {
                       <User size={14}/> Ficha de Identidad
                     </button>
                     <button onClick={() => setTabOperador('documentos')} className={`py-4 px-6 text-[10px] font-black uppercase tracking-widest transition-all border-b-2 flex items-center gap-2 ${tabOperador === 'documentos' ? 'border-purple-500 text-purple-400' : 'border-transparent text-slate-500 hover:text-slate-300'}`}>
-                      <FileText size={14}/> Documentos Digitales
+                      <FileText size={14}/> Bóveda Digital
                     </button>
                   </div>
                 )}
@@ -860,27 +920,52 @@ const eliminarRegistro = async (id) => {
                         </form>
                       )}
 
+                      {/* NUEVA BÓVEDA DIGITAL DE OPERADORES EN GRID */}
                       {tabOperador === 'documentos' && (
                         <div className="space-y-6 animate-in fade-in">
-                          <div className="bg-purple-500/10 border border-purple-500/30 p-6 rounded-2xl text-center">
+                          <div className="bg-purple-500/10 border border-purple-500/30 p-6 rounded-2xl text-center mb-6">
                             <FileText className="text-purple-500 mx-auto mb-3" size={32} />
                             <h4 className="text-white font-bold uppercase text-sm mb-2">Bóveda Documental</h4>
                             <p className="text-[10px] text-slate-400 leading-relaxed max-w-md mx-auto">
-                              Este módulo está preparado para almacenar copias digitalizadas (PDF/JPG) de la Licencia Federal y el Apto Médico de SCT. Evita problemas con aseguradoras por pérdida de documentos físicos.
+                              Respaldo digitalizado (PDF o JPG) del expediente del operador. Los documentos se almacenan de forma segura y privada.
                             </p>
-                            
-                            <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-4">
-                              <div className="border border-dashed border-slate-700 rounded-xl p-8 hover:bg-slate-800/50 transition-colors cursor-pointer group flex flex-col items-center">
-                                <UploadCloud className="text-slate-500 group-hover:text-blue-400 mb-3 transition-colors" size={24} />
-                                <span className="text-[10px] font-black uppercase tracking-widest text-slate-300">Subir Licencia</span>
-                                <span className="text-[8px] text-slate-500 mt-1 uppercase">Próximamente</span>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {DOCS_OPERADOR.map((doc) => (
+                              <div key={doc.id} className="bg-slate-950 border border-slate-800 p-5 rounded-2xl flex flex-col justify-between hover:border-purple-500/30 transition-all group">
+                                <div className="flex justify-between items-start mb-4">
+                                  <div className="flex items-center gap-3">
+                                    <div className={`p-2 rounded-lg ${formDataOp[doc.id] ? 'bg-emerald-500/10 text-emerald-500' : 'bg-slate-900 text-slate-500'}`}>
+                                      <doc.icon size={18} />
+                                    </div>
+                                    <div>
+                                      <p className="text-[10px] font-black text-white uppercase tracking-widest">{doc.label}</p>
+                                      <p className="text-[8px] text-slate-500 uppercase">{formDataOp[doc.id] ? 'Archivo en Bóveda' : 'Pendiente de subir'}</p>
+                                    </div>
+                                  </div>
+                                  {formDataOp[doc.id] && <CheckCircle size={14} className="text-emerald-500" />}
+                                </div>
+
+                                <div className="flex gap-2">
+                                  {formDataOp[doc.id] ? (
+                                    <>
+                                      <button onClick={() => verArchivoPrivado(formDataOp[doc.id])} className="flex-1 flex items-center justify-center gap-2 bg-purple-600/10 text-purple-400 text-[9px] font-black uppercase py-2.5 rounded-xl hover:bg-purple-600 hover:text-white transition-all">
+                                        <FileText size={12}/> Ver
+                                      </button>
+                                      <button onClick={() => gestionarDocOperador(null, doc.id, 'borrar')} disabled={loading} className="px-4 flex items-center justify-center bg-red-500/10 text-red-500 rounded-xl hover:bg-red-500 hover:text-white transition-all">
+                                        <Trash2 size={14}/>
+                                      </button>
+                                    </>
+                                  ) : (
+                                    <label className="w-full flex items-center justify-center gap-2 bg-slate-900 border border-slate-800 text-slate-400 text-[9px] font-black uppercase py-2.5 rounded-xl text-center cursor-pointer hover:bg-slate-800 hover:text-white transition-all">
+                                      <UploadCloud size={14}/> Subir Archivo
+                                      <input type="file" className="hidden" accept=".pdf,image/*" onChange={(e) => gestionarDocOperador(e, doc.id, 'subir')} disabled={loading} />
+                                    </label>
+                                  )}
+                                </div>
                               </div>
-                              <div className="border border-dashed border-slate-700 rounded-xl p-8 hover:bg-slate-800/50 transition-colors cursor-pointer group flex flex-col items-center">
-                                <UploadCloud className="text-slate-500 group-hover:text-purple-400 mb-3 transition-colors" size={24} />
-                                <span className="text-[10px] font-black uppercase tracking-widest text-slate-300">Subir Apto Médico</span>
-                                <span className="text-[8px] text-slate-500 mt-1 uppercase">Próximamente</span>
-                              </div>
-                            </div>
+                            ))}
                           </div>
                         </div>
                       )}

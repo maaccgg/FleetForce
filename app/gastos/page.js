@@ -2,9 +2,10 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { z } from 'zod';
+import * as XLSX from 'xlsx';
 import { 
   Wrench, PlusCircle, History, Trash2, Fuel, X, 
-  Truck, TrendingDown, Calendar, Search, ChevronDown 
+  Truck, TrendingDown, Calendar, Search, ChevronDown, FileText
 } from 'lucide-react';
 import Sidebar from '@/components/sidebar';
 import TarjetaDato from '@/components/tarjetaDato';
@@ -87,9 +88,9 @@ export default function GastosOperativosPage() {
     setUnidades(unidadesBD || []);
 
     // 2. Cargar los últimos viajes para el selector manual
-const { data: viajesBD, error: errorViajes } = await supabase
+    const { data: viajesBD, error: errorViajes } = await supabase
       .from('viajes')
-      .select('id, folio_interno, fecha_salida') // <--- Quitamos 'ruta' y pusimos 'fecha_salida'
+      .select('id, folio_interno, fecha_salida')
       .eq('usuario_id', idMaestro)
       .order('created_at', { ascending: false })
       .limit(50);
@@ -169,9 +170,58 @@ const { data: viajesBD, error: errorViajes } = await supabase
     obtenerDatos(empresaId);
   };
 
-  if (!sesion) return 
+  const exportarGastosExcel = () => {
+    if (historial.length === 0) return alert("No hay datos para exportar en este periodo.");
+
+    setLoading(true);
+    try {
+      // 1. Mapeo y limpieza de datos para el Excel
+      const datosParaExportar = historial.map(item => {
+        const vieneDeViaje = item.viaje_id !== null;
+        return {
+          'FECHA': item.fecha ? item.fecha.slice(0, 10) : 'S/F',
+          'FOLIO GASTO': item.folio_interno ? `G-${String(item.folio_interno).padStart(4, '0')}` : 'G-S/N',
+          'ORIGEN': vieneDeViaje ? `VIAJE V-${String(item.viajes?.folio_interno).padStart(4, '0')}` : 'Gasto General',
+          'UNIDAD (ECO)': item.unidades?.numero_economico || '---',
+          'TIPO': item.tipo.toUpperCase(),
+          'DESCRIPCIÓN': item.descripcion,
+          'INVERSIÓN ($)': Number(item.costo)
+        };
+      });
+
+      // 2. Creación del libro y la hoja
+      const worksheet = XLSX.utils.json_to_sheet(datosParaExportar);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Gastos Operativos");
+
+      // 3. Ajuste del ancho de las columnas
+      worksheet['!cols'] = [
+        { wch: 12 }, // FECHA
+        { wch: 15 }, // FOLIO GASTO
+        { wch: 20 }, // ORIGEN
+        { wch: 15 }, // UNIDAD
+        { wch: 15 }, // TIPO
+        { wch: 45 }, // DESCRIPCION
+        { wch: 15 }, // INVERSION
+      ];
+
+      // 4. Nombre dinámico y descarga
+      const nombreArchivo = `Reporte_Gastos_${fechaInicio}_al_${fechaFin}.xlsx`;
+      XLSX.writeFile(workbook, nombreArchivo);
+      
+      setMostrarFiltro(false);
+
+    } catch (error) {
+      console.error("Error al exportar:", error);
+      alert("Error al generar el reporte.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!sesion) return null;
   
-if (rolUsuario === 'facturacion') {
+  if (rolUsuario === 'facturacion') {
     return (
       <div className="flex bg-slate-950 min-h-screen text-slate-200 w-full">
         <Sidebar />
@@ -182,8 +232,6 @@ if (rolUsuario === 'facturacion') {
       </div>
     );
   }
-
-  <div className="min-h-screen bg-slate-950"></div>;
 
   return (
     <div className="flex bg-slate-950 min-h-screen text-slate-200 w-full">
@@ -223,7 +271,19 @@ if (rolUsuario === 'facturacion') {
                         <input type="date" className="w-full bg-slate-950 border border-slate-800 p-3 rounded-xl text-xs text-white" 
                           value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} />
                       </div>
-                      <button onClick={() => setMostrarFiltro(false)} className="w-full bg-blue-600 text-white py-2 rounded-xl text-[9px] font-black uppercase">Aplicar</button>
+                      
+                      <div className="pt-3 mt-2 border-t border-slate-800 space-y-2">
+                        <button onClick={() => setMostrarFiltro(false)} className="w-full bg-blue-600 hover:bg-blue-500 text-white py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-colors">
+                          Aplicar Filtro
+                        </button>
+                        <button 
+                          onClick={exportarGastosExcel} 
+                          disabled={loading || historial.length === 0}
+                          className="w-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 hover:bg-emerald-500 hover:text-white py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex justify-center items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <FileText size={14} /> Exportar a Excel
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -250,7 +310,7 @@ if (rolUsuario === 'facturacion') {
             </div>
           )}
 
-{/* TABLA DE HISTORIAL ESTANDARIZADA (DISEÑO TIPO FACTURAS) */}
+          {/* TABLA DE HISTORIAL ESTANDARIZADA (DISEÑO TIPO FACTURAS) */}
           <div className="bg-slate-900 border border-slate-800 rounded-[2rem] overflow-hidden shadow-2xl mb-12">
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse text-[13px]">
