@@ -4,7 +4,7 @@ import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import { 
   PlusCircle, Trash2, CheckCircle, Clock, X, 
-  Calendar, ChevronDown, DollarSign, Truck, FileText, ShieldCheck, Settings, FileCode, Receipt, Loader2,
+  Calendar, ChevronDown, DollarSign, Truck, FileText, ShieldCheck, Settings, FileCode, Receipt, Loader2, CalendarCheck
 } from 'lucide-react';
 import Sidebar from '@/components/sidebar';
 import TarjetaDato from '@/components/tarjetaDato';
@@ -287,7 +287,8 @@ function FacturasContenido() {
           forma_pago: validacion.data.forma_pago,
           metodo_pago: validacion.data.metodo_pago,
           estatus_pago: 'Pendiente',
-          referencia: validacion.data.referencia
+          referencia: validacion.data.referencia,
+          empresa_id: empresaId
       }]);
       if (error) throw error;
       
@@ -301,9 +302,24 @@ function FacturasContenido() {
     }
   };
 
+  // === MODIFICACIÓN: GUARDAR FECHA DE PAGO AUTOMÁTICAMENTE ===
   const alternarEstatus = async (id, estatusActual) => {
-    const nuevoEstatus = estatusActual === 'Pendiente' ? 'Pagado' : 'Pendiente';
-    await supabase.from('facturas').update({ estatus_pago: nuevoEstatus }).eq('id', id);
+    const esPendiente = estatusActual === 'Pendiente';
+    const nuevoEstatus = esPendiente ? 'Pagado' : 'Pendiente';
+    
+    // Si se marca como pagado, tomamos la fecha actual. Si se regresa a pendiente, la limpiamos.
+    const fechaDePago = esPendiente ? new Date().toISOString().split('T')[0] : null;
+
+    const { error } = await supabase.from('facturas').update({ 
+      estatus_pago: nuevoEstatus,
+      fecha_pago: fechaDePago 
+    }).eq('id', id);
+
+    if (error) {
+      alert("Error al actualizar estatus: " + error.message);
+      return;
+    }
+
     obtenerDatos(empresaId);
   };
 
@@ -325,6 +341,7 @@ function FacturasContenido() {
       Fecha_Emision: f.fecha_viaje,
       Fecha_Vencimiento: f.fecha_vencimiento || 'S/V',
       Estatus_Pago: f.estatus_pago,
+      Fecha_Pago_Real: f.fecha_pago || 'Pendiente', // <--- AGREGADO AL EXCEL
       Cliente: f.cliente,
       Concepto: f.ruta || '',
       Referencia: f.referencia || '',
@@ -357,8 +374,8 @@ function FacturasContenido() {
   return (
     <div className="flex bg-slate-950 min-h-screen text-slate-200 w-full">
       <Sidebar />
-      <main className="flex-1 p-8 overflow-y-auto">
-        <div className="max-w-7xl mx-auto">
+      <main className="flex-1 p-8 overflow-y-auto custom-scrollbar">
+        <div className="max-w-[1400px] mx-auto">
           
           <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-10">
             <div>
@@ -371,7 +388,6 @@ function FacturasContenido() {
             </div>
 
             <div className="flex items-center gap-3">
-              {/* BOTÓN DE PERIODO ESTANDARIZADO (CON EXCEL) */}
               <div className="relative shrink-0 z-20">
                 <button 
                   onClick={() => {
@@ -458,15 +474,17 @@ function FacturasContenido() {
           )}
 
           <div className="bg-slate-900 border border-slate-800 rounded-4xl overflow-hidden shadow-2xl">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse text-[13px] min-w-[1000px]">
+            <div className="overflow-x-auto custom-scrollbar pb-2">
+              <table className="w-full text-left border-collapse text-[13px] min-w-[1100px]">
                 <thead>
                   <tr className="bg-slate-950/50 border-b border-slate-800 text-slate-400 text-[12px] font-semibold uppercase tracking-wider">
                     <th className="p-4 pl-8 font-normal w-12">Pago</th>
                     <th className="p-4 font-normal">Folio y Origen</th>
                     <th className="p-4 font-normal min-w-[200px]">Cliente Receptor</th>
-                    <th className="p-4 font-normal min-w-[200px]">Concepto</th>
+                    <th className="p-4 font-normal min-w-[180px]">Concepto</th>
                     <th className="p-4 font-normal w-32">Vencimiento</th>
+                    {/* === NUEVA COLUMNA VISUAL === */}
+                    <th className="p-4 font-normal w-32">Fecha Pago</th>
                     <th className="p-4 font-normal">Monto Total</th>
                     <th className="p-4 pr-8 text-right font-normal">Acciones</th>
                   </tr>
@@ -516,7 +534,7 @@ function FacturasContenido() {
                           </div>
                         </td>
 
-                        <td className="p-4 align-middle max-w-[200px]">
+                        <td className="p-4 align-middle max-w-[180px]">
                           <span className="text-slate-300 text-[12px] truncate block" title={item.ruta}>{item.ruta || '---'}</span>
                           {item.referencia && (
                             <span className="text-emerald-500/80 text-[10px] uppercase font-bold tracking-widest truncate block mt-1" title={item.referencia}>
@@ -527,7 +545,7 @@ function FacturasContenido() {
 
                         <td className="p-4 align-middle">
                            {item.estatus_pago === 'Pagado' ? (
-                             <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">Liquidada</span>
+                             <span className="text-[10px] font-black text-emerald-500/50 uppercase tracking-widest line-through">Saldado</span>
                            ) : (
                              <div className="flex flex-col gap-0.5">
                                <span className={`text-[12px] ${esVencida ? 'text-red-400 font-bold' : 'text-slate-300'}`}>
@@ -536,6 +554,22 @@ function FacturasContenido() {
                                {esVencida && <span className="text-[9px] font-black text-red-500 uppercase">Vencida</span>}
                              </div>
                            )}
+                        </td>
+
+                        {/* === COLUMNA FECHA DE PAGO RENDERIZADA === */}
+                        <td className="p-4 align-middle">
+                          {item.estatus_pago === 'Pagado' ? (
+                            <div className="flex flex-col gap-0.5">
+                              <span className="text-[12px] text-emerald-400 font-bold font-mono">
+                                {item.fecha_pago?.slice(0, 10) || 'S/D'}
+                              </span>
+                              <span className="text-[9px] font-black text-emerald-500/70 uppercase tracking-widest flex items-center gap-1">
+                                <CalendarCheck size={10} /> Ingresado
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-[12px] text-slate-600 font-mono">---</span>
+                          )}
                         </td>
 
                         <td className="p-4 align-middle">
@@ -571,7 +605,7 @@ function FacturasContenido() {
                   
                   {historial.length === 0 && (
                     <tr>
-                      <td colSpan="7" className="py-16 text-center">
+                      <td colSpan="8" className="py-16 text-center">
                         <DollarSign size={32} className="mx-auto text-slate-700 mb-3" />
                         <p className="text-slate-500 uppercase tracking-widest text-sm">No hay facturas en este periodo</p>
                       </td>
