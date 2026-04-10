@@ -6,7 +6,7 @@ import Sidebar from '@/components/sidebar';
 import { 
   Bell, Calendar, DollarSign, TrendingUp, AlertTriangle, 
   ChevronRight, Search, ChevronDown, Truck, User, Loader2,
-  Mail, Lock, ArrowRight, Wrench 
+  Mail, Lock, ArrowRight, Wrench, Eye, EyeOff // <--- NUEVOS ICONOS
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
@@ -34,6 +34,10 @@ export default function Page() {
   const [password, setPassword] = useState(""); 
   const [loading, setLoading] = useState(true);
   const [errorLogin, setErrorLogin] = useState(null);
+  
+  // === NUEVO ESTADO PARA VER CONTRASEÑA ===
+  const [verPassword, setVerPassword] = useState(false); 
+  
   const router = useRouter();
 
   const [empresaId, setEmpresaId] = useState(null);
@@ -140,7 +144,6 @@ export default function Page() {
     setEmpresaId(idMaestro);
     if (perfilData?.rol) setRolUsuario(perfilData.rol);
 
-    // === LÓGICA MULTI-TENANT: Todo se filtra por empresa_id ===
     let queryFacturas = supabase.from('facturas').select('monto_total').eq('empresa_id', idMaestro).eq('estatus_pago', 'Pagado');
     let queryGastos = supabase.from('mantenimientos').select('costo').eq('empresa_id', idMaestro);
     let queryViajes = supabase.from('viajes').select('estatus, folio_interno').eq('empresa_id', idMaestro);
@@ -156,9 +159,7 @@ export default function Page() {
       { data: unidades }, { data: operadores }, { data: facturasPendientes },
       { data: alertasMtto }
     ] = await Promise.all([
-      queryFacturas, 
-      queryGastos, 
-      queryViajes,
+      queryFacturas, queryGastos, queryViajes,
       supabase.from('unidades').select('numero_economico, vencimiento_seguro, vencimiento_sct, vencimiento_circulacion').eq('empresa_id', idMaestro),
       supabase.from('operadores').select('nombre_completo, vencimiento_licencia').eq('empresa_id', idMaestro),
       supabase.from('facturas').select('cliente, fecha_vencimiento, monto_total').eq('empresa_id', idMaestro).eq('estatus_pago', 'Pendiente'),
@@ -316,20 +317,33 @@ export default function Page() {
             <div>
               <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1">Correo Electrónico</label>
               <div className="relative">
-                <Mail className="absolute left-4 top-4 text-slate-500" size={14} />
+                <Mail className="absolute left-4 top-[18px] text-slate-500" size={14} />
                 <input type="email" required placeholder=""
                   className="w-full bg-slate-950 border border-slate-800 pl-12 p-3.5 rounded-2xl text-sm text-white focus:border-blue-500 outline-none transition-all lowercase"
                   value={email} onChange={(e) => setEmail(e.target.value)} />
               </div>
             </div>
             
+            {/* === AQUÍ ESTÁ EL CAMBIO DEL OJO === */}
             <div>
               <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1">Contraseña</label>
               <div className="relative">
-                <Lock className="absolute left-4 top-4 text-slate-500" size={16} />
-                <input type="password" required placeholder= ""
-                  className="w-full bg-slate-950 border border-slate-800 pl-12 p-3.5 rounded-2xl text-sm text-white focus:border-blue-500 outline-none transition-all"
-                  value={password} onChange={(e) => setPassword(e.target.value)} />
+                <Lock className="absolute left-4 top-[18px] text-slate-500" size={16} />
+                <input 
+                  type={verPassword ? "text" : "password"} 
+                  required 
+                  placeholder=""
+                  className="w-full bg-slate-950 border border-slate-800 pl-12 pr-12 p-3.5 rounded-2xl text-sm text-white focus:border-blue-500 outline-none transition-all"
+                  value={password} 
+                  onChange={(e) => setPassword(e.target.value)} 
+                />
+                <button 
+                  type="button" 
+                  onClick={() => setVerPassword(!verPassword)}
+                  className="absolute right-4 top-[18px] text-slate-600 hover:text-slate-300 transition-colors"
+                >
+                  {verPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
               </div>
             </div>
           </div>
