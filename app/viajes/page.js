@@ -449,6 +449,7 @@ export default function ViajesPage() {
       }
 
       if (editandoId) {
+        // === EDICIÓN DE VIAJE ===
         await supabase.from('viajes').update(payloadComun).eq('id', editandoId);
         
         if (formData.monto_flete > 0 && formData.cliente_id) {
@@ -466,6 +467,7 @@ export default function ViajesPage() {
           }
         }
       } else {
+        // === CREACIÓN DE VIAJE ===
         const nuevoIdCCP = generarIdCCP();
 
         const { data: nuevoViaje, error: errorViaje } = await supabase.from('viajes')
@@ -474,6 +476,28 @@ export default function ViajesPage() {
           
         if (errorViaje) throw errorViaje;
 
+        // --- INICIO DEL MOTOR DE ODÓMETRO ESTIMADO ---
+        if (payloadComun.unidad_id && payloadComun.distancia_km > 0) {
+          // 1. Obtenemos el kilometraje actual del camión
+          const { data: unidadData } = await supabase
+            .from('unidades')
+            .select('kilometraje_actual')
+            .eq('id', payloadComun.unidad_id)
+            .single();
+
+          const kmActuales = Number(unidadData?.kilometraje_actual || 0);
+          const kmRuta = Number(payloadComun.distancia_km);
+          const nuevoKilometraje = kmActuales + kmRuta;
+
+          // 2. Sumamos y guardamos el nuevo total en la unidad
+          await supabase
+            .from('unidades')
+            .update({ kilometraje_actual: nuevoKilometraje })
+            .eq('id', payloadComun.unidad_id);
+        }
+        // --- FIN DEL MOTOR DE ODÓMETRO ESTIMADO ---
+
+        // Creación de factura ligada
         if (formData.monto_flete > 0 && formData.cliente_id) {
           const fechaVenc = new Date(formData.fecha_salida); fechaVenc.setDate(fechaVenc.getDate() + (clienteObj?.dias_credito || 0));
           
@@ -483,6 +507,7 @@ export default function ViajesPage() {
           }]);
         }
 
+        // Registro de gastos de viaje
         if (formData.gasto_monto && parseFloat(formData.gasto_monto) > 0) {
           await supabase.from('mantenimientos').insert([{
             usuario_id: empresaId,

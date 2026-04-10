@@ -6,7 +6,7 @@ import Sidebar from '@/components/sidebar';
 import { 
   Bell, Calendar, DollarSign, TrendingUp, AlertTriangle, 
   ChevronRight, Search, ChevronDown, Truck, User, Loader2,
-  Mail, Lock, ArrowRight
+  Mail, Lock, ArrowRight, Wrench 
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
@@ -33,64 +33,47 @@ export default function Page() {
   const [email, setEmail] = useState(""); 
   const [password, setPassword] = useState(""); 
   const [loading, setLoading] = useState(true);
-  const [errorLogin, setErrorLogin] = useState(null); // <-- Nuevo: Para mensajes en UI
+  const [errorLogin, setErrorLogin] = useState(null);
   const router = useRouter();
 
   const [empresaId, setEmpresaId] = useState(null);
   const [rolUsuario, setRolUsuario] = useState('miembro');
 
-  // =====================================================================
-  // 1. INICIALIZACIÓN Y DETECCIÓN DE SESIÓN
-  // =====================================================================
-useEffect(() => {
+  useEffect(() => {
     const verificarPasoObligatorio = async (session) => {
       if (session) {
-        // Consultamos el expediente del usuario en la tabla de perfiles
-        const { data: perfil, error } = await supabase
+        const { data: perfil } = await supabase
           .from('perfiles')
           .select('registro_completado')
           .eq('id', session.user.id)
           .single();
 
-        // SI HAY SESIÓN PERO NO HA COMPLETADO EL REGISTRO (PASSWORD) -> REBOTE
         if (perfil && perfil.registro_completado === false) {
-          console.log("🛡️ Filtro de Seguridad: Registro incompleto. Redirigiendo a Bienvenida.");
           router.push('/bienvenida');
           return;
         }
-        
         setSesion(session);
       }
       setLoading(false);
     };
 
-    // Revisar sesión inicial
     supabase.auth.getSession().then(({ data: { session } }) => {
       verificarPasoObligatorio(session);
     });
 
-    // Escuchar cambios de estado (Login/Logout/Invite)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       verificarPasoObligatorio(session);
     });
 
     return () => subscription.unsubscribe();
-  }, [router]); // Agregamos router a las dependencias
+  }, [router]); 
 
-  // =====================================================================
-  // 2. CARGA DEL DASHBOARD (SOLO SI HAY SESIÓN Y REGISTRO COMPLETO)
-  // =====================================================================
   useEffect(() => {
     if (sesion) {
       obtenerDashboard(sesion.user.id);
     }
   }, [sesion, fechaInicio, fechaFin, filtroActivo]);
 
-
-
-  // =====================================================================
-  // 3. MANEJADOR DE LOGIN (DISEÑO ACTUALIZADO)
-  // =====================================================================
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -121,7 +104,6 @@ useEffect(() => {
     }
   };
 
-  // Función para recuperación de contraseña (Mismo estilo que bienvenida)
   const recuperarPassword = async () => {
     if (!email) {
       setErrorLogin("Ingresa tu correo para enviarte el enlace.");
@@ -168,15 +150,16 @@ useEffect(() => {
       queryViajes = queryViajes.gte('fecha_salida', fechaInicio).lte('fecha_salida', fechaFin);
     }
 
-const [
+    const [
       { data: facturasPagadas }, { data: gastosBD }, { data: viajesBD },
-      { data: unidades }, { data: operadores }, { data: facturasPendientes }
+      { data: unidades }, { data: operadores }, { data: facturasPendientes },
+      { data: alertasMtto } // <-- SE AÑADIÓ LA CONSULTA DE ALERTAS
     ] = await Promise.all([
       queryFacturas, queryGastos, queryViajes,
-      // AQUÍ: Agregamos vencimiento_circulacion al select
       supabase.from('unidades').select('numero_economico, vencimiento_seguro, vencimiento_sct, vencimiento_circulacion').eq('usuario_id', idMaestro),
       supabase.from('operadores').select('nombre_completo, vencimiento_licencia').eq('usuario_id', idMaestro),
-      supabase.from('facturas').select('cliente, fecha_vencimiento, monto_total').eq('usuario_id', idMaestro).eq('estatus_pago', 'Pendiente')
+      supabase.from('facturas').select('cliente, fecha_vencimiento, monto_total').eq('usuario_id', idMaestro).eq('estatus_pago', 'Pendiente'),
+      supabase.from('alertas_mantenimiento').select('id, kilometraje_meta, mensaje, unidades(numero_economico, kilometraje_actual)').eq('usuario_id', idMaestro)
     ]);
 
     const totalIngresos = facturasPagadas?.reduce((acc, curr) => acc + (Number(curr.monto_total) || 0), 0) || 0;
@@ -191,24 +174,21 @@ const [
 
     const nuevasAlertas = [];
 
-const evaluarAlerta = (fechaString) => {
+    const evaluarAlerta = (fechaString) => {
       const fVencimiento = new Date(fechaString + 'T12:00:00'); 
       const dias = Math.ceil((fVencimiento - ahora) / (1000 * 60 * 60 * 24));
       let entraEnFiltro = false;
 
       if (filtroActivo && fIni && fFinObj) {
-        // OBEDIENCIA ESTRICTA AL PERIODO: Solo muestra lo que venza dentro del rango seleccionado.
-        // También incluimos lo que ya está vencido (dias < 0) para que nunca se pierda un riesgo crítico.
         entraEnFiltro = (fVencimiento >= fIni && fVencimiento <= fFinObj) || (dias < 0);
       } else {
-        // VISTA HISTÓRICA/TODOS: Muestra lo vencido y lo próximo a vencer (30 días).
         entraEnFiltro = (dias <= 30) || (dias < 0); 
       }
       return { entraEnFiltro, dias };
     };
 
     unidades?.forEach(u => {
-const docs = [
+      const docs = [
         { t: 'Seguro', f: u.vencimiento_seguro }, 
         { t: 'Permiso SCT', f: u.vencimiento_sct },
         { t: 'Tarjeta Circ.', f: u.vencimiento_circulacion }
@@ -264,6 +244,32 @@ const docs = [
         });
       });
     }
+
+    // --- NUEVO: INTEGRACIÓN DE ALERTAS DE MANTENIMIENTO POR KM ---
+    if (alertasMtto) {
+      alertasMtto.forEach(alerta => {
+        if (!alerta.unidades) return;
+        const kmActual = Number(alerta.unidades.kilometraje_actual || 0);
+        const kmMeta = Number(alerta.kilometraje_meta);
+        const kmFaltan = kmMeta - kmActual;
+
+        if (kmFaltan <= 2000) {
+          nuevasAlertas.push({
+            id: `AM-${alerta.id}`,
+            titulo: `Taller ECO-${alerta.unidades.numero_economico}`,
+            subtitulo: kmFaltan <= 0
+              ? `Rebasado por ${Math.abs(kmFaltan).toLocaleString('en-US')} KM: ${alerta.mensaje}`
+              : `En ${kmFaltan.toLocaleString('en-US')} KM: ${alerta.mensaje}`,
+            dias: kmFaltan <= 0 ? -10 : 5, // Valor arbitrario para forzar el ordenamiento
+            tipo: 'unidad', // Se suma al badge de "Flota"
+            urgencia: kmFaltan <= 0 ? 'critica' : 'preventiva',
+            icono: <Wrench size={18} />,
+            ruta: '/unidades'
+          });
+        }
+      });
+    }
+
     setAlertas(nuevasAlertas.sort((a, b) => a.dias - b.dias));
     setLoading(false);
   }
@@ -274,13 +280,12 @@ const docs = [
     return cumpleBusqueda && cumpleFiltro;
   });
 
-const resumenAlertas = [
+  const resumenAlertas = [
     { id: 'unidad', label: 'Flota', conteo: alertas.filter(a => a.tipo === 'unidad').length, icono: <Truck size={20}/>, colorText: 'text-blue-500', colorBg: 'bg-blue-500/10' },
     { id: 'operador', label: 'Operadores', conteo: alertas.filter(a => a.tipo === 'operador').length, icono: <User size={20}/>, colorText: 'text-purple-500', colorBg: 'bg-purple-500/10' },
     { id: 'factura', label: 'Cobranza', conteo: alertas.filter(a => a.tipo === 'factura').length, icono: <DollarSign size={20}/>, colorText: 'text-emerald-500', colorBg: 'bg-emerald-500/10' }
   ];
 
-  // Pantalla de Carga Estilizada
   if (loading && !sesion) return (
     <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-blue-500 font-black uppercase tracking-widest">
       <Loader2 className="animate-spin mb-4" size={40} /> 
@@ -288,10 +293,8 @@ const resumenAlertas = [
     </div>
   );
 
-  // VISTA DE LOGIN CON DISEÑO FLEETFORCE
   if (!sesion) return (
     <div className="min-h-screen flex items-center justify-center bg-slate-950 p-6 relative overflow-hidden">
-      {/* Orbes Decorativos */}
       <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-blue-600/10 rounded-full blur-3xl"></div>
       <div className="absolute bottom-[-10%] right-[-10%] w-96 h-96 bg-emerald-600/10 rounded-full blur-3xl"></div>
 
@@ -352,7 +355,6 @@ const resumenAlertas = [
     </div>
   );
 
-  // VISTA DEL DASHBOARD (SIN CAMBIOS EN TU LÓGICA)
   return (
     <div className="flex bg-slate-950 min-h-screen text-white">
       <Sidebar/>
@@ -479,7 +481,6 @@ const resumenAlertas = [
                     <p className="text-[10px] text-slate-600 font-black uppercase italic tracking-widest">Sin alertas pendientes</p>
                   </div>
                 ) : filtroTipo === "todos" && !busqueda ? (
-                  /* VISTA DE RESUMEN (Cuando "Todos" está seleccionado) */
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pb-2">
                     {resumenAlertas.map((resumen) => (
                       <div key={resumen.id} onClick={() => setFiltroTipo(resumen.id)}
@@ -515,7 +516,6 @@ const resumenAlertas = [
                     <p className="text-[10px] text-slate-600 font-black uppercase italic tracking-widest">No hay resultados para esta categoría</p>
                   </div>
                 ) : (
-                  /* VISTA DE LISTA DETALLADA (Cuando hay un filtro o búsqueda activa) */
                   alertasFiltradas.map((alerta) => (
                     <div key={alerta.id} onClick={() => router.push(alerta.ruta)}
                       className={`bg-slate-900 border ${alerta.urgencia === 'critica' ? 'border-red-500/30 hover:border-red-500/50' : 'border-orange-500/30 hover:border-orange-500/50'} p-5 rounded-[1.5rem] flex items-center gap-5 hover:bg-slate-800/80 transition-all cursor-pointer group`}>

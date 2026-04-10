@@ -2,8 +2,8 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { 
-  Truck, PlusCircle, Trash2, Edit2, X, 
-  ShieldCheck, Calendar, Wrench, AlertTriangle, CheckCircle, DollarSign, FileText, CreditCard, UploadCloud
+  Truck, PlusCircle, Trash2, X, Bell,
+  ShieldCheck, Calendar, Wrench, AlertTriangle, CheckCircle, FileText, CreditCard, UploadCloud
 } from 'lucide-react';
 import Sidebar from '@/components/sidebar';
 
@@ -18,16 +18,18 @@ export default function UnidadesPage() {
   const [tabExpediente, setTabExpediente] = useState('tecnica'); 
   
   const [mantenimientos, setMantenimientos] = useState([]);
+  const [alertas, setAlertas] = useState([]); // <-- NUEVO ESTADO PARA ALERTAS
+
   const [nuevoMantenimiento, setNuevoMantenimiento] = useState({ fecha: new Date().toISOString().split('T')[0], tipo: 'Preventivo', descripcion: '', costo: '' });
+  const [nuevaAlerta, setNuevaAlerta] = useState({ kilometraje_meta: '', mensaje: '' }); // <-- NUEVO ESTADO PARA FORMULARIO DE ALERTA
 
   const [formData, setFormData] = useState({
     numero_economico: '', placas: '', tipo_placa: 'Federal', permiso_sict: 'TPAF01', num_permiso_sict: '',
     configuracion_vehicular: 'T3S1', anio_modelo: '', aseguradora_rc: '', poliza_rc: '',
     vencimiento_seguro: '', vencimiento_sct: '', vencimiento_circulacion: '',
     kilometraje_actual: 0, 
-    alerta_aviso: '',
-    doc_poliza: '',             // Para la bóveda
-    doc_tarjeta_circulacion: '' // Para la bóveda
+    doc_poliza: '',
+    doc_tarjeta_circulacion: '' 
   });
 
   useEffect(() => {
@@ -39,37 +41,29 @@ export default function UnidadesPage() {
     });
   }, []);
 
-async function obtenerUnidades(userId) {
+  async function obtenerUnidades(userId) {
     setLoading(true);
-
-    const { data: perfilData } = await supabase
-      .from('perfiles')
-      .select('empresa_id, rol')
-      .eq('id', userId)
-      .single();
-
+    const { data: perfilData } = await supabase.from('perfiles').select('empresa_id, rol').eq('id', userId).single();
     const idInstitucion = perfilData?.empresa_id || userId; 
     setEmpresaId(idInstitucion);
 
     try {
-      const { data, error } = await supabase
-        .from('unidades')
-        .select('*')
-        .eq('usuario_id', idInstitucion) 
-        .order('created_at', { ascending: false });
-
+      const { data, error } = await supabase.from('unidades').select('*').eq('usuario_id', idInstitucion).order('created_at', { ascending: false });
       if (error) throw error;
       setUnidades(data || []);
-    } catch (err) {
-      console.error("Error cargando unidades:", err.message);
-    }
-    
+    } catch (err) { console.error("Error cargando unidades:", err.message); }
     setLoading(false);
   }
 
   async function cargarMantenimientos(unidadId) {
     const { data } = await supabase.from('mantenimientos').select('*').eq('unidad_id', unidadId).order('fecha', { ascending: false });
     setMantenimientos(data || []);
+  }
+
+  // <-- NUEVA FUNCIÓN PARA CARGAR ALERTAS
+  async function cargarAlertas(unidadId) {
+    const { data } = await supabase.from('alertas_mantenimiento').select('*').eq('unidad_id', unidadId).order('kilometraje_meta', { ascending: true });
+    setAlertas(data || []);
   }
 
   const guardarUnidad = async (e) => {
@@ -88,11 +82,12 @@ async function obtenerUnidades(userId) {
       ? await supabase.from('unidades').update(payload).eq('id', unidadSeleccionada.id)
       : await supabase.from('unidades').insert([payload]);
 
-    if (error) {
-      alert("Error al guardar: " + error.message);
-    } else {
-      cerrarModal();
+    if (error) alert("Error al guardar: " + error.message);
+    else {
+      alert("✅ Ficha Técnica actualizada. Odómetro guardado.");
       obtenerUnidades(sesion.user.id);
+      // Si la unidad ya existía, actualizamos el state visual de la unidad seleccionada
+      if (unidadSeleccionada) setUnidadSeleccionada({...unidadSeleccionada, kilometraje_actual: formData.kilometraje_actual});
     }
     setLoading(false);
   };
@@ -107,19 +102,18 @@ async function obtenerUnidades(userId) {
     setUnidadSeleccionada(u);
     setFormData({
       numero_economico: u.numero_economico || '', placas: u.placas || '', 
-      tipo_placa: u.tipo_placa || 'Federal', 
-      permiso_sict: u.permiso_sict || 'TPAF01',
+      tipo_placa: u.tipo_placa || 'Federal', permiso_sict: u.permiso_sict || 'TPAF01',
       num_permiso_sict: u.num_permiso_sict || '', configuracion_vehicular: u.configuracion_vehicular || 'T3S1',
       anio_modelo: u.anio_modelo || '', aseguradora_rc: u.aseguradora_rc || '', poliza_rc: u.poliza_rc || '',
       vencimiento_seguro: u.vencimiento_seguro || '', vencimiento_sct: u.vencimiento_sct || '',
       vencimiento_circulacion: u.vencimiento_circulacion || '',
       kilometraje_actual: u.kilometraje_actual || 0,
-      alerta_aviso: u.alerta_aviso || '',
       doc_poliza: u.doc_poliza || '',
       doc_tarjeta_circulacion: u.doc_tarjeta_circulacion || ''
     });
     setTabExpediente('tecnica');
     cargarMantenimientos(u.id);
+    cargarAlertas(u.id); // <-- CARGAMOS LAS ALERTAS AL ABRIR
     setMostrarModal(true);
   };
 
@@ -129,10 +123,7 @@ async function obtenerUnidades(userId) {
       numero_economico: '', placas: '', tipo_placa: 'Federal', permiso_sict: 'TPAF01', 
       num_permiso_sict: '', configuracion_vehicular: 'T3S1', anio_modelo: '', aseguradora_rc: '', 
       poliza_rc: '', vencimiento_seguro: '', vencimiento_sct: '', vencimiento_circulacion: '',
-      kilometraje_actual: 0,
-      alerta_aviso: '',
-      doc_poliza: '',
-      doc_tarjeta_circulacion: ''
+      kilometraje_actual: 0, doc_poliza: '', doc_tarjeta_circulacion: ''
     });
     setTabExpediente('tecnica');
     setMostrarModal(true);
@@ -159,6 +150,30 @@ async function obtenerUnidades(userId) {
     cargarMantenimientos(unidadSeleccionada.id);
   };
 
+  // <-- NUEVAS FUNCIONES PARA ALERTAS
+  const registrarAlerta = async (e) => {
+    e.preventDefault();
+    if (!nuevaAlerta.kilometraje_meta || !nuevaAlerta.mensaje) return;
+    setLoading(true);
+    const { error } = await supabase.from('alertas_mantenimiento').insert([{ 
+      usuario_id: empresaId, unidad_id: unidadSeleccionada.id, 
+      kilometraje_meta: parseFloat(nuevaAlerta.kilometraje_meta), 
+      mensaje: nuevaAlerta.mensaje 
+    }]);
+    if (error) alert("Error al crear alerta: " + error.message);
+    else { 
+      setNuevaAlerta({ kilometraje_meta: '', mensaje: '' }); 
+      cargarAlertas(unidadSeleccionada.id); 
+    }
+    setLoading(false);
+  };
+
+  const eliminarAlerta = async (id) => {
+    if (!confirm("¿Eliminar esta alerta del sistema?")) return;
+    await supabase.from('alertas_mantenimiento').delete().eq('id', id);
+    cargarAlertas(unidadSeleccionada.id);
+  };
+
   const verificarVigencia = (fecha) => {
     if (!fecha) return { texto: 'Sin registro', color: 'text-slate-500', bg: 'bg-slate-800' };
     const hoy = new Date();
@@ -170,94 +185,43 @@ async function obtenerUnidades(userId) {
     return { texto: 'Vigente', color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/30' };
   };
 
-  if (!sesion) return null;
-
- // 1. MODIFICACIÓN: Guardamos el PATH (la ruta), no la URL pública
   const subirDocumentoUnidad = async (e, campo) => {
     const file = e.target.files[0];
     if (!file || !unidadSeleccionada) return;
-
     setLoading(true);
     try {
       const fileExt = file.name.split('.').pop();
       const fileName = `${unidadSeleccionada.numero_economico}/${campo}_${Date.now()}.${fileExt}`;
-      const filePath = `${fileName}`; // Ruta limpia
-
-      // Subir al bucket privado
-      const { error: uploadError } = await supabase.storage
-        .from('expedientes')
-        .upload(filePath, file, { upsert: true });
-
+      const { error: uploadError } = await supabase.storage.from('expedientes').upload(fileName, file, { upsert: true });
       if (uploadError) throw uploadError;
-
-      // ACTUALIZAMOS LA DB CON EL PATH (Ej: "ECO-01/doc_poliza_123.pdf")
-      const { error: updateError } = await supabase
-        .from('unidades')
-        .update({ [campo]: filePath })
-        .eq('id', unidadSeleccionada.id);
-
+      const { error: updateError } = await supabase.from('unidades').update({ [campo]: fileName }).eq('id', unidadSeleccionada.id);
       if (updateError) throw updateError;
-
-      setFormData({ ...formData, [campo]: filePath });
+      setFormData({ ...formData, [campo]: fileName });
       obtenerUnidades(sesion.user.id);
       alert("✅ Guardado en búnker privado.");
-
-    } catch (error) {
-      alert("❌ Error de seguridad/subida: " + error.message);
-    } finally {
-      setLoading(false);
-    }
+    } catch (error) { alert("❌ Error: " + error.message); } finally { setLoading(false); }
   };
 
-  // 2. NUEVA FUNCIÓN: Para generar el link temporal al hacer clic en "Ver"
   const verArchivoPrivado = async (path) => {
     if (!path) return;
-    
-    const { data, error } = await supabase.storage
-      .from('expedientes')
-      .createSignedUrl(path, 60); // El link solo dura 60 segundos
-
-    if (error) {
-      alert("Error al generar acceso: " + error.message);
-    } else {
-      window.open(data.signedUrl, '_blank');
-    }
+    const { data, error } = await supabase.storage.from('expedientes').createSignedUrl(path, 60);
+    if (error) alert("Error al generar acceso: " + error.message);
+    else window.open(data.signedUrl, '_blank');
   };
 
-const borrarDocumentoUnidad = async (campo) => {
-    if (!confirm("¿Seguro que deseas eliminar este documento? El archivo será borrado de la nube.")) return;
-    
+  const borrarDocumentoUnidad = async (campo) => {
+    if (!confirm("¿Seguro que deseas eliminar este documento de la nube?")) return;
     setLoading(true);
     try {
       const filePath = formData[campo];
-      
-      // 1. Borrar el archivo físico del Storage
-      if (filePath) {
-        const { error: removeError } = await supabase.storage
-          .from('expedientes')
-          .remove([filePath]);
-          
-        if (removeError) console.warn("Aviso al borrar de storage:", removeError.message);
-      }
-
-      // 2. Actualizar la base de datos (dejar el campo vacío)
-      const { error: updateError } = await supabase
-        .from('unidades')
-        .update({ [campo]: null })
-        .eq('id', unidadSeleccionada.id);
-
-      if (updateError) throw updateError;
-
-      // 3. Reflejar cambios en la interfaz
+      if (filePath) await supabase.storage.from('expedientes').remove([filePath]);
+      await supabase.from('unidades').update({ [campo]: null }).eq('id', unidadSeleccionada.id);
       setFormData({ ...formData, [campo]: '' });
       obtenerUnidades(sesion.user.id);
-      
-    } catch (error) {
-      alert("❌ Error al eliminar documento: " + error.message);
-    } finally {
-      setLoading(false);
-    }
+    } catch (error) { alert("❌ Error: " + error.message); } finally { setLoading(false); }
   };
+
+  if (!sesion) return null;
 
   return (
     <div className="flex bg-slate-950 min-h-screen text-slate-200">
@@ -281,7 +245,7 @@ const borrarDocumentoUnidad = async (campo) => {
                 <thead>
                   <tr className="bg-slate-950/50 border-b border-slate-800 text-slate-400 text-[13px] font-semibold uppercase tracking-wider">
                     <th className="p-4 pl-8 font-normal">Identificación</th>
-                    <th className="p-4 font-normal">Configuración</th>
+                    <th className="p-4 font-normal">Odómetro Actual</th>
                     <th className="p-4 font-normal">Seguro RC</th>
                     <th className="p-4 font-normal">Permiso SCT</th>
                     <th className="p-4 font-normal">Tarjeta Circ.</th>
@@ -319,8 +283,8 @@ const borrarDocumentoUnidad = async (campo) => {
 
                         <td className="p-4 align-middle">
                           <div className="flex flex-col gap-0.5">
-                            <span className="text-white truncate">{u.configuracion_vehicular || 'N/A'}</span>
-                            <span className="text-slate-500 text-[11px]">Mod: {u.anio_modelo || 'N/A'}</span>
+                            <span className="text-white font-mono">{Number(u.kilometraje_actual || 0).toLocaleString()} KM</span>
+                            <span className="text-slate-500 text-[10px] uppercase tracking-widest">Registrado</span>
                           </div>
                         </td>
 
@@ -378,27 +342,31 @@ const borrarDocumentoUnidad = async (campo) => {
                   <button onClick={cerrarModal} className="text-slate-500 hover:text-white bg-slate-950 p-2 rounded-full"><X size={20} /></button>
                 </div>
 
+                {/* === NAVEGACIÓN DE PESTAÑAS (AHORA SON 4) === */}
                 {unidadSeleccionada && (
-                  <div className="flex px-8 border-b border-slate-800 bg-slate-950 shrink-0 overflow-x-auto">
-                    <button onClick={() => setTabExpediente('tecnica')} className={`py-4 px-6 text-[10px] font-black uppercase tracking-widest transition-all border-b-2 flex items-center gap-2 shrink-0 ${tabExpediente === 'tecnica' ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-500 hover:text-slate-300'}`}>
+                  <div className="flex px-8 border-b border-slate-800 bg-slate-950 shrink-0 overflow-x-auto scrollbar-hide">
+                    <button onClick={() => setTabExpediente('tecnica')} className={`py-4 px-5 text-[10px] font-black uppercase tracking-widest transition-all border-b-2 flex items-center gap-2 shrink-0 ${tabExpediente === 'tecnica' ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-500 hover:text-slate-300'}`}>
                       <Truck size={14}/> Ficha Técnica
                     </button>
-                    <button onClick={() => setTabExpediente('mantenimientos')} className={`py-4 px-6 text-[10px] font-black uppercase tracking-widest transition-all border-b-2 flex items-center gap-2 shrink-0 ${tabExpediente === 'mantenimientos' ? 'border-orange-500 text-orange-400' : 'border-transparent text-slate-500 hover:text-slate-300'}`}>
-                      <Wrench size={14}/> Mantenimiento
+                    <button onClick={() => setTabExpediente('mantenimientos')} className={`py-4 px-5 text-[10px] font-black uppercase tracking-widest transition-all border-b-2 flex items-center gap-2 shrink-0 ${tabExpediente === 'mantenimientos' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-500 hover:text-slate-300'}`}>
+                      <Wrench size={14}/> Historial Mtto
                     </button>
-                    <button onClick={() => setTabExpediente('boveda')} className={`py-4 px-6 text-[10px] font-black uppercase tracking-widest transition-all border-b-2 flex items-center gap-2 shrink-0 ${tabExpediente === 'boveda' ? 'border-purple-500 text-purple-400' : 'border-transparent text-slate-500 hover:text-slate-300'}`}>
-                      <UploadCloud size={14}/> Documentos (Bóveda)
+                    {/* NUEVA PESTAÑA DE AVISOS */}
+                    <button onClick={() => setTabExpediente('avisos')} className={`py-4 px-5 text-[10px] font-black uppercase tracking-widest transition-all border-b-2 flex items-center gap-2 shrink-0 ${tabExpediente === 'avisos' ? 'border-orange-500 text-orange-400' : 'border-transparent text-slate-500 hover:text-slate-300'}`}>
+                      <Bell size={14}/> Avisos (KM)
+                    </button>
+                    <button onClick={() => setTabExpediente('boveda')} className={`py-4 px-5 text-[10px] font-black uppercase tracking-widest transition-all border-b-2 flex items-center gap-2 shrink-0 ${tabExpediente === 'boveda' ? 'border-purple-500 text-purple-400' : 'border-transparent text-slate-500 hover:text-slate-300'}`}>
+                      <UploadCloud size={14}/> Bóveda Docs
                     </button>
                   </div>
                 )}
 
-                <div className="p-8 overflow-y-auto bg-slate-900 flex-1">
+                <div className="p-8 overflow-y-auto bg-slate-900 flex-1 custom-scrollbar">
                   
-                  {/* TAB 1: FICHA TÉCNICA */}
+                  {/* === TAB 1: FICHA TÉCNICA === */}
                   {tabExpediente === 'tecnica' && (
-                    <form onSubmit={guardarUnidad} className="space-y-6">
+                    <form onSubmit={guardarUnidad} className="space-y-6 animate-in fade-in">
                       
-                      {/* Bloque 1: Identificación Vehicular */}
                       <div className="p-6 bg-slate-950 rounded-2xl border border-slate-800">
                         <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-4 border-b border-slate-800 pb-2">Identificación Vehicular</p>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -447,11 +415,9 @@ const borrarDocumentoUnidad = async (campo) => {
                         </div>
                       </div>
 
-                      {/* Bloque 2: Permisos, Seguros y Vigencias */}
                       <div className="p-6 bg-blue-900/10 rounded-2xl border border-blue-500/20">
                         <p className="text-[9px] font-black text-blue-400 uppercase tracking-widest mb-4 border-b border-blue-500/20 pb-2">Seguros, Permisos y Vigencias</p>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                          
                           <div className="space-y-4">
                             <div className="flex items-center gap-2 mb-2"><ShieldCheck size={14} className="text-blue-500"/><span className="text-[10px] font-black text-white uppercase">Seguro RC</span></div>
                             <div>
@@ -511,141 +477,46 @@ const borrarDocumentoUnidad = async (campo) => {
                             </div>
                             <div className="bg-slate-950 border border-slate-800 p-4 rounded-xl">
                               <p className="text-[9px] text-slate-500 italic leading-relaxed text-center">
-                                Las revisiones de Guardia Nacional requieren que la Tarjeta de Circulación original o copia certificada viaje siempre en la unidad.
+                                Las revisiones de Guardia Nacional requieren que la Tarjeta original o copia certificada viaje en la unidad.
                               </p>
                             </div>
                           </div>
-
                         </div>
                       </div>
 
-                      {/* Bloque 3: Kilometraje y Alertas */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-6 bg-orange-500/5 border border-orange-500/20 rounded-2xl">
-                        <div className="col-span-1 md:col-span-2 text-[9px] font-black text-orange-400 uppercase tracking-widest mb-2 flex items-center gap-2 border-b border-orange-500/20 pb-2">
-                          <AlertTriangle size={14}/> Estado de Operación y Desgaste
-                        </div>
-                        
+                      {/* Odómetro Base se queda aquí */}
+                      <div className="p-6 bg-slate-950 rounded-2xl border border-slate-800 flex items-center justify-between">
                         <div>
-                          <label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1">Kilometraje Actual</label>
-                          <div className="relative">
-                            <input 
-                              type="number" 
-                              placeholder="0" 
-                              className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white font-mono" 
-                              value={formData.kilometraje_actual} 
-                              onChange={e => setFormData({...formData, kilometraje_actual: e.target.value})} 
-                            />
-                            <span className="absolute right-4 top-4 text-[10px] text-slate-600 font-black">KM</span>
-                          </div>
+                          <p className="text-[10px] font-black text-white uppercase tracking-widest mb-1">Odómetro Base (Calibración)</p>
+                          <p className="text-[10px] text-slate-500">Ajusta el kilometraje real de la unidad si hay desfase.</p>
                         </div>
-
-                        <div>
-                          <label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1">Aviso Crítico (Dashboard)</label>
+                        <div className="relative w-1/3">
                           <input 
-                            placeholder="Ej: Revisar sistema de frenos" 
-                            className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white focus:border-orange-500 transition-colors" 
-                            value={formData.alerta_aviso} 
-                            onChange={e => setFormData({...formData, alerta_aviso: e.target.value})} 
+                            type="number" 
+                            className="w-full bg-slate-900 border border-slate-800 p-4 rounded-xl text-sm text-white font-mono focus:border-blue-500 transition-colors" 
+                            value={formData.kilometraje_actual} 
+                            onChange={e => setFormData({...formData, kilometraje_actual: e.target.value})} 
                           />
+                          <span className="absolute right-4 top-4 text-[10px] text-slate-500 font-black">KM</span>
                         </div>
                       </div>
 
-                      <button type="submit" disabled={loading} className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black uppercase text-[11px] tracking-widest shadow-xl hover:bg-blue-500 transition-all flex justify-center items-center gap-2">
+                      <button type="submit" disabled={loading} className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black uppercase text-[11px] tracking-widest shadow-xl hover:bg-blue-500 transition-all">
                         {loading ? "Guardando..." : "Guardar Ficha Técnica"}
                       </button>
                     </form>
                   )}
 
-                  {/* TAB 2: BÓVEDA DOCUMENTAL */}
-{/* TAB 3: BÓVEDA DOCUMENTAL */}
-{tabExpediente === 'boveda' && unidadSeleccionada && (
-  <div className="space-y-6 animate-in fade-in">
-    <div className="bg-purple-500/5 border border-purple-500/20 p-8 rounded-[2rem] text-center">
-      <UploadCloud className="text-purple-500 mx-auto mb-4" size={40} />
-      <h4 className="text-white font-black uppercase tracking-widest mb-2">Bóveda Digital del Activo</h4>
-      <p className="text-[11px] text-slate-400 leading-relaxed max-w-lg mx-auto">
-        Respaldo en la nube de la documentación oficial de la unidad ECO-{unidadSeleccionada.numero_economico}.
-      </p>
-      
-      <div className="mt-10 grid grid-cols-1 md:grid-cols-2 gap-6 text-left">
-        
-{/* DOCUMENTO: PÓLIZA */}
-        <div className="border border-dashed border-slate-700 bg-slate-950 rounded-2xl p-6 hover:border-purple-500/50 transition-colors flex flex-col justify-between">
-          <div>
-            <div className="flex justify-between items-start mb-1">
-              <p className="text-[11px] font-black text-white uppercase tracking-widest">Póliza de Seguro RC</p>
-              {formData.doc_poliza && <CheckCircle size={14} className="text-emerald-500" />}
-            </div>
-            <p className="text-[9px] text-slate-500 uppercase tracking-wider mb-6">Formato PDF o Imagen</p>
-          </div>
-          
-          <div className="space-y-3">
-            {formData.doc_poliza ? (
-              <div className="flex gap-2">
-                <button onClick={() => verArchivoPrivado(formData.doc_poliza)} className="flex-1 flex items-center justify-center gap-2 p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400 text-[10px] font-black uppercase hover:bg-purple-500 hover:text-white transition-all">
-                  <FileText size={14}/> Ver Seguro
-                </button>
-                <button onClick={() => borrarDocumentoUnidad('doc_poliza')} disabled={loading} title="Eliminar Documento" className="px-4 flex items-center justify-center rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500 hover:text-white transition-all">
-                  <Trash2 size={14}/>
-                </button>
-              </div>
-            ) : (
-              <label className="w-full flex items-center justify-center p-3.5 rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 cursor-pointer transition-all">
-                <span className="text-[10px] font-black text-white uppercase tracking-widest flex items-center gap-2">
-                  <UploadCloud size={14} /> Subir Archivo
-                </span>
-                <input type="file" className="hidden" accept=".pdf, image/*" onChange={(e) => subirDocumentoUnidad(e, 'doc_poliza')} disabled={loading} />
-              </label>
-            )}
-          </div>
-        </div>
-
-        {/* DOCUMENTO: TARJETA CIRCULACIÓN */}
-        <div className="border border-dashed border-slate-700 bg-slate-950 rounded-2xl p-6 hover:border-purple-500/50 transition-colors flex flex-col justify-between">
-          <div>
-            <div className="flex justify-between items-start mb-1">
-              <p className="text-[11px] font-black text-white uppercase tracking-widest">Tarjeta de Circulación</p>
-              {formData.doc_tarjeta_circulacion && <CheckCircle size={14} className="text-emerald-500" />}
-            </div>
-            <p className="text-[9px] text-slate-500 uppercase tracking-wider mb-6">Formato PDF o Imagen</p>
-          </div>
-          
-          <div className="space-y-3">
-            {formData.doc_tarjeta_circulacion ? (
-              <div className="flex gap-2">
-                <button onClick={() => verArchivoPrivado(formData.doc_tarjeta_circulacion)} className="flex-1 flex items-center justify-center gap-2 p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400 text-[10px] font-black uppercase hover:bg-purple-500 hover:text-white transition-all">
-                  <FileText size={14}/> Ver Tarjeta
-                </button>
-                <button onClick={() => borrarDocumentoUnidad('doc_tarjeta_circulacion')} disabled={loading} title="Eliminar Documento" className="px-4 flex items-center justify-center rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500 hover:text-white transition-all">
-                  <Trash2 size={14}/>
-                </button>
-              </div>
-            ) : (
-              <label className="w-full flex items-center justify-center p-3.5 rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 cursor-pointer transition-all">
-                <span className="text-[10px] font-black text-white uppercase tracking-widest flex items-center gap-2">
-                  <UploadCloud size={14} /> Subir Archivo
-                </span>
-                <input type="file" className="hidden" accept=".pdf, image/*" onChange={(e) => subirDocumentoUnidad(e, 'doc_tarjeta_circulacion')} disabled={loading} />
-              </label>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-)}
-
-
-                  {/* TAB 3: MANTENIMIENTOS */}
+                  {/* === TAB 2: HISTORIAL MANTENIMIENTOS === */}
                   {tabExpediente === 'mantenimientos' && unidadSeleccionada && (
-                    <div className="space-y-8">
-                      <form onSubmit={registrarMantenimiento} className="p-6 bg-orange-500/10 border border-orange-500/20 rounded-2xl grid grid-cols-12 gap-3 items-end">
-                        <div className="col-span-12 mb-2"><h3 className="text-[10px] font-black text-orange-400 uppercase tracking-widest flex items-center gap-2"><PlusCircle size={14}/> Registrar Servicio</h3></div>
+                    <div className="space-y-8 animate-in fade-in">
+                      <form onSubmit={registrarMantenimiento} className="p-6 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl grid grid-cols-12 gap-3 items-end">
+                        <div className="col-span-12 mb-2"><h3 className="text-[10px] font-black text-emerald-500 uppercase tracking-widest flex items-center gap-2"><Wrench size={14}/> Registrar Servicio</h3></div>
                         <div className="col-span-12 md:col-span-3"><label className="text-[9px] text-slate-400 uppercase font-bold block mb-1 ml-1">Fecha</label><input type="date" required className="w-full bg-slate-950 border border-slate-800 p-3.5 rounded-xl text-xs text-white" value={nuevoMantenimiento.fecha} onChange={e => setNuevoMantenimiento({...nuevoMantenimiento, fecha: e.target.value})} /></div>
                         <div className="col-span-12 md:col-span-3"><label className="text-[9px] text-slate-400 uppercase font-bold block mb-1 ml-1">Tipo de Tarea</label><select className="w-full bg-slate-950 border border-slate-800 p-3.5 rounded-xl text-xs text-white" value={nuevoMantenimiento.tipo} onChange={e => setNuevoMantenimiento({...nuevoMantenimiento, tipo: e.target.value})}><option value="Preventivo">Preventivo (Afinación)</option><option value="Correctivo">Correctivo (Falla)</option></select></div>
                         <div className="col-span-12 md:col-span-4"><label className="text-[9px] text-slate-400 uppercase font-bold block mb-1 ml-1">Descripción del Taller</label><input required placeholder="Ej. Cambio de balatas" className="w-full bg-slate-950 border border-slate-800 p-3.5 rounded-xl text-xs text-white" value={nuevoMantenimiento.descripcion} onChange={e => setNuevoMantenimiento({...nuevoMantenimiento, descripcion: e.target.value})} /></div>
                         <div className="col-span-12 md:col-span-2"><label className="text-[9px] text-slate-400 uppercase font-bold block mb-1 ml-1">Costo ($)</label><input required type="number" placeholder="0.00" className="w-full bg-slate-950 border border-slate-800 p-3.5 rounded-xl text-xs text-white text-center font-mono" value={nuevoMantenimiento.costo} onChange={e => setNuevoMantenimiento({...nuevoMantenimiento, costo: e.target.value})} /></div>
-                        <div className="col-span-12 mt-2"><button type="submit" disabled={loading} className="w-full bg-orange-600 hover:bg-orange-500 text-white py-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors shadow-lg shadow-orange-900/20">Guardar Registro</button></div>
+                        <div className="col-span-12 mt-2"><button type="submit" disabled={loading} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors shadow-lg">Guardar Registro</button></div>
                       </form>
 
                       <div className="bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden">
@@ -665,23 +536,172 @@ const borrarDocumentoUnidad = async (campo) => {
                           </tbody>
                         </table>
                       </div>
-                      
-                      <div className="flex justify-end">
-                         <div className="bg-slate-950 border border-slate-800 px-6 py-4 rounded-2xl text-right">
-                           <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest mb-1">Gasto Total Histórico</p>
-                           <p className="text-xl font-mono font-black text-white">${mantenimientos.reduce((sum, m) => sum + Number(m.costo), 0).toLocaleString('es-MX', {minimumFractionDigits: 2})}</p>
-                         </div>
-                      </div>
                     </div>
                   )}
 
+                  {/* === TAB 3: AVISOS Y ALERTAS (NUEVO) === */}
+                  {tabExpediente === 'avisos' && unidadSeleccionada && (
+                    <div className="space-y-8 animate-in fade-in">
+                      
+                      <div className="flex justify-between items-center bg-slate-950 p-6 rounded-2xl border border-slate-800">
+                        <div>
+                          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Odómetro Actual del Vehículo</p>
+                          <p className="text-2xl font-mono font-black text-white">{Number(unidadSeleccionada.kilometraje_actual || 0).toLocaleString()} <span className="text-sm text-slate-500">KM</span></p>
+                        </div>
+                        <AlertTriangle size={32} className="text-orange-500/20" />
+                      </div>
 
+                      <form onSubmit={registrarAlerta} className="p-6 bg-orange-500/10 border border-orange-500/20 rounded-2xl grid grid-cols-12 gap-4 items-end">
+                        <div className="col-span-12 mb-2"><h3 className="text-[10px] font-black text-orange-400 uppercase tracking-widest flex items-center gap-2"><Bell size={14}/> Programar Nueva Alerta</h3></div>
+                        
+                        <div className="col-span-12 md:col-span-4">
+                          <label className="text-[9px] text-slate-400 uppercase font-bold block mb-1 ml-1">Avisar al llegar a (KM Meta)</label>
+                          <div className="relative">
+                            <input type="number" required placeholder="Ej. 120000" className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white font-mono focus:border-orange-500 outline-none" value={nuevaAlerta.kilometraje_meta} onChange={e => setNuevaAlerta({...nuevaAlerta, kilometraje_meta: e.target.value})} />
+                            <span className="absolute right-4 top-4 text-[10px] text-slate-600 font-black">KM</span>
+                          </div>
+                        </div>
+                        
+                        <div className="col-span-12 md:col-span-6">
+                          <label className="text-[9px] text-slate-400 uppercase font-bold block mb-1 ml-1">Mensaje de la Alerta</label>
+                          <input required placeholder="Ej. Revisión y cambio de aceite de diferencial" className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white focus:border-orange-500 outline-none" value={nuevaAlerta.mensaje} onChange={e => setNuevaAlerta({...nuevaAlerta, mensaje: e.target.value})} />
+                        </div>
+                        
+                        <div className="col-span-12 md:col-span-2">
+                          <button type="submit" disabled={loading} className="w-full bg-orange-600 hover:bg-orange-500 text-white py-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors shadow-lg shadow-orange-900/20">Añadir</button>
+                        </div>
+                      </form>
+
+                      <div className="bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden">
+                        <table className="w-full text-left text-xs">
+                          <thead className="bg-slate-900 border-b border-slate-800 text-slate-500">
+                            <tr>
+                              <th className="p-4 font-black uppercase tracking-widest">Alerta Programada</th>
+                              <th className="p-4 font-black uppercase tracking-widest text-center">Meta (KM)</th>
+                              <th className="p-4 font-black uppercase tracking-widest text-center">Faltan (KM)</th>
+                              <th className="p-4 font-black uppercase tracking-widest text-right">Descartar</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-800">
+                            {alertas.length === 0 && (<tr><td colSpan="4" className="p-8 text-center text-slate-500 italic">No hay alertas programadas para esta unidad.</td></tr>)}
+                            {alertas.map(a => {
+                              const kmActual = Number(unidadSeleccionada.kilometraje_actual || 0);
+                              const kmMeta = Number(a.kilometraje_meta);
+                              const kmFaltan = kmMeta - kmActual;
+                              const estaVencida = kmFaltan <= 0;
+                              const estaCerca = kmFaltan > 0 && kmFaltan <= 2000; // Avisa 2000km antes
+
+                              return (
+                                <tr key={a.id} className="hover:bg-slate-900/50 transition-colors">
+                                  <td className="p-4">
+                                    <div className="flex flex-col gap-1">
+                                      <span className={`font-semibold ${estaVencida ? 'text-red-400' : 'text-slate-200'}`}>{a.mensaje}</span>
+                                      {estaVencida && <span className="text-[9px] font-black bg-red-500/10 text-red-500 px-2 py-0.5 rounded w-max uppercase">Requiere Atención</span>}
+                                      {estaCerca && <span className="text-[9px] font-black bg-orange-500/10 text-orange-500 px-2 py-0.5 rounded w-max uppercase">Próxima</span>}
+                                    </div>
+                                  </td>
+                                  <td className="p-4 text-center text-slate-300 font-mono">{kmMeta.toLocaleString()}</td>
+                                  <td className="p-4 text-center font-mono">
+                                    <span className={`px-3 py-1 rounded-full text-[11px] font-bold ${estaVencida ? 'bg-red-500/20 text-red-400' : estaCerca ? 'bg-orange-500/20 text-orange-400' : 'bg-slate-800 text-emerald-400'}`}>
+                                      {estaVencida ? 'Ya rebasado' : kmFaltan.toLocaleString()}
+                                    </span>
+                                  </td>
+                                  <td className="p-4 text-right">
+                                    <button onClick={() => eliminarAlerta(a.id)} className="p-1.5 text-slate-600 hover:text-emerald-500 hover:bg-emerald-500/10 rounded-lg transition-colors" title="Marcar como Hecho / Borrar">
+                                      <CheckCircle size={16}/>
+                                    </button>
+                                  </td>
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+
+                    </div>
+                  )}
+
+                  {/* === TAB 4: BÓVEDA DOCUMENTAL === */}
+                  {tabExpediente === 'boveda' && unidadSeleccionada && (
+                    <div className="space-y-6 animate-in fade-in">
+                      <div className="bg-purple-500/5 border border-purple-500/20 p-8 rounded-[2rem] text-center">
+                        <UploadCloud className="text-purple-500 mx-auto mb-4" size={40} />
+                        <h4 className="text-white font-black uppercase tracking-widest mb-2">Bóveda Digital del Activo</h4>
+                        <p className="text-[11px] text-slate-400 leading-relaxed max-w-lg mx-auto">
+                          Respaldo en la nube de la documentación oficial de la unidad ECO-{unidadSeleccionada.numero_economico}.
+                        </p>
+                        
+                        <div className="mt-10 grid grid-cols-1 md:grid-cols-2 gap-6 text-left">
+                          
+                          <div className="border border-dashed border-slate-700 bg-slate-950 rounded-2xl p-6 hover:border-purple-500/50 transition-colors flex flex-col justify-between">
+                            <div>
+                              <div className="flex justify-between items-start mb-1">
+                                <p className="text-[11px] font-black text-white uppercase tracking-widest">Póliza de Seguro RC</p>
+                                {formData.doc_poliza && <CheckCircle size={14} className="text-emerald-500" />}
+                              </div>
+                              <p className="text-[9px] text-slate-500 uppercase tracking-wider mb-6">Formato PDF o Imagen</p>
+                            </div>
+                            
+                            <div className="space-y-3">
+                              {formData.doc_poliza ? (
+                                <div className="flex gap-2">
+                                  <button onClick={() => verArchivoPrivado(formData.doc_poliza)} className="flex-1 flex items-center justify-center gap-2 p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400 text-[10px] font-black uppercase hover:bg-purple-500 hover:text-white transition-all">
+                                    <FileText size={14}/> Ver Seguro
+                                  </button>
+                                  <button onClick={() => borrarDocumentoUnidad('doc_poliza')} disabled={loading} title="Eliminar Documento" className="px-4 flex items-center justify-center rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500 hover:text-white transition-all">
+                                    <Trash2 size={14}/>
+                                  </button>
+                                </div>
+                              ) : (
+                                <label className="w-full flex items-center justify-center p-3.5 rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 cursor-pointer transition-all">
+                                  <span className="text-[10px] font-black text-white uppercase tracking-widest flex items-center gap-2">
+                                    <UploadCloud size={14} /> Subir Archivo
+                                  </span>
+                                  <input type="file" className="hidden" accept=".pdf, image/*" onChange={(e) => subirDocumentoUnidad(e, 'doc_poliza')} disabled={loading} />
+                                </label>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="border border-dashed border-slate-700 bg-slate-950 rounded-2xl p-6 hover:border-purple-500/50 transition-colors flex flex-col justify-between">
+                            <div>
+                              <div className="flex justify-between items-start mb-1">
+                                <p className="text-[11px] font-black text-white uppercase tracking-widest">Tarjeta de Circulación</p>
+                                {formData.doc_tarjeta_circulacion && <CheckCircle size={14} className="text-emerald-500" />}
+                              </div>
+                              <p className="text-[9px] text-slate-500 uppercase tracking-wider mb-6">Formato PDF o Imagen</p>
+                            </div>
+                            
+                            <div className="space-y-3">
+                              {formData.doc_tarjeta_circulacion ? (
+                                <div className="flex gap-2">
+                                  <button onClick={() => verArchivoPrivado(formData.doc_tarjeta_circulacion)} className="flex-1 flex items-center justify-center gap-2 p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400 text-[10px] font-black uppercase hover:bg-purple-500 hover:text-white transition-all">
+                                    <FileText size={14}/> Ver Tarjeta
+                                  </button>
+                                  <button onClick={() => borrarDocumentoUnidad('doc_tarjeta_circulacion')} disabled={loading} title="Eliminar Documento" className="px-4 flex items-center justify-center rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500 hover:text-white transition-all">
+                                    <Trash2 size={14}/>
+                                  </button>
+                                </div>
+                              ) : (
+                                <label className="w-full flex items-center justify-center p-3.5 rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 cursor-pointer transition-all">
+                                  <span className="text-[10px] font-black text-white uppercase tracking-widest flex items-center gap-2">
+                                    <UploadCloud size={14} /> Subir Archivo
+                                  </span>
+                                  <input type="file" className="hidden" accept=".pdf, image/*" onChange={(e) => subirDocumentoUnidad(e, 'doc_tarjeta_circulacion')} disabled={loading} />
+                                </label>
+                              )}
+                            </div>
+                          </div>
+
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                 </div>
               </div>
             </div>
           )}
-
         </div>
       </main>
     </div>
