@@ -140,9 +140,10 @@ export default function Page() {
     setEmpresaId(idMaestro);
     if (perfilData?.rol) setRolUsuario(perfilData.rol);
 
-    let queryFacturas = supabase.from('facturas').select('monto_total').eq('usuario_id', idMaestro).eq('estatus_pago', 'Pagado');
-    let queryGastos = supabase.from('mantenimientos').select('costo').eq('usuario_id', idMaestro);
-    let queryViajes = supabase.from('viajes').select('estatus, folio_interno').eq('usuario_id', idMaestro);
+    // === LÓGICA MULTI-TENANT: Todo se filtra por empresa_id ===
+    let queryFacturas = supabase.from('facturas').select('monto_total').eq('empresa_id', idMaestro).eq('estatus_pago', 'Pagado');
+    let queryGastos = supabase.from('mantenimientos').select('costo').eq('empresa_id', idMaestro);
+    let queryViajes = supabase.from('viajes').select('estatus, folio_interno').eq('empresa_id', idMaestro);
 
     if (filtroActivo && fechaInicio && fechaFin) {
       queryFacturas = queryFacturas.gte('fecha_viaje', fechaInicio).lte('fecha_viaje', fechaFin);
@@ -153,13 +154,15 @@ export default function Page() {
     const [
       { data: facturasPagadas }, { data: gastosBD }, { data: viajesBD },
       { data: unidades }, { data: operadores }, { data: facturasPendientes },
-      { data: alertasMtto } // <-- SE AÑADIÓ LA CONSULTA DE ALERTAS
+      { data: alertasMtto }
     ] = await Promise.all([
-      queryFacturas, queryGastos, queryViajes,
-      supabase.from('unidades').select('numero_economico, vencimiento_seguro, vencimiento_sct, vencimiento_circulacion').eq('usuario_id', idMaestro),
-      supabase.from('operadores').select('nombre_completo, vencimiento_licencia').eq('usuario_id', idMaestro),
-      supabase.from('facturas').select('cliente, fecha_vencimiento, monto_total').eq('usuario_id', idMaestro).eq('estatus_pago', 'Pendiente'),
-      supabase.from('alertas_mantenimiento').select('id, kilometraje_meta, mensaje, unidades(numero_economico, kilometraje_actual)').eq('usuario_id', idMaestro)
+      queryFacturas, 
+      queryGastos, 
+      queryViajes,
+      supabase.from('unidades').select('numero_economico, vencimiento_seguro, vencimiento_sct, vencimiento_circulacion').eq('empresa_id', idMaestro),
+      supabase.from('operadores').select('nombre_completo, vencimiento_licencia').eq('empresa_id', idMaestro),
+      supabase.from('facturas').select('cliente, fecha_vencimiento, monto_total').eq('empresa_id', idMaestro).eq('estatus_pago', 'Pendiente'),
+      supabase.from('alertas_mantenimiento').select('id, kilometraje_meta, mensaje, unidades(numero_economico, kilometraje_actual)').eq('empresa_id', idMaestro)
     ]);
 
     const totalIngresos = facturasPagadas?.reduce((acc, curr) => acc + (Number(curr.monto_total) || 0), 0) || 0;
@@ -245,7 +248,6 @@ export default function Page() {
       });
     }
 
-    // --- NUEVO: INTEGRACIÓN DE ALERTAS DE MANTENIMIENTO POR KM ---
     if (alertasMtto) {
       alertasMtto.forEach(alerta => {
         if (!alerta.unidades) return;
@@ -260,8 +262,8 @@ export default function Page() {
             subtitulo: kmFaltan <= 0
               ? `Rebasado por ${Math.abs(kmFaltan).toLocaleString('en-US')} KM: ${alerta.mensaje}`
               : `En ${kmFaltan.toLocaleString('en-US')} KM: ${alerta.mensaje}`,
-            dias: kmFaltan <= 0 ? -10 : 5, // Valor arbitrario para forzar el ordenamiento
-            tipo: 'unidad', // Se suma al badge de "Flota"
+            dias: kmFaltan <= 0 ? -10 : 5, 
+            tipo: 'unidad', 
             urgencia: kmFaltan <= 0 ? 'critica' : 'preventiva',
             icono: <Wrench size={18} />,
             ruta: '/unidades'
@@ -465,17 +467,23 @@ export default function Page() {
                       className="bg-slate-900/50 border border-slate-800 rounded-full py-1.5 pl-8 pr-4 text-[12px] font-black uppercase outline-none focus:border-blue-500/50 transition-all w-32 focus:w-48" />
                   </div>
                 </div>
+                
                 <div className="flex gap-2">
                   {[{ id: 'todos', label: 'Todos' }, { id: 'unidad', label: 'Flota' }, { id: 'operador', label: 'Operadores' }, { id: 'factura', label: 'Cobranza' }].map((f) => (
-                    <button key={f.id} onClick={() => setFiltroTipo(f.id)}
+                    <button 
+                      key={f.id} 
+                      onClick={() => setFiltroTipo(f.id)}
                       className={`px-4 py-1.5 rounded-full text-[9.5px] font-black uppercase tracking-widest transition-all border ${
                         filtroTipo === f.id ? 'bg-blue-600 border-blue-500 text-white' : 'bg-slate-900/50 border-slate-800 text-slate-500'
-                      }`}>{f.label}</button>
+                      }`}
+                    >
+                      {f.label}
+                    </button>
                   ))}
                 </div>
               </div>
 
-<div className="space-y-3 max-h-[450px] overflow-y-auto pr-2 custom-scrollbar">
+              <div className="space-y-3 max-h-[450px] overflow-y-auto pr-2 custom-scrollbar">
                 {alertas.length === 0 ? (
                   <div className="bg-slate-900/50 border border-slate-800 p-8 rounded-[2.5rem] text-center">
                     <p className="text-[10px] text-slate-600 font-black uppercase italic tracking-widest">Sin alertas pendientes</p>
@@ -483,8 +491,11 @@ export default function Page() {
                 ) : filtroTipo === "todos" && !busqueda ? (
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pb-2">
                     {resumenAlertas.map((resumen) => (
-                      <div key={resumen.id} onClick={() => setFiltroTipo(resumen.id)}
-                        className="bg-slate-900 border border-slate-800 p-6 rounded-[2rem] hover:border-slate-700 transition-all cursor-pointer group flex flex-col justify-between min-h-[140px] shadow-lg">
+                      <div 
+                        key={resumen.id} 
+                        onClick={() => setFiltroTipo(resumen.id)}
+                        className="bg-slate-900 border border-slate-800 p-6 rounded-[2rem] hover:border-slate-700 transition-all cursor-pointer group flex flex-col justify-between min-h-[140px] shadow-lg"
+                      >
                         <div className="flex justify-between items-start mb-4">
                           <div className={`${resumen.colorBg} ${resumen.colorText} p-3.5 rounded-2xl transition-transform group-hover:scale-110`}>
                             {resumen.icono}
@@ -517,8 +528,11 @@ export default function Page() {
                   </div>
                 ) : (
                   alertasFiltradas.map((alerta) => (
-                    <div key={alerta.id} onClick={() => router.push(alerta.ruta)}
-                      className={`bg-slate-900 border ${alerta.urgencia === 'critica' ? 'border-red-500/30 hover:border-red-500/50' : 'border-orange-500/30 hover:border-orange-500/50'} p-5 rounded-[1.5rem] flex items-center gap-5 hover:bg-slate-800/80 transition-all cursor-pointer group`}>
+                    <div 
+                      key={alerta.id} 
+                      onClick={() => router.push(alerta.ruta)}
+                      className={`bg-slate-900 border ${alerta.urgencia === 'critica' ? 'border-red-500/30 hover:border-red-500/50' : 'border-orange-500/30 hover:border-orange-500/50'} p-5 rounded-[1.5rem] flex items-center gap-5 hover:bg-slate-800/80 transition-all cursor-pointer group`}
+                    >
                       <div className={`${alerta.urgencia === 'critica' ? 'bg-red-500/10 text-red-500' : 'bg-orange-500/10 text-orange-500'} p-3 rounded-xl transition-transform group-hover:scale-110`}>
                         {alerta.icono}
                       </div>

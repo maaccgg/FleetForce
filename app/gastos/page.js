@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabaseClient';
 import * as XLSX from 'xlsx';
 import { 
   Wrench, PlusCircle, Trash2, Fuel, X, Truck, Calendar, ChevronDown, FileText,
-  Settings, Ticket, Coffee, Bed, ArrowRightLeft, Package, CreditCard, Wallet, Car, Coins, Key, Tag, Edit
+  Settings, Ticket, Coffee, Bed, ArrowRightLeft, Package, CreditCard, Wallet, Car, Coins, Key, Tag, Edit, Loader2
 } from 'lucide-react';
 import Sidebar from '@/components/sidebar';
 import TarjetaDato from '@/components/tarjetaDato';
@@ -32,6 +32,7 @@ export default function GastosOperativosPage() {
   const [loading, setLoading] = useState(false);
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
   const [mostrarFiltro, setMostrarFiltro] = useState(false);
+  const [filtroActivo, setFiltroActivo] = useState(false);
   
   const [editandoId, setEditandoId] = useState(null);
   
@@ -108,7 +109,7 @@ export default function GastosOperativosPage() {
 
   useEffect(() => {
     if (empresaId) obtenerDatos(empresaId);
-  }, [fechaInicio, fechaFin]);
+  }, [fechaInicio, fechaFin, filtroActivo]);
 
   async function inicializarDatos(userId) {
     setLoading(true);
@@ -128,17 +129,27 @@ export default function GastosOperativosPage() {
   async function obtenerDatos(idMaestro) {
     setLoading(true);
     
-    const { data: unidadesBD } = await supabase.from('unidades').select('id, numero_economico').eq('usuario_id', idMaestro).eq('activo', true);
+    // === MULTI-TENANT: Filtramos por empresa_id ===
+    const { data: unidadesBD } = await supabase
+      .from('unidades')
+      .select('id, numero_economico')
+      .eq('empresa_id', idMaestro)
+      .eq('activo', true);
     setUnidades(unidadesBD || []);
 
-    const { data: viajesBD } = await supabase.from('viajes').select('id, folio_interno, fecha_salida').eq('usuario_id', idMaestro).order('created_at', { ascending: false }).limit(50);
+    const { data: viajesBD } = await supabase
+      .from('viajes')
+      .select('id, folio_interno, fecha_salida')
+      .eq('empresa_id', idMaestro)
+      .order('created_at', { ascending: false })
+      .limit(50);
     setViajesActivos(viajesBD || []);
 
     // Consulta con el Join Maestro-Detalle
     const { data: gastosBD, error } = await supabase
       .from('mantenimientos')
       .select(`*, unidades(numero_economico), viajes(folio_interno), gastos_detalle(*)`)
-      .eq('usuario_id', idMaestro)
+      .eq('empresa_id', idMaestro)
       .gte('fecha', fechaInicio)
       .lte('fecha', fechaFin)
       .order('fecha', { ascending: false });
@@ -208,6 +219,7 @@ export default function GastosOperativosPage() {
         return suma + monto;
       }, 0);
 
+      // === MULTI-TENANT: Guardamos con empresa_id ===
       const payloadMaestro = {
         unidad_id: formData.unidad_id || null, 
         viaje_id: formData.viaje_id || null,
@@ -215,7 +227,7 @@ export default function GastosOperativosPage() {
         costo: totalCalculado, 
         tipo: 'Liquidación', 
         fecha: formData.fecha,
-        usuario_id: empresaId 
+        empresa_id: empresaId 
       };
 
       if (editandoId) {
@@ -370,42 +382,85 @@ export default function GastosOperativosPage() {
             
             <div className="flex items-center gap-3">
               <div className="relative">
-                <button onClick={() => setMostrarFiltro(!mostrarFiltro)} className="flex items-center gap-3 bg-slate-900 border border-slate-800 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-white transition-all">
-                  <Calendar size={14} className="text-blue-300" /> Periodo <ChevronDown size={14} />
+                <button 
+                  onClick={() => setMostrarFiltro(!mostrarFiltro)} 
+                  className={`flex items-center gap-3 border px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all
+                  ${filtroActivo ? 'bg-blue-600/10 border-blue-500/30 text-blue-400' : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'}`}
+                >
+                  <Calendar size={14} className={filtroActivo ? 'text-blue-500' : 'text-slate-500'} /> 
+                  {filtroActivo ? 'Filtros Activos' : 'Periodo y Reportes'} <ChevronDown size={14} />
                 </button>
 
                 {mostrarFiltro && (
-                  <div className="absolute right-0 mt-3 w-72 bg-slate-900 border border-slate-800 p-6 rounded-3xl shadow-2xl z-50 animate-in fade-in zoom-in-95">
+                  <div className="absolute right-0 mt-3 w-80 bg-slate-900 border border-slate-800 p-6 rounded-3xl shadow-2xl z-50 animate-in fade-in zoom-in-95">
                     <div className="space-y-4">
-                      <div>
-                        <label className="text-[9px] font-black text-slate-500 uppercase block mb-2">Desde</label>
-                        <input type="date" className="w-full bg-slate-950 border border-slate-800 p-3 rounded-xl text-xs text-white" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} />
+                      
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-[9px] font-black text-slate-500 uppercase block mb-2">Desde</label>
+                          <input type="date" className="w-full bg-slate-950 border border-slate-800 p-3 rounded-xl text-xs text-white outline-none focus:border-blue-500" 
+                            value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} />
+                        </div>
+                        <div>
+                          <label className="text-[9px] font-black text-slate-500 uppercase block mb-2">Hasta</label>
+                          <input type="date" className="w-full bg-slate-950 border border-slate-800 p-3 rounded-xl text-xs text-white outline-none focus:border-blue-500" 
+                            value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} />
+                        </div>
                       </div>
-                      <div>
-                        <label className="text-[9px] font-black text-slate-500 uppercase block mb-2">Hasta</label>
-                        <input type="date" className="w-full bg-slate-950 border border-slate-800 p-3 rounded-xl text-xs text-white" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} />
-                      </div>
-                      <div className="pt-3 mt-2 border-t border-slate-800 space-y-2">
-                        <button onClick={() => setMostrarFiltro(false)} className="w-full bg-blue-600 hover:bg-blue-500 text-white py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-colors">Aplicar Filtro</button>
-                        <button onClick={exportarGastosExcel} disabled={loading || historial.length === 0} className="w-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 hover:bg-emerald-500 hover:text-white py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex justify-center items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
-                          <FileText size={14} /> Exportar a Excel
+
+                      <div className="pt-4 border-t border-slate-800 space-y-2">
+                        <button 
+                          onClick={() => { setFiltroActivo(true); setMostrarFiltro(false); }} 
+                          className="w-full bg-blue-600 hover:bg-blue-500 text-white py-3 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all shadow-lg shadow-blue-900/20"
+                        >
+                          Aplicar Filtros
                         </button>
+                        
+                        <div className="grid grid-cols-2 gap-2 mt-2">
+                           {filtroActivo && (
+                             <button 
+                               onClick={() => { setFiltroActivo(false); setFechaInicio(primerDiaMes); setFechaFin(ultimoDiaMes); setMostrarFiltro(false); }} 
+                               className="bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-colors"
+                             >
+                               Limpiar
+                             </button>
+                           )}
+                           <button 
+                             onClick={exportarGastosExcel} 
+                             disabled={loading || historial.length === 0} 
+                             className={`${filtroActivo ? '' : 'col-span-2'} flex items-center justify-center gap-2 bg-emerald-600/10 hover:bg-emerald-600 text-emerald-500 hover:text-white border border-emerald-500/20 font-black text-[9px] uppercase tracking-widest py-2.5 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed`}
+                           >
+                             <FileText size={14} /> Excel
+                           </button>
+                        </div>
                       </div>
+
                     </div>
                   </div>
                 )}
               </div>
 
-              <button onClick={abrirModalCrear} className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl font-black uppercase text-[10px] tracking-widest transition-all shadow-lg flex items-center gap-2">
+              <button 
+                onClick={abrirModalCrear} 
+                className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl font-black uppercase text-[10px] tracking-widest transition-all shadow-lg flex items-center gap-2"
+              >
                 <PlusCircle size={14} /> Registrar Gasto
               </button>
             </div>
           </header>
 
-          {rolUsuario === 'administrador' && (
+          {(rolUsuario === 'administrador' || rolUsuario === 'admin') && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12 animate-in fade-in">
-              <TarjetaDato titulo="Egreso en Rango" valor={`$${metricas.totalPeriodo.toLocaleString('es-MX', {minimumFractionDigits: 2})}`} color="blue" />
-              <TarjetaDato titulo="Folios de Gastos" valor={metricas.conteo.toString()} color="blue" />
+              <TarjetaDato 
+                titulo="Egreso en Periodo" 
+                valor={`$${metricas.totalPeriodo.toLocaleString('es-MX', {minimumFractionDigits: 2})}`} 
+                color="blue" 
+              />
+              <TarjetaDato 
+                titulo="Folios Registrados" 
+                valor={metricas.conteo.toString()} 
+                color="blue" 
+              />
             </div>
           )}
 
@@ -430,11 +485,13 @@ export default function GastosOperativosPage() {
 
                     return (
                       <tr key={item.id} className="hover:bg-slate-800/40 transition-colors group">
+                        
                         <td className="p-4 pl-8 whitespace-nowrap">
                           <span className="text-[14px] text-white font-mono font-medium">
                             {item.folio_interno ? `G-${String(item.folio_interno).padStart(4, '0')}` : 'G-S/N'}
                           </span>
                         </td>
+                        
                         <td className="p-4 whitespace-nowrap">
                           {vieneDeViaje ? (
                             <span className="inline-flex px-2 py-1 rounded-md bg-blue-900/30 border border-blue-500/30 text-blue-400 font-mono text-[12px] items-center gap-1.5">
@@ -444,18 +501,23 @@ export default function GastosOperativosPage() {
                             <span className="text-slate-600 text-[12px] font-mono">---</span>
                           )}
                         </td>
+                        
                         <td className="p-4 whitespace-nowrap">
                           {item.unidades?.numero_economico ? (
                             <span className="inline-flex px-2 py-1 rounded-md bg-slate-800 border border-slate-700 text-slate-300 font-mono text-[12px]">
                               ECO: {item.unidades.numero_economico}
                             </span>
-                          ) : <span className="text-slate-600 text-[12px] font-mono">---</span>}
-                        </td>
-                        <td className="p-4 whitespace-nowrap">
-                           <span className="text-[12px] text-slate-400 font-medium">{item.fecha?.slice(0, 10) || 'S/F'}</span>
+                          ) : (
+                            <span className="text-slate-600 text-[12px] font-mono">---</span>
+                          )}
                         </td>
                         
-                        {/* SECCIÓN ACTUALIZADA: Solo texto general y número de conceptos */}
+                        <td className="p-4 whitespace-nowrap">
+                           <span className="text-[12px] text-slate-400 font-medium">
+                             {item.fecha?.slice(0, 10) || 'S/F'}
+                           </span>
+                        </td>
+                        
                         <td className="p-4 whitespace-normal min-w-[350px]">
                           <div className="flex flex-col items-start py-1">
                             <span className="text-slate-200 text-sm leading-tight">
@@ -472,12 +534,21 @@ export default function GastosOperativosPage() {
                             ${Number(item.costo).toLocaleString('es-MX', {minimumFractionDigits: 2})}
                           </span>
                         </td>
+                        
                         <td className="p-4 pr-8 whitespace-nowrap text-center">
                           <div className="flex items-center justify-center gap-2 opacity-30 group-hover:opacity-100 transition-opacity">
-                            <button onClick={() => abrirModalEditar(item)} title="Editar" className="p-2 transition-colors rounded-lg text-slate-400 hover:text-blue-400 hover:bg-blue-500/10">
+                            <button 
+                              onClick={() => abrirModalEditar(item)} 
+                              title="Editar" 
+                              className="p-2 transition-colors rounded-lg text-slate-400 hover:text-blue-400 hover:bg-blue-500/10"
+                            >
                               <Edit size={16} />
                             </button>
-                            <button onClick={() => eliminarGasto(item.id)} title="Eliminar" className="p-2 transition-colors rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-500/10">
+                            <button 
+                              onClick={() => eliminarGasto(item.id)} 
+                              title="Eliminar" 
+                              className="p-2 transition-colors rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-500/10"
+                            >
                               <Trash2 size={16} />
                             </button>
                           </div>
@@ -502,42 +573,73 @@ export default function GastosOperativosPage() {
           {mostrarFormulario && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
               <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-sm" onClick={() => setMostrarFormulario(false)} />
-              <div className="relative bg-slate-900 border border-slate-800 w-full max-w-3xl rounded-[3rem] p-10 shadow-2xl animate-in zoom-in-95">
-                <button onClick={() => setMostrarFormulario(false)} className="absolute top-8 right-8 text-slate-500 hover:text-white bg-slate-950 p-2 rounded-full"><X size={20} /></button>
-                <h2 className="text-2xl font-black text-white italic uppercase mb-8">
+              
+              <div className="relative bg-slate-900 border border-slate-800 w-full max-w-3xl rounded-[3rem] p-10 shadow-2xl animate-in zoom-in-95 overflow-hidden flex flex-col max-h-[90vh]">
+                <button 
+                  onClick={() => setMostrarFormulario(false)} 
+                  className="absolute top-8 right-8 text-slate-500 hover:text-white bg-slate-950 p-2 rounded-full"
+                >
+                  <X size={20} />
+                </button>
+                
+                <h2 className="text-2xl font-black text-white italic uppercase mb-8 shrink-0">
                   {editandoId ? 'Editar' : 'Captura de'} <span className="text-blue-500">Gasto</span>
                 </h2>
                 
-                <form onSubmit={registrarGasto} className="space-y-6">
+                <form onSubmit={registrarGasto} className="space-y-6 overflow-y-auto pr-2 custom-scrollbar">
+                  
                   <div className="bg-slate-950/50 p-6 rounded-3xl border border-slate-800 space-y-4">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-800 pb-2">1. Datos Generales (Folio Maestro)</p>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-800 pb-2">
+                      1. Datos Generales (Folio Maestro)
+                    </p>
                     
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <select className="w-full bg-slate-900 border border-slate-800 p-3.5 rounded-xl text-sm text-white focus:border-blue-500 outline-none"
-                        value={formData.unidad_id} onChange={e => setFormData({...formData, unidad_id: e.target.value})}>
+                      <select 
+                        className="w-full bg-slate-900 border border-slate-800 p-3.5 rounded-xl text-sm text-white focus:border-blue-500 outline-none"
+                        value={formData.unidad_id} 
+                        onChange={e => setFormData({...formData, unidad_id: e.target.value})}
+                      >
                         <option value="">-- Sin Unidad Específica --</option>
                         {unidades.map(u => <option key={u.id} value={u.id}>ECO: {u.numero_economico}</option>)}
                       </select>
                       
-                      <select className="w-full bg-slate-900 border border-slate-800 p-3.5 rounded-xl text-sm text-white focus:border-blue-500 outline-none"
-                        value={formData.viaje_id} onChange={e => setFormData({...formData, viaje_id: e.target.value})}>
+                      <select 
+                        className="w-full bg-slate-900 border border-slate-800 p-3.5 rounded-xl text-sm text-white focus:border-blue-500 outline-none"
+                        value={formData.viaje_id} 
+                        onChange={e => setFormData({...formData, viaje_id: e.target.value})}
+                      >
                         <option value="">-- Gasto Administrativo --</option>
                         {viajesActivos.map(v => <option key={v.id} value={v.id}>Viaje V-{String(v.folio_interno).padStart(4, '0')}</option>)}
                       </select>
 
-                      <input type="date" className="w-full bg-slate-900 border border-slate-800 p-3.5 rounded-xl text-sm text-white focus:border-blue-500 outline-none" 
-                        value={formData.fecha} onChange={e => setFormData({...formData, fecha: e.target.value})} required />
+                      <input 
+                        type="date" 
+                        className="w-full bg-slate-900 border border-slate-800 p-3.5 rounded-xl text-sm text-white focus:border-blue-500 outline-none" 
+                        value={formData.fecha} 
+                        onChange={e => setFormData({...formData, fecha: e.target.value})} 
+                        required 
+                      />
                     </div>
 
-                    <input required className="w-full bg-slate-900 border border-slate-800 p-3.5 rounded-xl text-sm text-white focus:border-blue-500 outline-none" 
-                      value={formData.descripcion_general} onChange={e => setFormData({...formData, descripcion_general: e.target.value})} 
-                      placeholder="Concepto General (Ej. Gastos de Viaje MTY-QRO)" />
+                    <input 
+                      required 
+                      className="w-full bg-slate-900 border border-slate-800 p-3.5 rounded-xl text-sm text-white focus:border-blue-500 outline-none" 
+                      value={formData.descripcion_general} 
+                      onChange={e => setFormData({...formData, descripcion_general: e.target.value})} 
+                      placeholder="Concepto General (Ej. Gastos de Viaje MTY-QRO)" 
+                    />
                   </div>
 
                   <div className="space-y-3">
                     <div className="flex justify-between items-end border-b border-slate-800 pb-2">
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">2. Desglose del gasto (Detalle)</p>
-                      <button type="button" onClick={agregarLinea} className="text-[10px] font-black text-blue-400 hover:text-blue-300 uppercase tracking-widest flex items-center gap-1 bg-blue-500/10 px-3 py-1.5 rounded-lg border border-blue-500/20">
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                        2. Desglose del gasto (Detalle)
+                      </p>
+                      <button 
+                        type="button" 
+                        onClick={agregarLinea} 
+                        className="text-[10px] font-black text-blue-400 hover:text-blue-300 uppercase tracking-widest flex items-center gap-1 bg-blue-500/10 px-3 py-1.5 rounded-lg border border-blue-500/20 transition-colors"
+                      >
                         <PlusCircle size={12} /> Agregar Concepto
                       </button>
                     </div>
@@ -545,8 +647,12 @@ export default function GastosOperativosPage() {
                     <div className="max-h-[250px] overflow-y-auto custom-scrollbar space-y-3 pr-2">
                       {formData.lineas.map((linea) => (
                         <div key={linea.id_temp} className="flex flex-col sm:flex-row gap-3 bg-slate-950 p-3 rounded-2xl border border-slate-800 group hover:border-slate-700 transition-colors">
-                          <select required className="sm:w-1/4 bg-slate-900 border border-slate-800 p-3 rounded-xl text-xs text-white focus:border-blue-500 outline-none"
-                            value={linea.tipo} onChange={e => actualizarLinea(linea.id_temp, 'tipo', e.target.value)}>
+                          <select 
+                            required 
+                            className="sm:w-1/4 bg-slate-900 border border-slate-800 p-3 rounded-xl text-xs text-white focus:border-blue-500 outline-none"
+                            value={linea.tipo} 
+                            onChange={e => actualizarLinea(linea.id_temp, 'tipo', e.target.value)}
+                          >
                             <optgroup label="OPERACIÓN" className="bg-slate-900 text-slate-400">
                               <option value="Gasolina">Gasolina / Diesel</option>
                               <option value="Casetas">Casetas</option>
@@ -569,17 +675,32 @@ export default function GastosOperativosPage() {
                             </optgroup>
                           </select>
 
-                          <input required className="flex-1 bg-slate-900 border border-slate-800 p-3 rounded-xl text-xs text-white focus:border-blue-500 outline-none" 
-                            value={linea.descripcion} onChange={e => actualizarLinea(linea.id_temp, 'descripcion', e.target.value)} 
-                            placeholder="Descripción del gasto..." />
+                          <input 
+                            required 
+                            className="flex-1 bg-slate-900 border border-slate-800 p-3 rounded-xl text-xs text-white focus:border-blue-500 outline-none" 
+                            value={linea.descripcion} 
+                            onChange={e => actualizarLinea(linea.id_temp, 'descripcion', e.target.value)} 
+                            placeholder="Descripción del gasto..." 
+                          />
 
                           <div className="sm:w-1/4 relative">
                             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-mono text-xs">$</span>
-                            <input required type="number" step="0.01" className="w-full bg-slate-900 border border-slate-800 p-3 pl-7 pr-10 rounded-xl text-xs text-white font-mono focus:border-blue-500 outline-none" 
-                              value={linea.monto} onChange={e => actualizarLinea(linea.id_temp, 'monto', e.target.value)} placeholder="0.00" />
+                            <input 
+                              required 
+                              type="number" 
+                              step="0.01" 
+                              className="w-full bg-slate-900 border border-slate-800 p-3 pl-7 pr-10 rounded-xl text-xs text-white font-mono focus:border-blue-500 outline-none" 
+                              value={linea.monto} 
+                              onChange={e => actualizarLinea(linea.id_temp, 'monto', e.target.value)} 
+                              placeholder="0.00" 
+                            />
                             
                             {formData.lineas.length > 1 && (
-                              <button type="button" onClick={() => eliminarLinea(linea.id_temp)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-600 hover:text-red-500 transition-colors">
+                              <button 
+                                type="button" 
+                                onClick={() => eliminarLinea(linea.id_temp)} 
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-600 hover:text-red-500 transition-colors"
+                              >
                                 <Trash2 size={14} />
                               </button>
                             )}
@@ -591,18 +712,25 @@ export default function GastosOperativosPage() {
                   
                   <div className="pt-4 border-t border-slate-800 flex flex-col sm:flex-row justify-between items-center gap-4">
                     <div className="text-left w-full sm:w-auto">
-                      <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Total del gasto </p>
+                      <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                        Total del gasto 
+                      </p>
                       <p className="text-3xl font-mono font-black text-blue-500 italic">
                         ${totalLiquidacion.toLocaleString('es-MX', {minimumFractionDigits: 2})}
                       </p>
                     </div>
 
-                    <button type="submit" disabled={loading || formData.lineas.length === 0} 
-                      className="w-full sm:w-auto flex-1 bg-blue-600 text-white py-4 px-8 rounded-2xl font-black uppercase text-[11px] tracking-widest shadow-xl hover:bg-blue-500 transition-all flex justify-center items-center gap-3 disabled:opacity-50">
+                    <button 
+                      type="submit" 
+                      disabled={loading || formData.lineas.length === 0} 
+                      className="w-full sm:w-auto flex-1 bg-blue-600 text-white py-4 px-8 rounded-2xl font-black uppercase text-[11px] tracking-widest shadow-xl hover:bg-blue-500 transition-all flex justify-center items-center gap-3 disabled:opacity-50"
+                    >
+                      {loading ? <Loader2 size={16} className="animate-spin" /> : editandoId ? <Edit size={16}/> : <PlusCircle size={16}/>}
                       {loading ? "Sincronizando..." : editandoId ? "Actualizar Gasto" : "Ingresar Gasto"}
                     </button>
                   </div>
                 </form>
+
               </div>
             </div>
           )}

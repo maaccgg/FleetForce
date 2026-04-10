@@ -87,18 +87,18 @@ export default function ViajesPage() {
   }
 
   async function obtenerPerfilFiscal(idMaestro) {
-    const { data } = await supabase.from('perfil_emisor').select('*').eq('usuario_id', idMaestro).single();
+    const { data } = await supabase.from('perfil_emisor').select('*').eq('empresa_id', idMaestro).single();
     if (data) setPerfilEmisor(data);
   }
 
   async function cargarCatalogos(idMaestro) {
     const [u, o, ub, m, cl, r] = await Promise.all([
-      supabase.from('unidades').select('*').eq('usuario_id', idMaestro).eq('activo', true),
-      supabase.from('operadores').select('*').eq('usuario_id', idMaestro).eq('activo', true),
-      supabase.from('ubicaciones').select('*').eq('usuario_id', idMaestro).eq('activo', true),
-      supabase.from('mercancias').select('*').eq('usuario_id', idMaestro).eq('activo', true),
-      supabase.from('clientes').select('*').eq('usuario_id', idMaestro).eq('activo', true),
-      supabase.from('remolques').select('*').eq('usuario_id', idMaestro).eq('activo', true)
+      supabase.from('unidades').select('*').eq('empresa_id', idMaestro).eq('activo', true),
+      supabase.from('operadores').select('*').eq('empresa_id', idMaestro).eq('activo', true),
+      supabase.from('ubicaciones').select('*').eq('empresa_id', idMaestro).eq('activo', true),
+      supabase.from('mercancias').select('*').eq('empresa_id', idMaestro).eq('activo', true),
+      supabase.from('clientes').select('*').eq('empresa_id', idMaestro).eq('activo', true),
+      supabase.from('remolques').select('*').eq('empresa_id', idMaestro).eq('activo', true)
     ]);
     setCatalogos({ unidades: u.data || [], operadores: o.data || [], ubicaciones: ub.data || [], mercancias: m.data || [], remolques: r.data || [] });
     setClientes(cl.data || []);
@@ -108,7 +108,7 @@ export default function ViajesPage() {
     const { data } = await supabase.from('viajes').select(`
         *, unidades(*), operadores(*), remolques(*), clientes(*),
         origen:ubicaciones!viajes_origen_id_fkey(*), destino:ubicaciones!viajes_destino_id_fkey(*)
-      `).eq('usuario_id', idMaestro).order('created_at', { ascending: false });
+      `).eq('empresa_id', idMaestro).order('created_at', { ascending: false });
     setViajes(data || []);
   }
 
@@ -417,6 +417,7 @@ export default function ViajesPage() {
 
       const remolqueLimpio = esCamionArticulado ? formData.remolque_id : null;
 
+      // ELIMINACIÓN DE usuario_id para que aplique el default SQL
       const payloadComun = {
         distancia_km: parseFloat(formData.distancia_km || 0), 
         unidad_id: formData.unidad_id, 
@@ -431,7 +432,6 @@ export default function ViajesPage() {
         monto_flete: parseFloat(formData.monto_flete || 0), 
         referencia: formData.referencia || '', 
         fecha_salida: formData.fecha_salida, 
-        usuario_id: empresaId,
         tag_casetas: formData.tag_casetas,
         tarjeta_gasolina: formData.tarjeta_gasolina
       };
@@ -461,7 +461,7 @@ export default function ViajesPage() {
           } else {
             const { data: viajeEditado } = await supabase.from('viajes').select('folio_interno').eq('id', editandoId).single();
             await supabase.from('facturas').insert([{ 
-              usuario_id: empresaId, viaje_id: editandoId, folio_viaje: viajeEditado?.folio_interno,
+              viaje_id: editandoId, folio_viaje: viajeEditado?.folio_interno,
               cliente: clienteObj.nombre, monto_total: parseFloat(formData.monto_flete), fecha_viaje: formData.fecha_salida, fecha_vencimiento: fechaVenc.toISOString().split('T')[0], estatus_pago: 'Pendiente', ruta: `Flete CCP${formData.referencia ? ' - Ref: '+formData.referencia : ''}` 
             }]);
           }
@@ -478,7 +478,6 @@ export default function ViajesPage() {
 
         // --- INICIO DEL MOTOR DE ODÓMETRO ESTIMADO ---
         if (payloadComun.unidad_id && payloadComun.distancia_km > 0) {
-          // 1. Obtenemos el kilometraje actual del camión
           const { data: unidadData } = await supabase
             .from('unidades')
             .select('kilometraje_actual')
@@ -489,7 +488,6 @@ export default function ViajesPage() {
           const kmRuta = Number(payloadComun.distancia_km);
           const nuevoKilometraje = kmActuales + kmRuta;
 
-          // 2. Sumamos y guardamos el nuevo total en la unidad
           await supabase
             .from('unidades')
             .update({ kilometraje_actual: nuevoKilometraje })
@@ -497,20 +495,19 @@ export default function ViajesPage() {
         }
         // --- FIN DEL MOTOR DE ODÓMETRO ESTIMADO ---
 
-        // Creación de factura ligada
+        // Creación de factura ligada (sin usuario_id)
         if (formData.monto_flete > 0 && formData.cliente_id) {
           const fechaVenc = new Date(formData.fecha_salida); fechaVenc.setDate(fechaVenc.getDate() + (clienteObj?.dias_credito || 0));
           
           await supabase.from('facturas').insert([{ 
-            usuario_id: empresaId, viaje_id: nuevoViaje.id, folio_viaje: nuevoViaje.folio_interno,
+            viaje_id: nuevoViaje.id, folio_viaje: nuevoViaje.folio_interno,
             cliente: clienteObj.nombre, monto_total: parseFloat(formData.monto_flete), fecha_viaje: formData.fecha_salida, fecha_vencimiento: fechaVenc.toISOString().split('T')[0], estatus_pago: 'Pendiente', ruta: `Flete CCP${formData.referencia ? ' - Ref: '+formData.referencia : ''}` 
           }]);
         }
 
-        // Registro de gastos de viaje
+        // Registro de gastos de viaje (sin usuario_id)
         if (formData.gasto_monto && parseFloat(formData.gasto_monto) > 0) {
           await supabase.from('mantenimientos').insert([{
-            usuario_id: empresaId,
             unidad_id: formData.unidad_id,
             viaje_id: nuevoViaje.id, 
             descripcion: formData.gasto_descripcion || `Gastos Operativos - Viaje V-${String(nuevoViaje.folio_interno).padStart(4, '0')}`,
@@ -638,86 +635,86 @@ export default function ViajesPage() {
               ))}
             </div>
 
-        <div className="relative shrink-0">
-          <button 
-            onClick={() => setMostrarFiltro(!mostrarFiltro)}
-            className={`flex items-center gap-3 border px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all
-              ${filtroActivo ? 'bg-blue-600/10 border-blue-500/30 text-blue-400' : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'}`}
-          >
-            <Calendar size={14} className={filtroActivo ? 'text-blue-500' : 'text-slate-500'} />
-            {filtroActivo ? 'Filtro Activo' : 'Periodo'}
-            <ChevronDown size={14} className={`transition-transform duration-200 ${mostrarFiltro ? 'rotate-180' : ''}`} />
-          </button>
+            {/* BOTÓN DE PERIODO ESTANDARIZADO (CON EXCEL) */}
+            <div className="relative shrink-0 z-20">
+              <button 
+                onClick={() => setMostrarFiltro(!mostrarFiltro)}
+                className={`flex items-center gap-3 border px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-sm
+                  ${filtroActivo ? 'bg-blue-600/10 border-blue-500/30 text-blue-400' : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white hover:border-slate-700'}`}
+              >
+                <Calendar size={14} className={filtroActivo ? 'text-blue-500' : 'text-slate-500'} />
+                <span>{filtroActivo ? 'Filtros Activos' : 'Filtros y Reportes'}</span>
+                <ChevronDown size={14} className={`transition-transform duration-300 ${mostrarFiltro ? 'rotate-180' : ''}`} />
+              </button>
 
-          {mostrarFiltro && (
-            <div className="absolute right-0 mt-2 w-80 bg-slate-900 border border-slate-800 rounded-[1.5rem] shadow-2xl overflow-hidden z-20 p-6 animate-in fade-in zoom-in-95 duration-200">
-              
-              <p className="text-[10px] font-black text-white uppercase tracking-[0.2em] mb-5 border-b border-slate-800 pb-3">
-                Filtros de Búsqueda
-              </p>
-
-              <div className="grid grid-cols-2 gap-3 mb-4">
-                <div>
-                  <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1">Desde</label>
-                  <input type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 text-white text-[11px] rounded-xl p-3 outline-none focus:border-blue-500 transition-colors" />
-                </div>
-                <div>
-                  <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1">Hasta</label>
-                  <input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 text-white text-[11px] rounded-xl p-3 outline-none focus:border-blue-500 transition-colors" />
-                </div>
-              </div>
-
-              <div className="space-y-4 mb-6">
-                <div>
-                  <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1">Origen de Ruta</label>
-                  <select value={filtroOrigen} onChange={(e) => setFiltroOrigen(e.target.value)} 
-                    className="w-full bg-slate-950 border border-slate-800 text-white text-xs rounded-xl p-3 outline-none focus:border-blue-500 appearance-none">
-                    <option value="">Todos los Orígenes</option>
-                    {catalogos.ubicaciones.map(ub => <option key={ub.id} value={ub.id}>{ub.nombre_lugar}</option>)}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1">Destino de Ruta</label>
-                  <select value={filtroDestino} onChange={(e) => setFiltroDestino(e.target.value)} 
-                    className="w-full bg-slate-950 border border-slate-800 text-white text-xs rounded-xl p-3 outline-none focus:border-blue-500 appearance-none">
-                    <option value="">Todos los Destinos</option>
-                    {catalogos.ubicaciones.map(ub => <option key={ub.id} value={ub.id}>{ub.nombre_lugar}</option>)}
-                  </select>
-                </div>
-              </div>
-
-              <div className="space-y-2 pt-4 border-t border-slate-800">
-                <button onClick={() => { setFiltroActivo(true); setMostrarFiltro(false); }}
-                  className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black text-[10px] uppercase tracking-widest py-3.5 rounded-xl transition-all shadow-lg shadow-blue-900/20">
-                  Aplicar Filtros
-                </button>
-                
-                <div className="grid grid-cols-2 gap-2">
-                  {filtroActivo && (
-                    <button onClick={() => { setFiltroActivo(false); setFechaInicio(''); setFechaFin(''); setFiltroOrigen(''); setFiltroDestino(''); setMostrarFiltro(false); }}
-                      className="bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white font-black text-[9px] uppercase tracking-widest py-2.5 rounded-xl transition-colors">
-                      Limpiar
-                    </button>
-                  )}
+              {mostrarFiltro && (
+                <div className="absolute right-0 mt-2 w-80 bg-slate-900 border border-slate-800 rounded-[1.5rem] shadow-2xl overflow-hidden p-6 animate-in fade-in zoom-in-95 duration-200">
                   
-                  {puedeVerAdmin && (
-                    <button 
-                      onClick={exportarExcelViajes} 
-                      className={`${filtroActivo ? '' : 'col-span-2'} flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white font-black text-[9px] uppercase tracking-widest py-2.5 rounded-xl transition-colors`}
-                    >
-                      <FileText size={12} /> Excel
+                  <p className="text-[10px] font-black text-white uppercase tracking-[0.2em] mb-5 border-b border-slate-800 pb-3 text-center">
+                    Parámetros de Búsqueda
+                  </p>
+
+                  <div className="grid grid-cols-2 gap-3 mb-4">
+                    <div>
+                      <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1">Desde</label>
+                      <input type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-800 text-white text-[11px] rounded-xl p-3 outline-none focus:border-blue-500 transition-colors" />
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1">Hasta</label>
+                      <input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-800 text-white text-[11px] rounded-xl p-3 outline-none focus:border-blue-500 transition-colors" />
+                    </div>
+                  </div>
+
+                  <div className="space-y-4 mb-6">
+                    <div>
+                      <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1">Origen de Ruta</label>
+                      <select value={filtroOrigen} onChange={(e) => setFiltroOrigen(e.target.value)} 
+                        className="w-full bg-slate-950 border border-slate-800 text-white text-xs rounded-xl p-3 outline-none focus:border-blue-500 appearance-none">
+                        <option value="">Todos los Orígenes</option>
+                        {catalogos.ubicaciones.map(ub => <option key={ub.id} value={ub.id}>{ub.nombre_lugar}</option>)}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1">Destino de Ruta</label>
+                      <select value={filtroDestino} onChange={(e) => setFiltroDestino(e.target.value)} 
+                        className="w-full bg-slate-950 border border-slate-800 text-white text-xs rounded-xl p-3 outline-none focus:border-blue-500 appearance-none">
+                        <option value="">Todos los Destinos</option>
+                        {catalogos.ubicaciones.map(ub => <option key={ub.id} value={ub.id}>{ub.nombre_lugar}</option>)}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 pt-4 border-t border-slate-800">
+                    <button onClick={() => { setFiltroActivo(true); setMostrarFiltro(false); }}
+                      className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black text-[10px] uppercase tracking-widest py-3.5 rounded-xl transition-all shadow-lg shadow-blue-900/20">
+                      Aplicar Filtros
                     </button>
-                  )}
+                    
+                    <div className="grid grid-cols-2 gap-2 mt-2">
+                      {filtroActivo && (
+                        <button onClick={() => { setFiltroActivo(false); setFechaInicio(''); setFechaFin(''); setFiltroOrigen(''); setFiltroDestino(''); setMostrarFiltro(false); }}
+                          className="bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white font-black text-[9px] uppercase tracking-widest py-2.5 rounded-xl transition-colors">
+                          Limpiar
+                        </button>
+                      )}
+                      
+                      {puedeVerAdmin && (
+                        <button 
+                          onClick={exportarExcelViajes} 
+                          className={`${filtroActivo ? '' : 'col-span-2'} flex items-center justify-center gap-2 bg-emerald-600/10 hover:bg-emerald-600 text-emerald-500 hover:text-white border border-emerald-500/20 font-black text-[9px] uppercase tracking-widest py-2.5 rounded-xl transition-colors`}
+                        >
+                          <FileText size={12} /> Excel
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
                 </div>
-              </div>
-
+              )}
             </div>
-          )}
-        </div>
-
           </div>
 
           {/* ========================================================= */}

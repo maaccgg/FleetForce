@@ -18,10 +18,10 @@ export default function UnidadesPage() {
   const [tabExpediente, setTabExpediente] = useState('tecnica'); 
   
   const [mantenimientos, setMantenimientos] = useState([]);
-  const [alertas, setAlertas] = useState([]); // <-- NUEVO ESTADO PARA ALERTAS
+  const [alertas, setAlertas] = useState([]);
 
   const [nuevoMantenimiento, setNuevoMantenimiento] = useState({ fecha: new Date().toISOString().split('T')[0], tipo: 'Preventivo', descripcion: '', costo: '' });
-  const [nuevaAlerta, setNuevaAlerta] = useState({ kilometraje_meta: '', mensaje: '' }); // <-- NUEVO ESTADO PARA FORMULARIO DE ALERTA
+  const [nuevaAlerta, setNuevaAlerta] = useState({ kilometraje_meta: '', mensaje: '' });
 
   const [formData, setFormData] = useState({
     numero_economico: '', placas: '', tipo_placa: 'Federal', permiso_sict: 'TPAF01', num_permiso_sict: '',
@@ -43,12 +43,20 @@ export default function UnidadesPage() {
 
   async function obtenerUnidades(userId) {
     setLoading(true);
-    const { data: perfilData } = await supabase.from('perfiles').select('empresa_id, rol').eq('id', userId).single();
+    const { data: perfilData } = await supabase.from('perfiles').select('empresa_id').eq('id', userId).single();
+    
+    // idInstitucion es el ID de la empresa a la que pertenece el usuario
     const idInstitucion = perfilData?.empresa_id || userId; 
     setEmpresaId(idInstitucion);
 
     try {
-      const { data, error } = await supabase.from('unidades').select('*').eq('usuario_id', idInstitucion).order('created_at', { ascending: false });
+      // CORRECCIÓN 1: Ahora consultamos por empresa_id para que todo el equipo vea lo mismo
+      const { data, error } = await supabase
+        .from('unidades')
+        .select('*')
+        .eq('empresa_id', idInstitucion) 
+        .order('created_at', { ascending: false });
+
       if (error) throw error;
       setUnidades(data || []);
     } catch (err) { console.error("Error cargando unidades:", err.message); }
@@ -60,7 +68,6 @@ export default function UnidadesPage() {
     setMantenimientos(data || []);
   }
 
-  // <-- NUEVA FUNCIÓN PARA CARGAR ALERTAS
   async function cargarAlertas(unidadId) {
     const { data } = await supabase.from('alertas_mantenimiento').select('*').eq('unidad_id', unidadId).order('kilometraje_meta', { ascending: true });
     setAlertas(data || []);
@@ -69,9 +76,11 @@ export default function UnidadesPage() {
   const guardarUnidad = async (e) => {
     e.preventDefault();
     setLoading(true);
+    
+    // CORRECCIÓN 2: Eliminamos usuario_id del payload. 
+    // Supabase lo pondrá en automático (Default: auth.uid())
     const payload = { 
       ...formData, 
-      usuario_id: empresaId,
       placas: formData.placas.toUpperCase(),
       vencimiento_seguro: formData.vencimiento_seguro || null,
       vencimiento_sct: formData.tipo_placa === 'Estatal' ? null : (formData.vencimiento_sct || null),
@@ -84,9 +93,8 @@ export default function UnidadesPage() {
 
     if (error) alert("Error al guardar: " + error.message);
     else {
-      alert("✅ Ficha Técnica actualizada. Odómetro guardado.");
+      alert("✅ Datos actualizados correctamente.");
       obtenerUnidades(sesion.user.id);
-      // Si la unidad ya existía, actualizamos el state visual de la unidad seleccionada
       if (unidadSeleccionada) setUnidadSeleccionada({...unidadSeleccionada, kilometraje_actual: formData.kilometraje_actual});
     }
     setLoading(false);
@@ -94,8 +102,51 @@ export default function UnidadesPage() {
 
   const eliminarUnidad = async (id) => {
     if (!confirm("¿Deseas eliminar esta unidad permanentemente?")) return;
-    await supabase.from('unidades').delete().eq('id', id);
-    obtenerUnidades(sesion.user.id);
+    const { error } = await supabase.from('unidades').delete().eq('id', id);
+    if (error) alert("No tienes permisos para eliminar (Solo Admins)");
+    else obtenerUnidades(sesion.user.id);
+  };
+
+  const registrarMantenimiento = async (e) => {
+    e.preventDefault();
+    if (!nuevoMantenimiento.descripcion || !nuevoMantenimiento.costo) return;
+    setLoading(true);
+
+    // CORRECCIÓN 3: Dejamos que Supabase estampe el usuario_id y empresa_id
+    const { error } = await supabase.from('mantenimientos').insert([{ 
+      unidad_id: unidadSeleccionada.id, 
+      fecha: nuevoMantenimiento.fecha, 
+      tipo: nuevoMantenimiento.tipo, 
+      descripcion: nuevoMantenimiento.descripcion, 
+      costo: parseFloat(nuevoMantenimiento.costo) 
+    }]);
+
+    if (error) alert("Error: " + error.message);
+    else { 
+      setNuevoMantenimiento({ fecha: new Date().toISOString().split('T')[0], tipo: 'Preventivo', descripcion: '', costo: '' }); 
+      cargarMantenimientos(unidadSeleccionada.id); 
+    }
+    setLoading(false);
+  };
+
+  const registrarAlerta = async (e) => {
+    e.preventDefault();
+    if (!nuevaAlerta.kilometraje_meta || !nuevaAlerta.mensaje) return;
+    setLoading(true);
+
+    // CORRECCIÓN 4: Limpieza de IDs manuales
+    const { error } = await supabase.from('alertas_mantenimiento').insert([{ 
+      unidad_id: unidadSeleccionada.id, 
+      kilometraje_meta: parseFloat(nuevaAlerta.kilometraje_meta), 
+      mensaje: nuevaAlerta.mensaje 
+    }]);
+
+    if (error) alert("Error: " + error.message);
+    else { 
+      setNuevaAlerta({ kilometraje_meta: '', mensaje: '' }); 
+      cargarAlertas(unidadSeleccionada.id); 
+    }
+    setLoading(false);
   };
 
   const abrirExpediente = (u) => {
@@ -113,7 +164,7 @@ export default function UnidadesPage() {
     });
     setTabExpediente('tecnica');
     cargarMantenimientos(u.id);
-    cargarAlertas(u.id); // <-- CARGAMOS LAS ALERTAS AL ABRIR
+    cargarAlertas(u.id);
     setMostrarModal(true);
   };
 
@@ -134,42 +185,14 @@ export default function UnidadesPage() {
     setUnidadSeleccionada(null);
   };
 
-  const registrarMantenimiento = async (e) => {
-    e.preventDefault();
-    if (!nuevoMantenimiento.descripcion || !nuevoMantenimiento.costo) return;
-    setLoading(true);
-    const { error } = await supabase.from('mantenimientos').insert([{ usuario_id: sesion.user.id, unidad_id: unidadSeleccionada.id, fecha: nuevoMantenimiento.fecha, tipo: nuevoMantenimiento.tipo, descripcion: nuevoMantenimiento.descripcion, costo: parseFloat(nuevoMantenimiento.costo) }]);
-    if (error) alert("Error: " + error.message);
-    else { setNuevoMantenimiento({ fecha: new Date().toISOString().split('T')[0], tipo: 'Preventivo', descripcion: '', costo: '' }); cargarMantenimientos(unidadSeleccionada.id); }
-    setLoading(false);
-  };
-
   const eliminarMantenimiento = async (id) => {
-    if (!confirm("¿Borrar registro de mantenimiento?")) return;
+    if (!confirm("¿Borrar registro?")) return;
     await supabase.from('mantenimientos').delete().eq('id', id);
     cargarMantenimientos(unidadSeleccionada.id);
   };
 
-  // <-- NUEVAS FUNCIONES PARA ALERTAS
-  const registrarAlerta = async (e) => {
-    e.preventDefault();
-    if (!nuevaAlerta.kilometraje_meta || !nuevaAlerta.mensaje) return;
-    setLoading(true);
-    const { error } = await supabase.from('alertas_mantenimiento').insert([{ 
-      usuario_id: empresaId, unidad_id: unidadSeleccionada.id, 
-      kilometraje_meta: parseFloat(nuevaAlerta.kilometraje_meta), 
-      mensaje: nuevaAlerta.mensaje 
-    }]);
-    if (error) alert("Error al crear alerta: " + error.message);
-    else { 
-      setNuevaAlerta({ kilometraje_meta: '', mensaje: '' }); 
-      cargarAlertas(unidadSeleccionada.id); 
-    }
-    setLoading(false);
-  };
-
   const eliminarAlerta = async (id) => {
-    if (!confirm("¿Eliminar esta alerta del sistema?")) return;
+    if (!confirm("¿Eliminar alerta?")) return;
     await supabase.from('alertas_mantenimiento').delete().eq('id', id);
     cargarAlertas(unidadSeleccionada.id);
   };
@@ -179,7 +202,6 @@ export default function UnidadesPage() {
     const hoy = new Date();
     const fechaVenc = new Date(fecha + 'T23:59:59');
     const diasRestantes = Math.ceil((fechaVenc - hoy) / (1000 * 60 * 60 * 24));
-
     if (diasRestantes < 0) return { texto: 'Vencido', color: 'text-red-500', bg: 'bg-red-500/10 border-red-500/30' };
     if (diasRestantes <= 30) return { texto: `Vence en ${diasRestantes} días`, color: 'text-orange-400', bg: 'bg-orange-500/10 border-orange-500/30' };
     return { texto: 'Vigente', color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/30' };
@@ -198,19 +220,19 @@ export default function UnidadesPage() {
       if (updateError) throw updateError;
       setFormData({ ...formData, [campo]: fileName });
       obtenerUnidades(sesion.user.id);
-      alert("✅ Guardado en búnker privado.");
+      alert("✅ Documento guardado.");
     } catch (error) { alert("❌ Error: " + error.message); } finally { setLoading(false); }
   };
 
   const verArchivoPrivado = async (path) => {
     if (!path) return;
     const { data, error } = await supabase.storage.from('expedientes').createSignedUrl(path, 60);
-    if (error) alert("Error al generar acceso: " + error.message);
+    if (error) alert("Error de acceso: " + error.message);
     else window.open(data.signedUrl, '_blank');
   };
 
   const borrarDocumentoUnidad = async (campo) => {
-    if (!confirm("¿Seguro que deseas eliminar este documento de la nube?")) return;
+    if (!confirm("¿Eliminar documento?")) return;
     setLoading(true);
     try {
       const filePath = formData[campo];
@@ -342,7 +364,6 @@ export default function UnidadesPage() {
                   <button onClick={cerrarModal} className="text-slate-500 hover:text-white bg-slate-950 p-2 rounded-full"><X size={20} /></button>
                 </div>
 
-                {/* === NAVEGACIÓN DE PESTAÑAS (AHORA SON 4) === */}
                 {unidadSeleccionada && (
                   <div className="flex px-8 border-b border-slate-800 bg-slate-950 shrink-0 overflow-x-auto scrollbar-hide">
                     <button onClick={() => setTabExpediente('tecnica')} className={`py-4 px-5 text-[10px] font-black uppercase tracking-widest transition-all border-b-2 flex items-center gap-2 shrink-0 ${tabExpediente === 'tecnica' ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-500 hover:text-slate-300'}`}>
@@ -351,7 +372,6 @@ export default function UnidadesPage() {
                     <button onClick={() => setTabExpediente('mantenimientos')} className={`py-4 px-5 text-[10px] font-black uppercase tracking-widest transition-all border-b-2 flex items-center gap-2 shrink-0 ${tabExpediente === 'mantenimientos' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-500 hover:text-slate-300'}`}>
                       <Wrench size={14}/> Historial Mtto
                     </button>
-                    {/* NUEVA PESTAÑA DE AVISOS */}
                     <button onClick={() => setTabExpediente('avisos')} className={`py-4 px-5 text-[10px] font-black uppercase tracking-widest transition-all border-b-2 flex items-center gap-2 shrink-0 ${tabExpediente === 'avisos' ? 'border-orange-500 text-orange-400' : 'border-transparent text-slate-500 hover:text-slate-300'}`}>
                       <Bell size={14}/> Avisos (KM)
                     </button>
@@ -363,10 +383,8 @@ export default function UnidadesPage() {
 
                 <div className="p-8 overflow-y-auto bg-slate-900 flex-1 custom-scrollbar">
                   
-                  {/* === TAB 1: FICHA TÉCNICA === */}
                   {tabExpediente === 'tecnica' && (
                     <form onSubmit={guardarUnidad} className="space-y-6 animate-in fade-in">
-                      
                       <div className="p-6 bg-slate-950 rounded-2xl border border-slate-800">
                         <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-4 border-b border-slate-800 pb-2">Identificación Vehicular</p>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -477,14 +495,13 @@ export default function UnidadesPage() {
                             </div>
                             <div className="bg-slate-950 border border-slate-800 p-4 rounded-xl">
                               <p className="text-[9px] text-slate-500 italic leading-relaxed text-center">
-                                Las revisiones de Guardia Nacional requieren que la Tarjeta original o copia certificada viaje en la unidad.
+                                Las revisiones de Guardia Nacional requieren que la Tarjeta viaje en la unidad.
                               </p>
                             </div>
                           </div>
                         </div>
                       </div>
 
-                      {/* Odómetro Base se queda aquí */}
                       <div className="p-6 bg-slate-950 rounded-2xl border border-slate-800 flex items-center justify-between">
                         <div>
                           <p className="text-[10px] font-black text-white uppercase tracking-widest mb-1">Odómetro Base (Calibración)</p>
@@ -507,30 +524,28 @@ export default function UnidadesPage() {
                     </form>
                   )}
 
-                  {/* === TAB 2: HISTORIAL MANTENIMIENTOS === */}
                   {tabExpediente === 'mantenimientos' && unidadSeleccionada && (
                     <div className="space-y-8 animate-in fade-in">
                       <form onSubmit={registrarMantenimiento} className="p-6 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl grid grid-cols-12 gap-3 items-end">
                         <div className="col-span-12 mb-2"><h3 className="text-[10px] font-black text-emerald-500 uppercase tracking-widest flex items-center gap-2"><Wrench size={14}/> Registrar Servicio</h3></div>
                         <div className="col-span-12 md:col-span-3"><label className="text-[9px] text-slate-400 uppercase font-bold block mb-1 ml-1">Fecha</label><input type="date" required className="w-full bg-slate-950 border border-slate-800 p-3.5 rounded-xl text-xs text-white" value={nuevoMantenimiento.fecha} onChange={e => setNuevoMantenimiento({...nuevoMantenimiento, fecha: e.target.value})} /></div>
-                        <div className="col-span-12 md:col-span-3"><label className="text-[9px] text-slate-400 uppercase font-bold block mb-1 ml-1">Tipo de Tarea</label><select className="w-full bg-slate-950 border border-slate-800 p-3.5 rounded-xl text-xs text-white" value={nuevoMantenimiento.tipo} onChange={e => setNuevoMantenimiento({...nuevoMantenimiento, tipo: e.target.value})}><option value="Preventivo">Preventivo (Afinación)</option><option value="Correctivo">Correctivo (Falla)</option></select></div>
+                        <div className="col-span-12 md:col-span-3"><label className="text-[9px] text-slate-400 uppercase font-bold block mb-1 ml-1">Tipo de Tarea</label><select className="w-full bg-slate-950 border border-slate-800 p-3.5 rounded-xl text-xs text-white" value={nuevoMantenimiento.tipo} onChange={e => setNuevoMantenimiento({...nuevoMantenimiento, tipo: e.target.value})}><option value="Preventivo">Preventivo</option><option value="Correctivo">Correctivo</option></select></div>
                         <div className="col-span-12 md:col-span-4"><label className="text-[9px] text-slate-400 uppercase font-bold block mb-1 ml-1">Descripción del Taller</label><input required placeholder="Ej. Cambio de balatas" className="w-full bg-slate-950 border border-slate-800 p-3.5 rounded-xl text-xs text-white" value={nuevoMantenimiento.descripcion} onChange={e => setNuevoMantenimiento({...nuevoMantenimiento, descripcion: e.target.value})} /></div>
                         <div className="col-span-12 md:col-span-2"><label className="text-[9px] text-slate-400 uppercase font-bold block mb-1 ml-1">Costo ($)</label><input required type="number" placeholder="0.00" className="w-full bg-slate-950 border border-slate-800 p-3.5 rounded-xl text-xs text-white text-center font-mono" value={nuevoMantenimiento.costo} onChange={e => setNuevoMantenimiento({...nuevoMantenimiento, costo: e.target.value})} /></div>
                         <div className="col-span-12 mt-2"><button type="submit" disabled={loading} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors shadow-lg">Guardar Registro</button></div>
                       </form>
-
                       <div className="bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden">
                         <table className="w-full text-left text-xs">
-                          <thead className="bg-slate-900 border-b border-slate-800 text-slate-500"><tr><th className="p-4 font-black uppercase tracking-widest">Fecha</th><th className="p-4 font-black uppercase tracking-widest">Tipo</th><th className="p-4 font-black uppercase tracking-widest">Descripción Técnica</th><th className="p-4 font-black uppercase tracking-widest text-right">Inversión</th><th className="p-4 font-black uppercase tracking-widest text-right">Borrar</th></tr></thead>
+                          <thead className="bg-slate-900 border-b border-slate-800 text-slate-500"><tr><th className="p-4 font-black uppercase tracking-widest">Fecha</th><th className="p-4 font-black uppercase tracking-widest">Tipo</th><th className="p-4 font-black uppercase tracking-widest">Descripción</th><th className="p-4 font-black uppercase tracking-widest text-right">Costo</th><th className="p-4 font-black uppercase tracking-widest text-right">Borrar</th></tr></thead>
                           <tbody className="divide-y divide-slate-800">
-                            {mantenimientos.length === 0 && (<tr><td colSpan="5" className="p-8 text-center text-slate-500 italic">No hay registros de mantenimiento.</td></tr>)}
+                            {mantenimientos.length === 0 && (<tr><td colSpan="5" className="p-8 text-center text-slate-500 italic">No hay registros.</td></tr>)}
                             {mantenimientos.map(m => (
                               <tr key={m.id} className="hover:bg-slate-900/50 transition-colors">
                                 <td className="p-4 text-slate-300 font-mono">{m.fecha}</td>
                                 <td className="p-4"><span className={`px-2 py-1 rounded-md text-[9px] font-black uppercase tracking-widest ${m.tipo === 'Preventivo' ? 'bg-blue-500/10 text-blue-400' : 'bg-red-500/10 text-red-400'}`}>{m.tipo}</span></td>
-                                <td className="p-4 text-slate-300 max-w-xs truncate" title={m.descripcion}>{m.descripcion}</td>
-                                <td className="p-4 text-right font-mono text-emerald-400 font-medium">${Number(m.costo).toLocaleString('es-MX', {minimumFractionDigits: 2})}</td>
-                                <td className="p-4 text-right"><button onClick={() => eliminarMantenimiento(m.id)} className="p-1.5 text-slate-600 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"><Trash2 size={14}/></button></td>
+                                <td className="p-4 text-slate-300 max-w-xs truncate">{m.descripcion}</td>
+                                <td className="p-4 text-right font-mono text-emerald-400 font-medium">${Number(m.costo).toLocaleString()}</td>
+                                <td className="p-4 text-right"><button onClick={() => eliminarMantenimiento(m.id)} className="p-1.5 text-slate-600 hover:text-red-500 rounded-lg transition-colors"><Trash2 size={14}/></button></td>
                               </tr>
                             ))}
                           </tbody>
@@ -539,160 +554,84 @@ export default function UnidadesPage() {
                     </div>
                   )}
 
-                  {/* === TAB 3: AVISOS Y ALERTAS (NUEVO) === */}
                   {tabExpediente === 'avisos' && unidadSeleccionada && (
                     <div className="space-y-8 animate-in fade-in">
-                      
                       <div className="flex justify-between items-center bg-slate-950 p-6 rounded-2xl border border-slate-800">
                         <div>
-                          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Odómetro Actual del Vehículo</p>
+                          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Odómetro Actual</p>
                           <p className="text-2xl font-mono font-black text-white">{Number(unidadSeleccionada.kilometraje_actual || 0).toLocaleString()} <span className="text-sm text-slate-500">KM</span></p>
                         </div>
                         <AlertTriangle size={32} className="text-orange-500/20" />
                       </div>
-
                       <form onSubmit={registrarAlerta} className="p-6 bg-orange-500/10 border border-orange-500/20 rounded-2xl grid grid-cols-12 gap-4 items-end">
-                        <div className="col-span-12 mb-2"><h3 className="text-[10px] font-black text-orange-400 uppercase tracking-widest flex items-center gap-2"><Bell size={14}/> Programar Nueva Alerta</h3></div>
-                        
-                        <div className="col-span-12 md:col-span-4">
-                          <label className="text-[9px] text-slate-400 uppercase font-bold block mb-1 ml-1">Avisar al llegar a (KM Meta)</label>
-                          <div className="relative">
-                            <input type="number" required placeholder="Ej. 120000" className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white font-mono focus:border-orange-500 outline-none" value={nuevaAlerta.kilometraje_meta} onChange={e => setNuevaAlerta({...nuevaAlerta, kilometraje_meta: e.target.value})} />
-                            <span className="absolute right-4 top-4 text-[10px] text-slate-600 font-black">KM</span>
-                          </div>
-                        </div>
-                        
-                        <div className="col-span-12 md:col-span-6">
-                          <label className="text-[9px] text-slate-400 uppercase font-bold block mb-1 ml-1">Mensaje de la Alerta</label>
-                          <input required placeholder="Ej. Revisión y cambio de aceite de diferencial" className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white focus:border-orange-500 outline-none" value={nuevaAlerta.mensaje} onChange={e => setNuevaAlerta({...nuevaAlerta, mensaje: e.target.value})} />
-                        </div>
-                        
-                        <div className="col-span-12 md:col-span-2">
-                          <button type="submit" disabled={loading} className="w-full bg-orange-600 hover:bg-orange-500 text-white py-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors shadow-lg shadow-orange-900/20">Añadir</button>
-                        </div>
+                        <div className="col-span-12 mb-2"><h3 className="text-[10px] font-black text-orange-400 uppercase tracking-widest flex items-center gap-2"><Bell size={14}/> Nueva Alerta</h3></div>
+                        <div className="col-span-12 md:col-span-4"><label className="text-[9px] text-slate-400 uppercase font-bold block mb-1 ml-1">Meta (KM)</label><input type="number" required className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white font-mono" value={nuevaAlerta.kilometraje_meta} onChange={e => setNuevaAlerta({...nuevaAlerta, kilometraje_meta: e.target.value})} /></div>
+                        <div className="col-span-12 md:col-span-6"><label className="text-[9px] text-slate-400 uppercase font-bold block mb-1 ml-1">Mensaje</label><input required placeholder="Ej. Cambio Aceite" className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white" value={nuevaAlerta.mensaje} onChange={e => setNuevaAlerta({...nuevaAlerta, mensaje: e.target.value})} /></div>
+                        <div className="col-span-12 md:col-span-2"><button type="submit" disabled={loading} className="w-full bg-orange-600 hover:bg-orange-500 text-white py-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors">Añadir</button></div>
                       </form>
-
                       <div className="bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden">
                         <table className="w-full text-left text-xs">
-                          <thead className="bg-slate-900 border-b border-slate-800 text-slate-500">
-                            <tr>
-                              <th className="p-4 font-black uppercase tracking-widest">Alerta Programada</th>
-                              <th className="p-4 font-black uppercase tracking-widest text-center">Meta (KM)</th>
-                              <th className="p-4 font-black uppercase tracking-widest text-center">Faltan (KM)</th>
-                              <th className="p-4 font-black uppercase tracking-widest text-right">Descartar</th>
-                            </tr>
-                          </thead>
+                          <thead className="bg-slate-900 border-b border-slate-800 text-slate-500"><tr><th className="p-4 font-black uppercase tracking-widest">Aviso</th><th className="p-4 font-black uppercase tracking-widest text-center">Meta (KM)</th><th className="p-4 font-black uppercase tracking-widest text-center">Faltan</th><th className="p-4 font-black uppercase tracking-widest text-right">Ok</th></tr></thead>
                           <tbody className="divide-y divide-slate-800">
-                            {alertas.length === 0 && (<tr><td colSpan="4" className="p-8 text-center text-slate-500 italic">No hay alertas programadas para esta unidad.</td></tr>)}
+                            {alertas.length === 0 && (<tr><td colSpan="4" className="p-8 text-center text-slate-500 italic">Sin alertas.</td></tr>)}
                             {alertas.map(a => {
                               const kmActual = Number(unidadSeleccionada.kilometraje_actual || 0);
                               const kmMeta = Number(a.kilometraje_meta);
                               const kmFaltan = kmMeta - kmActual;
                               const estaVencida = kmFaltan <= 0;
-                              const estaCerca = kmFaltan > 0 && kmFaltan <= 2000; // Avisa 2000km antes
-
                               return (
                                 <tr key={a.id} className="hover:bg-slate-900/50 transition-colors">
-                                  <td className="p-4">
-                                    <div className="flex flex-col gap-1">
-                                      <span className={`font-semibold ${estaVencida ? 'text-red-400' : 'text-slate-200'}`}>{a.mensaje}</span>
-                                      {estaVencida && <span className="text-[9px] font-black bg-red-500/10 text-red-500 px-2 py-0.5 rounded w-max uppercase">Requiere Atención</span>}
-                                      {estaCerca && <span className="text-[9px] font-black bg-orange-500/10 text-orange-500 px-2 py-0.5 rounded w-max uppercase">Próxima</span>}
-                                    </div>
-                                  </td>
+                                  <td className="p-4"><span className={`font-semibold ${estaVencida ? 'text-red-400' : 'text-slate-200'}`}>{a.mensaje}</span></td>
                                   <td className="p-4 text-center text-slate-300 font-mono">{kmMeta.toLocaleString()}</td>
                                   <td className="p-4 text-center font-mono">
-                                    <span className={`px-3 py-1 rounded-full text-[11px] font-bold ${estaVencida ? 'bg-red-500/20 text-red-400' : estaCerca ? 'bg-orange-500/20 text-orange-400' : 'bg-slate-800 text-emerald-400'}`}>
-                                      {estaVencida ? 'Ya rebasado' : kmFaltan.toLocaleString()}
+                                    <span className={`px-3 py-1 rounded-full text-[11px] font-bold ${estaVencida ? 'bg-red-500/20 text-red-400' : 'bg-slate-800 text-emerald-400'}`}>
+                                      {estaVencida ? 'REBASADO' : `${kmFaltan.toLocaleString()} KM`}
                                     </span>
                                   </td>
-                                  <td className="p-4 text-right">
-                                    <button onClick={() => eliminarAlerta(a.id)} className="p-1.5 text-slate-600 hover:text-emerald-500 hover:bg-emerald-500/10 rounded-lg transition-colors" title="Marcar como Hecho / Borrar">
-                                      <CheckCircle size={16}/>
-                                    </button>
-                                  </td>
+                                  <td className="p-4 text-right"><button onClick={() => eliminarAlerta(a.id)} className="p-1.5 text-slate-600 hover:text-emerald-500 transition-colors"><CheckCircle size={16}/></button></td>
                                 </tr>
                               )
                             })}
                           </tbody>
                         </table>
                       </div>
-
                     </div>
                   )}
 
-                  {/* === TAB 4: BÓVEDA DOCUMENTAL === */}
                   {tabExpediente === 'boveda' && unidadSeleccionada && (
                     <div className="space-y-6 animate-in fade-in">
                       <div className="bg-purple-500/5 border border-purple-500/20 p-8 rounded-[2rem] text-center">
                         <UploadCloud className="text-purple-500 mx-auto mb-4" size={40} />
-                        <h4 className="text-white font-black uppercase tracking-widest mb-2">Bóveda Digital del Activo</h4>
-                        <p className="text-[11px] text-slate-400 leading-relaxed max-w-lg mx-auto">
-                          Respaldo en la nube de la documentación oficial de la unidad ECO-{unidadSeleccionada.numero_economico}.
-                        </p>
-                        
+                        <h4 className="text-white font-black uppercase tracking-widest mb-2">Bóveda Digital</h4>
                         <div className="mt-10 grid grid-cols-1 md:grid-cols-2 gap-6 text-left">
-                          
-                          <div className="border border-dashed border-slate-700 bg-slate-950 rounded-2xl p-6 hover:border-purple-500/50 transition-colors flex flex-col justify-between">
-                            <div>
-                              <div className="flex justify-between items-start mb-1">
-                                <p className="text-[11px] font-black text-white uppercase tracking-widest">Póliza de Seguro RC</p>
-                                {formData.doc_poliza && <CheckCircle size={14} className="text-emerald-500" />}
+                          <div className="border border-dashed border-slate-700 bg-slate-950 rounded-2xl p-6 flex flex-col justify-between">
+                            <p className="text-[11px] font-black text-white uppercase tracking-widest mb-4">Póliza de Seguro</p>
+                            {formData.doc_poliza ? (
+                              <div className="flex gap-2">
+                                <button onClick={() => verArchivoPrivado(formData.doc_poliza)} className="flex-1 p-3 rounded-xl bg-purple-500/10 text-purple-400 text-[10px] font-black uppercase">Ver Doc</button>
+                                <button onClick={() => borrarDocumentoUnidad('doc_poliza')} className="px-4 rounded-xl bg-red-500/10 text-red-400"><Trash2 size={14}/></button>
                               </div>
-                              <p className="text-[9px] text-slate-500 uppercase tracking-wider mb-6">Formato PDF o Imagen</p>
-                            </div>
-                            
-                            <div className="space-y-3">
-                              {formData.doc_poliza ? (
-                                <div className="flex gap-2">
-                                  <button onClick={() => verArchivoPrivado(formData.doc_poliza)} className="flex-1 flex items-center justify-center gap-2 p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400 text-[10px] font-black uppercase hover:bg-purple-500 hover:text-white transition-all">
-                                    <FileText size={14}/> Ver Seguro
-                                  </button>
-                                  <button onClick={() => borrarDocumentoUnidad('doc_poliza')} disabled={loading} title="Eliminar Documento" className="px-4 flex items-center justify-center rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500 hover:text-white transition-all">
-                                    <Trash2 size={14}/>
-                                  </button>
-                                </div>
-                              ) : (
-                                <label className="w-full flex items-center justify-center p-3.5 rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 cursor-pointer transition-all">
-                                  <span className="text-[10px] font-black text-white uppercase tracking-widest flex items-center gap-2">
-                                    <UploadCloud size={14} /> Subir Archivo
-                                  </span>
-                                  <input type="file" className="hidden" accept=".pdf, image/*" onChange={(e) => subirDocumentoUnidad(e, 'doc_poliza')} disabled={loading} />
-                                </label>
-                              )}
-                            </div>
+                            ) : (
+                              <label className="w-full flex items-center justify-center p-3.5 rounded-xl border border-slate-800 bg-slate-900 cursor-pointer">
+                                <span className="text-[10px] font-black text-white uppercase"><UploadCloud size={14} className="inline mr-2"/> Subir</span>
+                                <input type="file" className="hidden" accept=".pdf, image/*" onChange={(e) => subirDocumentoUnidad(e, 'doc_poliza')} />
+                              </label>
+                            )}
                           </div>
-
-                          <div className="border border-dashed border-slate-700 bg-slate-950 rounded-2xl p-6 hover:border-purple-500/50 transition-colors flex flex-col justify-between">
-                            <div>
-                              <div className="flex justify-between items-start mb-1">
-                                <p className="text-[11px] font-black text-white uppercase tracking-widest">Tarjeta de Circulación</p>
-                                {formData.doc_tarjeta_circulacion && <CheckCircle size={14} className="text-emerald-500" />}
+                          <div className="border border-dashed border-slate-700 bg-slate-950 rounded-2xl p-6 flex flex-col justify-between">
+                            <p className="text-[11px] font-black text-white uppercase tracking-widest mb-4">Tarjeta Circulación</p>
+                            {formData.doc_tarjeta_circulacion ? (
+                              <div className="flex gap-2">
+                                <button onClick={() => verArchivoPrivado(formData.doc_tarjeta_circulacion)} className="flex-1 p-3 rounded-xl bg-purple-500/10 text-purple-400 text-[10px] font-black uppercase">Ver Doc</button>
+                                <button onClick={() => borrarDocumentoUnidad('doc_tarjeta_circulacion')} className="px-4 rounded-xl bg-red-500/10 text-red-400"><Trash2 size={14}/></button>
                               </div>
-                              <p className="text-[9px] text-slate-500 uppercase tracking-wider mb-6">Formato PDF o Imagen</p>
-                            </div>
-                            
-                            <div className="space-y-3">
-                              {formData.doc_tarjeta_circulacion ? (
-                                <div className="flex gap-2">
-                                  <button onClick={() => verArchivoPrivado(formData.doc_tarjeta_circulacion)} className="flex-1 flex items-center justify-center gap-2 p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400 text-[10px] font-black uppercase hover:bg-purple-500 hover:text-white transition-all">
-                                    <FileText size={14}/> Ver Tarjeta
-                                  </button>
-                                  <button onClick={() => borrarDocumentoUnidad('doc_tarjeta_circulacion')} disabled={loading} title="Eliminar Documento" className="px-4 flex items-center justify-center rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500 hover:text-white transition-all">
-                                    <Trash2 size={14}/>
-                                  </button>
-                                </div>
-                              ) : (
-                                <label className="w-full flex items-center justify-center p-3.5 rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 cursor-pointer transition-all">
-                                  <span className="text-[10px] font-black text-white uppercase tracking-widest flex items-center gap-2">
-                                    <UploadCloud size={14} /> Subir Archivo
-                                  </span>
-                                  <input type="file" className="hidden" accept=".pdf, image/*" onChange={(e) => subirDocumentoUnidad(e, 'doc_tarjeta_circulacion')} disabled={loading} />
-                                </label>
-                              )}
-                            </div>
+                            ) : (
+                              <label className="w-full flex items-center justify-center p-3.5 rounded-xl border border-slate-800 bg-slate-900 cursor-pointer">
+                                <span className="text-[10px] font-black text-white uppercase"><UploadCloud size={14} className="inline mr-2"/> Subir</span>
+                                <input type="file" className="hidden" accept=".pdf, image/*" onChange={(e) => subirDocumentoUnidad(e, 'doc_tarjeta_circulacion')} />
+                              </label>
+                            )}
                           </div>
-
                         </div>
                       </div>
                     </div>

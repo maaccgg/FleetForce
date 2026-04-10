@@ -148,9 +148,9 @@ export default function SATConfigPage() {
 
         if (registros.length === 0) throw new Error(`La pestaña '${activeTab}' está vacía.`);
 
-        // Inyectamos ADN Institucional y estandarizamos datos críticos
+        // CORRECCIÓN 1: Inyectamos empresa_id en lugar de usuario_id
         const payloadMasivo = registros.map(reg => {
-          let limpio = { usuario_id: empresaId, activo: true };
+          let limpio = { empresa_id: empresaId, activo: true };
           for (const key in reg) {
             limpio[key.trim()] = String(reg[key]).trim(); 
           }
@@ -213,9 +213,9 @@ export default function SATConfigPage() {
       setEmpresaId(idInstitucion);
       if (perfilData?.rol) setRolUsuario(perfilData.rol);
 
-      // 2. CARGAR CATÁLOGOS USANDO EL ID DE LA EMPRESA
+      // CORRECCIÓN 2: CARGAR CATÁLOGOS USANDO empresa_id
       if (activeTab === 'fiscal') {
-        const { data } = await supabase.from('perfil_emisor').select('*').eq('usuario_id', idInstitucion).single();
+        const { data } = await supabase.from('perfil_emisor').select('*').eq('empresa_id', idInstitucion).single();
         if (data) {
           setPerfilFiscal({
             ...data,
@@ -227,7 +227,7 @@ export default function SATConfigPage() {
         const { data, error } = await supabase
           .from(activeTab)
           .select('*')
-          .eq('usuario_id', idInstitucion)
+          .eq('empresa_id', idInstitucion)
           .eq('activo', true) 
           .order('created_at');
           
@@ -248,11 +248,12 @@ export default function SATConfigPage() {
     setLoading(true);
     let payload = {};
 
-    if (activeTab === 'operadores') payload = { ...formDataOp, usuario_id: empresaId, rfc: formDataOp.rfc.toUpperCase() };
-    if (activeTab === 'ubicaciones') payload = { ...formDataUb, usuario_id: empresaId, rfc_ubicacion: formDataUb.rfc_ubicacion.toUpperCase() };
-    if (activeTab === 'mercancias') payload = { ...formDataMe, usuario_id: empresaId };
-    if (activeTab === 'remolques') payload = { ...formDataRe, usuario_id: empresaId, placas: formDataRe.placas.toUpperCase() };
-    if (activeTab === 'clientes') payload = { ...formDataCl, usuario_id: empresaId, rfc: formDataCl.rfc.toUpperCase() };
+    // CORRECCIÓN 3: Cambiamos usuario_id por empresa_id para delegar tenencia
+    if (activeTab === 'operadores') payload = { ...formDataOp, empresa_id: empresaId, rfc: formDataOp.rfc.toUpperCase() };
+    if (activeTab === 'ubicaciones') payload = { ...formDataUb, empresa_id: empresaId, rfc_ubicacion: formDataUb.rfc_ubicacion.toUpperCase() };
+    if (activeTab === 'mercancias') payload = { ...formDataMe, empresa_id: empresaId };
+    if (activeTab === 'remolques') payload = { ...formDataRe, empresa_id: empresaId, placas: formDataRe.placas.toUpperCase() };
+    if (activeTab === 'clientes') payload = { ...formDataCl, empresa_id: empresaId, rfc: formDataCl.rfc.toUpperCase() };
 
     const { error } = editandoId 
       ? await supabase.from(activeTab).update(payload).eq('id', editandoId) 
@@ -265,9 +266,10 @@ export default function SATConfigPage() {
 
   const guardarPerfilFiscal = async () => {
     setLoading(true);
+    // CORRECCIÓN 4: Asignamos empresa_id para que el perfil fiscal sea único por compañía
     const { error } = await supabase.from('perfil_emisor').upsert({ 
         ...perfilFiscal, 
-        usuario_id: sesion.user.id, 
+        empresa_id: empresaId, 
         rfc: perfilFiscal.rfc.toUpperCase(), 
         updated_at: new Date().toISOString()
     });
@@ -304,9 +306,10 @@ export default function SATConfigPage() {
     try {
       await new Promise(resolve => setTimeout(resolve, 2000)); 
       
+      // CORRECCIÓN 5: empresa_id para sellos compartidos en equipo
       const { error } = await supabase.from('perfil_emisor').upsert({ 
           ...perfilFiscal, 
-          usuario_id: sesion.user.id, 
+          empresa_id: empresaId, 
           tiene_csd: true, 
           updated_at: new Date().toISOString()
       });

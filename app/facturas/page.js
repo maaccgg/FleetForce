@@ -10,6 +10,7 @@ import Sidebar from '@/components/sidebar';
 import TarjetaDato from '@/components/tarjetaDato';
 import { generarFacturaPDF } from '@/utils/PdfFactura'; 
 import { z } from 'zod';
+import * as XLSX from 'xlsx';
 
 // === ESCUDO DE VALIDACIÓN ZOD ===
 const facturaSchema = z.object({
@@ -18,7 +19,7 @@ const facturaSchema = z.object({
   metodo_pago: z.enum(["PUE", "PPD"], { errorMap: () => ({ message: "Método de pago inválido detectado." }) }),
   forma_pago: z.string().min(2, "La forma de pago es obligatoria."),
   fecha_viaje: z.string().min(10, "La fecha de emisión es obligatoria o tiene un formato incorrecto."),
-  referencia: z.string().optional() // <--- NUEVO: Permitimos la referencia opcional
+  referencia: z.string().optional()
 });
 
 function FacturasContenido() {
@@ -42,11 +43,13 @@ function FacturasContenido() {
   const [empresaId, setEmpresaId] = useState(null);
   const [rolUsuario, setRolUsuario] = useState('miembro');
 
+  const esAdmin = rolUsuario === 'administrador' || rolUsuario === 'admin';
+
   const [formData, setFormData] = useState({ 
     cliente_id: '', monto_total: '', folio_fiscal: '', 
     ruta: '', fecha_viaje: new Date().toISOString().split('T')[0],
     fecha_vencimiento: '', forma_pago: '99', metodo_pago: 'PPD',
-    referencia: '' // <--- NUEVO: Estado inicial
+    referencia: ''
   });
 
   useEffect(() => {
@@ -103,14 +106,14 @@ function FacturasContenido() {
   }
 
   async function obtenerPerfilEmisor(idMaestro) {
-    const { data } = await supabase.from('perfil_emisor').select('*').eq('usuario_id', idMaestro).single();
+    const { data } = await supabase.from('perfil_emisor').select('*').eq('empresa_id', idMaestro).single();
     if (data) setPerfilEmisor(data);
   }
 
   async function obtenerClientes(idMaestro) {
     const { data } = await supabase.from('clientes')
       .select('*')
-      .eq('usuario_id', idMaestro)
+      .eq('empresa_id', idMaestro)
       .eq('activo', true)
       .order('nombre');
     setClientes(data || []);
@@ -121,7 +124,7 @@ function FacturasContenido() {
     let query = supabase
       .from('facturas')
       .select('*') 
-      .eq('usuario_id', idMaestro)
+      .eq('empresa_id', idMaestro)
       .order('folio_interno', { ascending: false })
       .order('created_at', { ascending: false });
 
@@ -145,32 +148,27 @@ function FacturasContenido() {
     setLoading(false);
   }
 
-const descargarXML = async (facturapi_id, cliente_nombre) => {
+  const descargarXML = async (facturapi_id, cliente_nombre) => {
     if (!facturapi_id) return alert("Esta factura aún no está timbrada en el SAT.");
     
     try {
-      // 1. OBTENEMOS EL GAFETE DEL USUARIO
       const { data: { session } } = await supabase.auth.getSession();
-      
       if (!session) throw new Error("Sesión expirada o inválida. Vuelve a iniciar sesión.");
 
-      // 2. DISPARAMOS AL TÚNEL PIDIENDO EL XML (MÉTODO GET, SIN PAYLOAD)
       const response = await fetch('/api/facturapi', { 
-        method: 'POST', // Sigue siendo POST hacia nuestro propio túnel
+        method: 'POST', 
         headers: { 
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session.access_token}` 
         }, 
         body: JSON.stringify({
-          endpoint: `invoices/${facturapi_id}/xml`, // <--- RUTA CORRECTA PARA DESCARGAR
-          method: 'GET' // <--- MÉTODO CORRECTO PARA CONSULTA
-          // Eliminamos el payload por completo
+          endpoint: `invoices/${facturapi_id}/xml`,
+          method: 'GET'
         }) 
       });
 
       if (!response.ok) throw new Error("No se pudo obtener el XML del SAT");
 
-      // 3. RECIBIMOS EL ARCHIVO (BLOB) DIRECTAMENTE, SIN PARSEAR JSON
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -186,7 +184,7 @@ const descargarXML = async (facturapi_id, cliente_nombre) => {
     }
   };
 
-const timbrarFactura = async (factura) => {
+  const timbrarFactura = async (factura) => {
     const clienteData = clientes.find(c => c.nombre === factura.cliente);
     if (!clienteData) {
       alert("⚠️ Error: No se encontró la información fiscal del cliente. Verifica tu catálogo de clientes.");
@@ -211,23 +209,20 @@ const timbrarFactura = async (factura) => {
 
     setLoading(true);
     try {
-
-      // 1. OBTENEMOS EL GAFETE DEL USUARIO
       const { data: { session } } = await supabase.auth.getSession();
       
       if (!session) throw new Error("Sesión expirada o inválida. Vuelve a iniciar sesión.");
 
-      // 2. DISPARAMOS AL TÚNEL CON LA CABECERA DE AUTORIZACIÓN
       const response = await fetch('/api/facturapi', { 
         method: 'POST', 
         headers: { 
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}` // <--- EL GAFETE
+          'Authorization': `Bearer ${session.access_token}`
         }, 
         body: JSON.stringify({
           endpoint: 'invoices',
           method: 'POST',
-          payload: invoiceData // Asegúrate de que tu variable se llame así o cámbiala por la tuya
+          payload: invoiceData 
         }) 
       });
       const res = await response.json();
@@ -257,7 +252,7 @@ const timbrarFactura = async (factura) => {
     } catch (err) { alert("Error de red:\n" + err.message); } finally { setLoading(false); }
   };
 
-const registrarFactura = async (e) => {
+  const registrarFactura = async (e) => {
     e.preventDefault();
     if (!formData.cliente_id || !formData.monto_total) return;
     setLoading(true);
@@ -265,41 +260,35 @@ const registrarFactura = async (e) => {
     try {
       const clienteSeleccionado = clientes.find(c => c.id === formData.cliente_id);
 
-      // 1. Preparamos los datos crudos (lo que el usuario escribió)
       const datosCrudos = {
         cliente: clienteSeleccionado?.nombre || "",
         monto_total: parseFloat(formData.monto_total),
         metodo_pago: formData.metodo_pago,
         forma_pago: formData.forma_pago,
         fecha_viaje: formData.fecha_viaje,
-        referencia: formData.referencia, // <--- NUEVO
+        referencia: formData.referencia, 
       };
 
-      // 2. PASAMOS POR EL DETECTOR DE METALES (SAFE PARSE)
-      // Esto no rompe la app, solo nos devuelve un reporte de inspección
       const validacion = facturaSchema.safeParse(datosCrudos);
 
       if (!validacion.success) {
         setLoading(false);
-        // Mostramos el primer error que Zod haya encontrado
         const mensajeError = validacion.error.issues[0]?.message || "🛑 Revisa los datos ingresados.";
         return alert(mensajeError);
       }
 
-      // 3. Si Zod aprueba (success: true), insertamos en Supabase con los datos ultra-limpios
-const { error } = await supabase.from('facturas').insert([{ 
-    cliente: validacion.data.cliente,
-    monto_total: validacion.data.monto_total, 
-    folio_fiscal: formData.folio_fiscal,
-    ruta: formData.ruta,
-    fecha_viaje: validacion.data.fecha_viaje,
-    fecha_vencimiento: formData.fecha_vencimiento,
-    forma_pago: validacion.data.forma_pago,
-    metodo_pago: validacion.data.metodo_pago,
-    estatus_pago: 'Pendiente',
-    referencia: validacion.data.referencia
-    // Ya NO enviamos empresa_id ni usuario_id aquí, Supabase lo hará solo.
-}]);
+      const { error } = await supabase.from('facturas').insert([{ 
+          cliente: validacion.data.cliente,
+          monto_total: validacion.data.monto_total, 
+          folio_fiscal: formData.folio_fiscal,
+          ruta: formData.ruta,
+          fecha_viaje: validacion.data.fecha_viaje,
+          fecha_vencimiento: formData.fecha_vencimiento,
+          forma_pago: validacion.data.forma_pago,
+          metodo_pago: validacion.data.metodo_pago,
+          estatus_pago: 'Pendiente',
+          referencia: validacion.data.referencia
+      }]);
       if (error) throw error;
       
       setFormData({ cliente_id: '', monto_total: '', folio_fiscal: '', ruta: 'Ingreso Extraordinario', fecha_viaje: new Date().toISOString().split('T')[0], fecha_vencimiento: '', forma_pago: '99', metodo_pago: 'PPD', referencia:'' });
@@ -326,6 +315,29 @@ const { error } = await supabase.from('facturas').insert([{
     if (!confirm("¿Eliminar registro manual?")) return;
     await supabase.from('facturas').delete().eq('id', id);
     obtenerDatos(empresaId);
+  };
+
+  // Función exportar Excel
+  const exportarExcelFacturas = () => {
+    const datosParaExcel = historial.map(f => ({
+      Folio_Interno: f.folio_interno ? `F-${String(f.folio_interno).padStart(4, '0')}` : 'F-S/N',
+      Folio_Viaje: f.viaje_id && f.folio_viaje ? `V-${String(f.folio_viaje).padStart(4, '0')}` : 'N/A',
+      Fecha_Emision: f.fecha_viaje,
+      Fecha_Vencimiento: f.fecha_vencimiento || 'S/V',
+      Estatus_Pago: f.estatus_pago,
+      Cliente: f.cliente,
+      Concepto: f.ruta || '',
+      Referencia: f.referencia || '',
+      Monto_Total: f.monto_total,
+      Metodo_Pago: f.metodo_pago,
+      Forma_Pago: f.forma_pago,
+      UUID_SAT: f.folio_fiscal || 'Sin Timbrar'
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(datosParaExcel);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Facturas");
+    XLSX.writeFile(wb, `Reporte_Facturas_FleetForce_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
   if (!sesion) return <div className="min-h-screen bg-slate-950"></div>;
@@ -359,43 +371,67 @@ const { error } = await supabase.from('facturas').insert([{
             </div>
 
             <div className="flex items-center gap-3">
-              <div className="relative shrink-0">
+              {/* BOTÓN DE PERIODO ESTANDARIZADO (CON EXCEL) */}
+              <div className="relative shrink-0 z-20">
                 <button 
                   onClick={() => {
-                    if (viajeIdHighlight) window.location.href = '/facturas'; 
+                    if (viajeIdHighlight) window.location.href = '/facturas';
                     else setMostrarFiltro(!mostrarFiltro);
                   }}
-                  className={`flex items-center gap-3 border px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all
-                    ${filtroActivo ? 'bg-emerald-600/10 border-emerald-500/30 text-emerald-400' : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'}
+                  className={`flex items-center gap-3 border px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-sm
+                    ${filtroActivo ? 'bg-emerald-600/10 border-emerald-500/30 text-emerald-400' : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white hover:border-slate-700'}
                     ${viajeIdHighlight ? 'border-orange-500/50 text-orange-400 hover:bg-orange-500/10' : ''}`}
                 >
                   <Calendar size={14} className={filtroActivo ? 'text-emerald-500' : (viajeIdHighlight ? 'text-orange-500' : 'text-slate-500')} />
-                  {viajeIdHighlight ? 'Ver Todo el Historial' : (filtroActivo ? 'Filtro Activo' : 'Periodo')}
-                  {!viajeIdHighlight && <ChevronDown size={14} className={`transition-transform duration-200 ${mostrarFiltro ? 'rotate-180' : ''}`} />}
+                  <span>{viajeIdHighlight ? 'Ver Todo el Historial' : (filtroActivo ? 'Filtros Activos' : 'Filtros y Reportes')}</span>
+                  {!viajeIdHighlight && <ChevronDown size={14} className={`transition-transform duration-300 ${mostrarFiltro ? 'rotate-180' : ''}`} />}
                 </button>
 
                 {mostrarFiltro && !viajeIdHighlight && (
-                  <div className="absolute right-0 mt-2 w-72 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden z-20 p-5">
-                    <div className="mb-4">
-                      <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 block">Desde (Fecha Viaje)</label>
-                      <input type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)}
-                        className="w-full bg-slate-950 border border-slate-800 text-white text-sm rounded-xl p-3 outline-none focus:border-emerald-500" />
+                  <div className="absolute right-0 mt-2 w-80 bg-slate-900 border border-slate-800 rounded-[1.5rem] shadow-2xl overflow-hidden p-6 animate-in fade-in zoom-in-95 duration-200">
+                    
+                    <p className="text-[10px] font-black text-white uppercase tracking-[0.2em] mb-5 border-b border-slate-800 pb-3 text-center">
+                      Parámetros de Búsqueda
+                    </p>
+
+                    <div className="grid grid-cols-2 gap-3 mb-6">
+                      <div>
+                        <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1">Desde</label>
+                        <input type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)}
+                          className="w-full bg-slate-950 border border-slate-800 text-white text-[11px] rounded-xl p-3 outline-none focus:border-emerald-500 transition-colors" />
+                      </div>
+                      <div>
+                        <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1">Hasta</label>
+                        <input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)}
+                          className="w-full bg-slate-950 border border-slate-800 text-white text-[11px] rounded-xl p-3 outline-none focus:border-emerald-500 transition-colors" />
+                      </div>
                     </div>
-                    <div className="mb-6">
-                      <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 block">Hasta (Fecha Viaje)</label>
-                      <input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)}
-                        className="w-full bg-slate-950 border border-slate-800 text-white text-sm rounded-xl p-3 outline-none focus:border-emerald-500" />
-                    </div>
-                    <button onClick={() => { setFiltroActivo(true); setMostrarFiltro(false); }}
-                      className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[10px] uppercase tracking-widest py-3 rounded-xl transition-colors mb-2">
-                      Aplicar Filtro
-                    </button>
-                    {filtroActivo && (
-                      <button onClick={() => { setFiltroActivo(false); setFechaInicio(''); setFechaFin(''); setMostrarFiltro(false); }}
-                        className="w-full bg-slate-800 hover:bg-slate-700 text-slate-400 font-black text-[10px] uppercase tracking-widest py-2.5 rounded-xl transition-colors">
-                        Limpiar
+
+                    <div className="space-y-2 pt-4 border-t border-slate-800">
+                      <button onClick={() => { setFiltroActivo(true); setMostrarFiltro(false); }}
+                        className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[10px] uppercase tracking-widest py-3.5 rounded-xl transition-all shadow-lg shadow-emerald-900/20">
+                        Aplicar Filtros
                       </button>
-                    )}
+                      
+                      <div className="grid grid-cols-2 gap-2 mt-2">
+                        {filtroActivo && (
+                          <button onClick={() => { setFiltroActivo(false); setFechaInicio(''); setFechaFin(''); setMostrarFiltro(false); }}
+                            className="bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white font-black text-[9px] uppercase tracking-widest py-2.5 rounded-xl transition-colors">
+                            Limpiar
+                          </button>
+                        )}
+                        
+                        {esAdmin && (
+                          <button 
+                            onClick={exportarExcelFacturas} 
+                            className={`${filtroActivo ? '' : 'col-span-2'} flex items-center justify-center gap-2 bg-emerald-600/10 hover:bg-emerald-600 text-emerald-500 hover:text-white border border-emerald-500/20 font-black text-[9px] uppercase tracking-widest py-2.5 rounded-xl transition-colors`}
+                          >
+                            <FileText size={12} /> Excel
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
                   </div>
                 )}
               </div>
@@ -406,7 +442,7 @@ const { error } = await supabase.from('facturas').insert([{
             </div>
           </header>
 
-          {rolUsuario === 'administrador' && (
+          {esAdmin && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12 animate-in fade-in">
               <TarjetaDato 
                 titulo="Ingreso Cobrado" 
@@ -423,14 +459,14 @@ const { error } = await supabase.from('facturas').insert([{
 
           <div className="bg-slate-900 border border-slate-800 rounded-4xl overflow-hidden shadow-2xl">
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse text-[13px]">
+              <table className="w-full text-left border-collapse text-[13px] min-w-[1000px]">
                 <thead>
                   <tr className="bg-slate-950/50 border-b border-slate-800 text-slate-400 text-[12px] font-semibold uppercase tracking-wider">
                     <th className="p-4 pl-8 font-normal w-12">Pago</th>
                     <th className="p-4 font-normal">Folio y Origen</th>
-                    <th className="p-4 font-normal">Cliente Receptor</th>
-                    <th className="p-4 font-normal">Concepto</th>
-                    <th className="p-4 font-normal">Vencimiento</th>
+                    <th className="p-4 font-normal min-w-[200px]">Cliente Receptor</th>
+                    <th className="p-4 font-normal min-w-[200px]">Concepto</th>
+                    <th className="p-4 font-normal w-32">Vencimiento</th>
                     <th className="p-4 font-normal">Monto Total</th>
                     <th className="p-4 pr-8 text-right font-normal">Acciones</th>
                   </tr>
@@ -480,9 +516,8 @@ const { error } = await supabase.from('facturas').insert([{
                           </div>
                         </td>
 
-<td className="p-4 align-middle max-w-[200px]">
+                        <td className="p-4 align-middle max-w-[200px]">
                           <span className="text-slate-300 text-[12px] truncate block" title={item.ruta}>{item.ruta || '---'}</span>
-                          {/* NUEVO: Mostramos la referencia debajo del concepto si existe */}
                           {item.referencia && (
                             <span className="text-emerald-500/80 text-[10px] uppercase font-bold tracking-widest truncate block mt-1" title={item.referencia}>
                               REF: {item.referencia}
@@ -510,7 +545,7 @@ const { error } = await supabase.from('facturas').insert([{
                         </td>
 
                         <td className="p-4 pr-8 align-middle">
-                          <div className="flex items-center justify-end gap-1.5 opacity-20 group-hover:opacity-100 transition-opacity">
+                          <div className="flex items-center justify-end gap-1.5 opacity-30 group-hover:opacity-100 transition-opacity">
                             
                             {sinTimbrar ? (
                               <button onClick={() => timbrarFactura(item)} title="Timbrar Factura" className="px-3 py-1.5 bg-blue-600/10 text-blue-500 hover:bg-blue-600 hover:text-white border border-blue-500/20 rounded-lg uppercase tracking-widest text-[10px] flex items-center gap-1.5 transition-colors">
@@ -572,12 +607,12 @@ const { error } = await supabase.from('facturas').insert([{
                         value={formData.monto_total} onChange={e => setFormData({...formData, monto_total: e.target.value})} placeholder="0.00" />
                     </div>
                     <div>
-                      <label className="text-[12px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1">Concepto / Referencia</label>
+                      <label className="text-[12px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1">Concepto</label>
                       <input className="w-full bg-slate-950 border border-slate-800 p-4 rounded-2xl text-sm text-white outline-none focus:border-emerald-500" 
                         value={formData.ruta} onChange={e => setFormData({...formData, ruta: e.target.value})} placeholder="Ej. Flete Extra" />
                     </div>
                   </div>
-{/* NUEVO CAMPO: Referencia del Cliente */}
+
                   <div className="md:col-span-2">
                      <label className="text-[12px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1">Referencia del Cliente (Opcional)</label>
                      <input className="w-full bg-slate-950 border border-slate-800 p-4 rounded-2xl text-sm text-white outline-none focus:border-emerald-500" 
