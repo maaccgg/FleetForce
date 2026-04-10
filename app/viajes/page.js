@@ -13,7 +13,7 @@ import * as XLSX from 'xlsx';
 // === ESCUDO DE VALIDACIÓN ZOD PARA VIAJES ===
 const viajeSchema = z.object({
   distancia_km: z.number().positive("🛑 La distancia en KM debe ser estrictamente mayor a 0."),
-  monto_flete: z.number().nonnegative("🛑 El monto del flete no puede ser negativo."), // <-- Cambio táctico
+  monto_flete: z.number().nonnegative("🛑 El monto del flete no puede ser negativo."),
   fecha_salida: z.string().min(10, "🛑 La fecha de salida es obligatoria.")
 });
 
@@ -41,14 +41,14 @@ export default function ViajesPage() {
   const [empresaId, setEmpresaId] = useState(null);
   const [rolUsuario, setRolUsuario] = useState('miembro');
 
-  const puedeVerAdmin = rolUsuario === 'admin' || rolUsuario === 'administrador'; // Ajusta el texto según el rol exacto de tu BD
+  const puedeVerAdmin = rolUsuario === 'admin' || rolUsuario === 'administrador'; 
 
   const formInicial = {
     unidad_id: '', remolque_id: '', operador_id: '', origen_id: '', destino_id: '', 
     cliente_id: '', monto_flete: '', distancia_km: '', referencia: '', fecha_salida: new Date().toISOString().split('T')[0],
     mercancias_detalle: [{ mercancia_id: '', cantidad: 1, peso_kg: '', valor: '', moneda: 'MXN' }],
     gasto_monto: '', gasto_descripcion: 'Viáticos de Ruta',
-    tag_casetas: '', tarjeta_gasolina: '' // <-- Agregado aquí
+    tag_casetas: '', tarjeta_gasolina: ''
   };
 
   const [formData, setFormData] = useState(formInicial);
@@ -112,7 +112,7 @@ export default function ViajesPage() {
     setViajes(data || []);
   }
 
- const generarIdCCP = () => `CCC${crypto.randomUUID().substring(3).toUpperCase()}`;
+  const generarIdCCP = () => `CCC${crypto.randomUUID().substring(3).toUpperCase()}`;
 
   const agregarFilaMercancia = () => { setFormData({ ...formData, mercancias_detalle: [...formData.mercancias_detalle, { mercancia_id: '', cantidad: 1, peso_kg: '', valor: '', moneda: 'MXN' }] }); };
   const actualizarFilaMercancia = (index, campo, valor) => { const nuevasMercancias = [...formData.mercancias_detalle]; nuevasMercancias[index][campo] = valor; setFormData({ ...formData, mercancias_detalle: nuevasMercancias }); };
@@ -135,16 +135,15 @@ export default function ViajesPage() {
      unidad_id: viaje.unidad_id || '', remolque_id: viaje.remolque_id || '', operador_id: viaje.operador_id || '', origen_id: viaje.origen_id || '', destino_id: viaje.destino_id || '',
      cliente_id: viaje.cliente_id || '', monto_flete: viaje.monto_flete || '', distancia_km: viaje.distancia_km || '', referencia: viaje.referencia || '',
      fecha_salida: viaje.fecha_salida || new Date().toISOString().split('T')[0], mercancias_detalle: detalle,
-     tag_casetas: viaje.tag_casetas || '', tarjeta_gasolina: viaje.tarjeta_gasolina || '' // <-- Agregado aquí
+     tag_casetas: viaje.tag_casetas || '', tarjeta_gasolina: viaje.tarjeta_gasolina || ''
       });
     setMostrarModal(true);
   };
 
-const eliminarViaje = async (id) => {
+  const eliminarViaje = async (id) => {
     if (!confirm("¿Deseas eliminar este viaje permanentemente?")) return;
     setLoading(true);
     try {
-      // ORDEN ESTRATÉGICO: Borramos primero los hijos (gastos y facturas) y al final el padre (viaje)
       await supabase.from('mantenimientos').delete().eq('viaje_id', id); 
       await supabase.from('facturas').delete().eq('viaje_id', id);
       await supabase.from('viajes').delete().eq('id', id);
@@ -153,13 +152,12 @@ const eliminarViaje = async (id) => {
     finally { setLoading(false); }
   };
 
-const cancelarViaje = async (viaje) => {
+  const cancelarViaje = async (viaje) => {
     if (!confirm("¿Estás seguro de CANCELAR esta Carta Porte? Se enviará la petición al SAT y la factura quedará invalidada.")) return;
     setLoading(true);
     try {
       const { data: factura } = await supabase.from('facturas').select('facturapi_id').eq('viaje_id', viaje.id).single();
       if (factura && factura.facturapi_id) {
-        // ATAQUE MITIGADO: Llamada al túnel seguro
         await fetch('/api/facturapi', { 
           method: 'POST', 
           headers: { 'Content-Type': 'application/json' },
@@ -176,14 +174,12 @@ const cancelarViaje = async (viaje) => {
     } catch (error) { alert("Error al cancelar: " + error.message); } finally { setLoading(false); }
   };
 
-
-const descargarXML = async (viajeId) => {
+  const descargarXML = async (viajeId) => {
     setLoading(true);
     try {
       const { data: factura } = await supabase.from('facturas').select('facturapi_id').eq('viaje_id', viajeId).single();
       if (!factura || !factura.facturapi_id) throw new Error("No se encontró el registro de esta factura en el sistema.");
 
-      // ATAQUE MITIGADO: Llamada al túnel seguro
       const response = await fetch('/api/facturapi', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -206,8 +202,6 @@ const descargarXML = async (viajeId) => {
     } catch (err) { alert(err.message); } finally { setLoading(false); }
   };
 
-
-
   const traducirErrorFacturapi = (err) => {
     const errorStr = typeof err === 'object' ? JSON.stringify(err).toLowerCase() : String(err).toLowerCase();
     
@@ -228,7 +222,7 @@ const descargarXML = async (viajeId) => {
     return `❌ Error técnico:\n${typeof err === 'object' ? JSON.stringify(err) : err}`;
   };
 
-const timbrarCartaPorte = async (viaje) => {
+  const timbrarCartaPorte = async (viaje) => {
     try {
       if (!viaje.clientes?.rfc) throw new Error("Falta el RFC del Cliente. Revisa el catálogo de Clientes.");
       if (!viaje.clientes?.codigo_postal) throw new Error("Falta el Código Postal del Cliente.");
@@ -331,7 +325,6 @@ const timbrarCartaPorte = async (viaje) => {
 
       setLoading(true);
       
-      // ELIMINADA LA LLAVE DE FACTURAPI
       const subtotal = Number((Number(viaje.monto_flete || 0) / 1.16).toFixed(2));
       const descripcionServicio = viaje.referencia ? `Servicio de Flete Nacional - Ref: ${viaje.referencia}` : "Servicio de Flete Nacional";
 
@@ -345,7 +338,7 @@ const timbrarCartaPorte = async (viaje) => {
           quantity: 1, product: { description: descripcionServicio, product_key: "78101802", price: subtotal, taxes: [{ type: "IVA", rate: 0.16 }, { type: "IVA", rate: 0.04, withholding: true }] } 
         }],
         payment_form: "99", payment_method: "PPD", use: viaje.clientes.uso_cfdi || "G03",
-complements: [{
+        complements: [{
           type: "carta_porte",
           data: {
             IdCCP: viaje.id_ccp?.startsWith('CCC') ? viaje.id_ccp : `CCC${(viaje.id_ccp || crypto.randomUUID().toUpperCase()).substring(3)}`,
@@ -353,7 +346,8 @@ complements: [{
             TotalDistRec: parseFloat(viaje.distancia_km || 150),
             Ubicaciones: [
               { TipoUbicacion: "Origen", RFCRemitenteDestinatario: rfcOrigen, FechaHoraSalidaLlegada: fechaHoraCFDI, Domicilio: { Calle: viaje.origen.nombre_lugar, Estado: viaje.origen.estado, Pais: "MEX", CodigoPostal: viaje.origen.codigo_postal } },
-{ TipoUbicacion: "Destino", DistanciaRecorrida: parseFloat(viaje.distancia_km || 150), RFCRemitenteDestinatario: rfcDestino, FechaHoraSalidaLlegada: fechaHoraLlegadaCFDI, Domicilio: { Calle: viaje.destino.nombre_lugar, Estado: viaje.destino.estado, Pais: "MEX", CodigoPostal: viaje.destino.codigo_postal } }            ],
+              { TipoUbicacion: "Destino", DistanciaRecorrida: parseFloat(viaje.distancia_km || 150), RFCRemitenteDestinatario: rfcDestino, FechaHoraSalidaLlegada: fechaHoraLlegadaCFDI, Domicilio: { Calle: viaje.destino.nombre_lugar, Estado: viaje.destino.estado, Pais: "MEX", CodigoPostal: viaje.destino.codigo_postal } }            
+            ],
             Mercancias: {
               PesoBrutoTotal: pesoTotalTimbre, UnidadPeso: "KGM", NumTotalMercancias: arregloMercanciasFacturapi.length, Mercancia: arregloMercanciasFacturapi, 
               Autotransporte: autotransporteObj
@@ -363,8 +357,7 @@ complements: [{
         }]
       };
 
-      // ATAQUE MITIGADO: Llamada al túnel seguro
-const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session } } = await supabase.auth.getSession();
       
       if (!session) throw new Error("Sesión expirada o inválida. Vuelve a iniciar sesión.");
 
@@ -372,7 +365,7 @@ const { data: { session } } = await supabase.auth.getSession();
         method: 'POST', 
         headers: { 
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}` // <--- AQUÍ LE ENSEÑAMOS EL GAFETE AL TÚNEL
+          'Authorization': `Bearer ${session.access_token}`
         }, 
         body: JSON.stringify({
           endpoint: 'invoices',
@@ -439,12 +432,10 @@ const { data: { session } } = await supabase.auth.getSession();
         referencia: formData.referencia || '', 
         fecha_salida: formData.fecha_salida, 
         usuario_id: empresaId,
-        tag_casetas: formData.tag_casetas, // <-- Agregado aquí
-        tarjeta_gasolina: formData.tarjeta_gasolina // <-- Agregado aquí
+        tag_casetas: formData.tag_casetas,
+        tarjeta_gasolina: formData.tarjeta_gasolina
       };
 
-
-// === PASAMOS POR EL DETECTOR DE METALES (ZOD) ===
       const validacion = viajeSchema.safeParse({
         distancia_km: payloadComun.distancia_km,
         monto_flete: payloadComun.monto_flete,
@@ -457,9 +448,7 @@ const { data: { session } } = await supabase.auth.getSession();
         return alert(mensajeError);
       }
 
-
       if (editandoId) {
-        // === MODO EDICIÓN ===
         await supabase.from('viajes').update(payloadComun).eq('id', editandoId);
         
         if (formData.monto_flete > 0 && formData.cliente_id) {
@@ -469,7 +458,6 @@ const { data: { session } } = await supabase.auth.getSession();
           if (facExistente) {
             await supabase.from('facturas').update({ cliente: clienteObj.nombre, monto_total: parseFloat(formData.monto_flete), fecha_viaje: formData.fecha_salida, fecha_vencimiento: fechaVenc.toISOString().split('T')[0], ruta: `Flete CCP${formData.referencia ? ' - Ref: '+formData.referencia : ''}` }).eq('id', facExistente.id);
           } else {
-            // Se inserta factura nueva omitiendo folio_interno
             const { data: viajeEditado } = await supabase.from('viajes').select('folio_interno').eq('id', editandoId).single();
             await supabase.from('facturas').insert([{ 
               usuario_id: empresaId, viaje_id: editandoId, folio_viaje: viajeEditado?.folio_interno,
@@ -477,18 +465,15 @@ const { data: { session } } = await supabase.auth.getSession();
             }]);
           }
         }
-     } else {
-        // === MODO CREACIÓN (NUEVO VIAJE) ===
+      } else {
         const nuevoIdCCP = generarIdCCP();
 
-        // 1. Se inserta viaje omitiendo folio_interno. La BD genera el folio y lo devuelve
         const { data: nuevoViaje, error: errorViaje } = await supabase.from('viajes')
           .insert([{ ...payloadComun, id_ccp: nuevoIdCCP, estatus: 'Borrador' }])
           .select().single();
           
         if (errorViaje) throw errorViaje;
 
-        // 2. CREACIÓN AUTOMÁTICA DE FACTURA (Si aplica)
         if (formData.monto_flete > 0 && formData.cliente_id) {
           const fechaVenc = new Date(formData.fecha_salida); fechaVenc.setDate(fechaVenc.getDate() + (clienteObj?.dias_credito || 0));
           
@@ -498,9 +483,7 @@ const { data: { session } } = await supabase.auth.getSession();
           }]);
         }
 
-        // 3. CREACIÓN AUTOMÁTICA DEL GASTO BASE DEL VIAJE (NUEVO)
-        // Crea una "carpeta" de gasto inicial en 0 para que el despachador añada después los viáticos
-if (formData.gasto_monto && parseFloat(formData.gasto_monto) > 0) {
+        if (formData.gasto_monto && parseFloat(formData.gasto_monto) > 0) {
           await supabase.from('mantenimientos').insert([{
             usuario_id: empresaId,
             unidad_id: formData.unidad_id,
@@ -595,31 +578,28 @@ if (formData.gasto_monto && parseFloat(formData.gasto_monto) > 0) {
     XLSX.writeFile(wb, `Reporte_Viajes_FleetForce_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
-
   return (
     <div className="flex bg-slate-950 min-h-screen text-slate-200">
       <Sidebar />
       <main className="flex-1 p-8 overflow-y-auto">
         <div className="max-w-7xl mx-auto">
           
-<header className="mb-8 flex justify-between items-end">
-  {/* HIJO 1: El texto (se queda a la izquierda) */}
-  <div>
-    <h1 className="text-3xl font-black tracking-tighter uppercase italic text-white leading-none">
-      Logística <span className="text-blue-500">Operativa</span>
-    </h1>
-    <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mt-2">
-      Histórico de Despachos y Carta Porte
-    </p>
-  </div>
+        <header className="mb-8 flex justify-between items-end">
+          <div>
+            <h1 className="text-3xl font-black tracking-tighter uppercase italic text-white leading-none">
+              Logística <span className="text-blue-500">Operativa</span>
+            </h1>
+            <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mt-2">
+              Histórico de Despachos y Carta Porte
+            </p>
+          </div>
 
-  {/* HIJO 2: El contenedor de botones (se van juntos a la derecha) */}
-  <div className="flex gap-3 items-center">
-    <button 
-      onClick={() => setMostrarModal(true)} className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-2xl font-black uppercase text-[10px] flex items-center gap-2 shadow-lg shadow-blue-900/20 transition-all"><PlusCircle size={16} /> Crear Despacho
-    </button>
-  </div>
-</header>
+          <div className="flex gap-3 items-center">
+            <button 
+              onClick={() => setMostrarModal(true)} className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-2xl font-black uppercase text-[10px] flex items-center gap-2 shadow-lg shadow-blue-900/20 transition-all"><PlusCircle size={16} /> Crear Despacho
+            </button>
+          </div>
+        </header>
 
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8 border-b border-slate-800 pb-4">
             
@@ -633,179 +613,189 @@ if (formData.gasto_monto && parseFloat(formData.gasto_monto) > 0) {
               ))}
             </div>
 
-<div className="relative shrink-0">
-  <button 
-    onClick={() => setMostrarFiltro(!mostrarFiltro)}
-    className={`flex items-center gap-3 border px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all
-      ${filtroActivo ? 'bg-blue-600/10 border-blue-500/30 text-blue-400' : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'}`}
-  >
-    <Calendar size={14} className={filtroActivo ? 'text-blue-500' : 'text-slate-500'} />
-    {filtroActivo ? 'Filtro Activo' : 'Periodo'}
-    <ChevronDown size={14} className={`transition-transform duration-200 ${mostrarFiltro ? 'rotate-180' : ''}`} />
-  </button>
+        <div className="relative shrink-0">
+          <button 
+            onClick={() => setMostrarFiltro(!mostrarFiltro)}
+            className={`flex items-center gap-3 border px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all
+              ${filtroActivo ? 'bg-blue-600/10 border-blue-500/30 text-blue-400' : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'}`}
+          >
+            <Calendar size={14} className={filtroActivo ? 'text-blue-500' : 'text-slate-500'} />
+            {filtroActivo ? 'Filtro Activo' : 'Periodo'}
+            <ChevronDown size={14} className={`transition-transform duration-200 ${mostrarFiltro ? 'rotate-180' : ''}`} />
+          </button>
 
-  {mostrarFiltro && (
-    <div className="absolute right-0 mt-2 w-80 bg-slate-900 border border-slate-800 rounded-[1.5rem] shadow-2xl overflow-hidden z-20 p-6 animate-in fade-in zoom-in-95 duration-200">
-      
-      {/* Título del Menú */}
-      <p className="text-[10px] font-black text-white uppercase tracking-[0.2em] mb-5 border-b border-slate-800 pb-3">
-        Filtros de Búsqueda
-      </p>
+          {mostrarFiltro && (
+            <div className="absolute right-0 mt-2 w-80 bg-slate-900 border border-slate-800 rounded-[1.5rem] shadow-2xl overflow-hidden z-20 p-6 animate-in fade-in zoom-in-95 duration-200">
+              
+              <p className="text-[10px] font-black text-white uppercase tracking-[0.2em] mb-5 border-b border-slate-800 pb-3">
+                Filtros de Búsqueda
+              </p>
 
-      {/* SECCIÓN: TIEMPO (Dos columnas para simetría) */}
-      <div className="grid grid-cols-2 gap-3 mb-4">
-        <div>
-          <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1">Desde</label>
-          <input type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)}
-            className="w-full bg-slate-950 border border-slate-800 text-white text-[11px] rounded-xl p-3 outline-none focus:border-blue-500 transition-colors" />
-        </div>
-        <div>
-          <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1">Hasta</label>
-          <input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)}
-            className="w-full bg-slate-950 border border-slate-800 text-white text-[11px] rounded-xl p-3 outline-none focus:border-blue-500 transition-colors" />
-        </div>
-      </div>
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                <div>
+                  <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1">Desde</label>
+                  <input type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 text-white text-[11px] rounded-xl p-3 outline-none focus:border-blue-500 transition-colors" />
+                </div>
+                <div>
+                  <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1">Hasta</label>
+                  <input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 text-white text-[11px] rounded-xl p-3 outline-none focus:border-blue-500 transition-colors" />
+                </div>
+              </div>
 
-      {/* SECCIÓN: RUTA (Campos completos) */}
-      <div className="space-y-4 mb-6">
-        <div>
-          <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1">Origen de Ruta</label>
-          <select value={filtroOrigen} onChange={(e) => setFiltroOrigen(e.target.value)} 
-            className="w-full bg-slate-950 border border-slate-800 text-white text-xs rounded-xl p-3 outline-none focus:border-blue-500 appearance-none">
-            <option value="">Todos los Orígenes</option>
-            {catalogos.ubicaciones.map(ub => <option key={ub.id} value={ub.id}>{ub.nombre_lugar}</option>)}
-          </select>
-        </div>
+              <div className="space-y-4 mb-6">
+                <div>
+                  <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1">Origen de Ruta</label>
+                  <select value={filtroOrigen} onChange={(e) => setFiltroOrigen(e.target.value)} 
+                    className="w-full bg-slate-950 border border-slate-800 text-white text-xs rounded-xl p-3 outline-none focus:border-blue-500 appearance-none">
+                    <option value="">Todos los Orígenes</option>
+                    {catalogos.ubicaciones.map(ub => <option key={ub.id} value={ub.id}>{ub.nombre_lugar}</option>)}
+                  </select>
+                </div>
 
-        <div>
-          <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1">Destino de Ruta</label>
-          <select value={filtroDestino} onChange={(e) => setFiltroDestino(e.target.value)} 
-            className="w-full bg-slate-950 border border-slate-800 text-white text-xs rounded-xl p-3 outline-none focus:border-blue-500 appearance-none">
-            <option value="">Todos los Destinos</option>
-            {catalogos.ubicaciones.map(ub => <option key={ub.id} value={ub.id}>{ub.nombre_lugar}</option>)}
-          </select>
-        </div>
-      </div>
+                <div>
+                  <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1">Destino de Ruta</label>
+                  <select value={filtroDestino} onChange={(e) => setFiltroDestino(e.target.value)} 
+                    className="w-full bg-slate-950 border border-slate-800 text-white text-xs rounded-xl p-3 outline-none focus:border-blue-500 appearance-none">
+                    <option value="">Todos los Destinos</option>
+                    {catalogos.ubicaciones.map(ub => <option key={ub.id} value={ub.id}>{ub.nombre_lugar}</option>)}
+                  </select>
+                </div>
+              </div>
 
-      {/* ACCIONES */}
-      <div className="space-y-2 pt-4 border-t border-slate-800">
-        <button onClick={() => { setFiltroActivo(true); setMostrarFiltro(false); }}
-          className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black text-[10px] uppercase tracking-widest py-3.5 rounded-xl transition-all shadow-lg shadow-blue-900/20">
-          Aplicar Filtros
-        </button>
-        
-        <div className="grid grid-cols-2 gap-2">
-          {filtroActivo && (
-            <button onClick={() => { setFiltroActivo(false); setFechaInicio(''); setFechaFin(''); setFiltroOrigen(''); setFiltroDestino(''); setMostrarFiltro(false); }}
-              className="bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white font-black text-[9px] uppercase tracking-widest py-2.5 rounded-xl transition-colors">
-              Limpiar
-            </button>
+              <div className="space-y-2 pt-4 border-t border-slate-800">
+                <button onClick={() => { setFiltroActivo(true); setMostrarFiltro(false); }}
+                  className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black text-[10px] uppercase tracking-widest py-3.5 rounded-xl transition-all shadow-lg shadow-blue-900/20">
+                  Aplicar Filtros
+                </button>
+                
+                <div className="grid grid-cols-2 gap-2">
+                  {filtroActivo && (
+                    <button onClick={() => { setFiltroActivo(false); setFechaInicio(''); setFechaFin(''); setFiltroOrigen(''); setFiltroDestino(''); setMostrarFiltro(false); }}
+                      className="bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white font-black text-[9px] uppercase tracking-widest py-2.5 rounded-xl transition-colors">
+                      Limpiar
+                    </button>
+                  )}
+                  
+                  {puedeVerAdmin && (
+                    <button 
+                      onClick={exportarExcelViajes} 
+                      className={`${filtroActivo ? '' : 'col-span-2'} flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white font-black text-[9px] uppercase tracking-widest py-2.5 rounded-xl transition-colors`}
+                    >
+                      <FileText size={12} /> Excel
+                    </button>
+                  )}
+                </div>
+              </div>
+
+            </div>
           )}
-          
-          {puedeVerAdmin && (
-            <button 
-              onClick={exportarExcelViajes} 
-              className={`${filtroActivo ? '' : 'col-span-2'} flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white font-black text-[9px] uppercase tracking-widest py-2.5 rounded-xl transition-colors`}
-            >
-              <FileText size={12} /> Excel
-            </button>
-          )}
         </div>
-      </div>
-
-    </div>
-  )}
-</div>
 
           </div>
 
-          <div className="bg-slate-900 border border-slate-800 rounded-[2rem] overflow-hidden shadow-2xl">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse text-[13px]">
+          {/* ========================================================= */}
+          {/* TABLA OPTIMIZADA FORMATO DATA-GRID */}
+          {/* ========================================================= */}
+          <div className="bg-slate-900 border border-slate-800 rounded-[2rem] mb-12 flex flex-col shadow-2xl overflow-hidden">
+            <div className="overflow-x-auto custom-scrollbar pb-2">
+              <table className="w-full text-left border-collapse min-w-[1200px]">
                 <thead>
-                  <tr className="bg-slate-950/50 border-b border-slate-800 text-slate-400 text-[13px] font-semibold uppercase tracking-wider">
-                    <th className="p-4 pl-8 font-normal">Folio</th>
-                    <th className="p-4 font-normal">Cliente / Referencia</th>
-                    <th className="p-4 font-normal">Ruta Operativa</th>
-                    <th className="p-4 font-normal">Unidad y Remolque</th>
-                    <th className="p-4 font-normal">Carga</th>
-                    <th className="p-4 pr-8 text-right font-normal">Acciones</th>
+                  <tr className="bg-slate-950/50 border-b border-slate-800 text-slate-400 text-[11px] font-black uppercase tracking-widest whitespace-nowrap">
+                    <th className="p-5 pl-8 w-32">Folio & Estatus</th>
+                    <th className="p-5 w-48">Cliente / Referencia</th>
+                    <th className="p-5 min-w-[220px]">Ruta Operativa</th>
+                    <th className="p-5 min-w-[200px]">Asignación</th>
+                    <th className="p-5 w-32">Detalle Carga</th>
+                    <th className="p-5 pr-8 w-40 text-center">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/50">
                   {viajesFiltrados.map((v) => (
-                    <tr key={v.id} className={`hover:bg-slate-800/30 transition-colors group ${v.estatus === 'Cancelado' ? 'opacity-50 grayscale' : ''}`}>
+                    <tr key={v.id} className={`hover:bg-slate-800/40 transition-colors group ${v.estatus === 'Cancelado' ? 'opacity-50 grayscale' : ''}`}>
                       
-                      <td className="p-4 pl-8 align-middle">
+                      {/* 1. FOLIO & ESTATUS */}
+                      <td className="p-4 pl-8 whitespace-nowrap align-middle">
                         <div className="flex flex-col items-start gap-1">
-                          <span className="text-[14px] text-white font-mono font-medium">#V-{String(v.folio_interno).padStart(4, '0')}</span>
+                          <span className="text-[14px] text-white font-mono font-medium">V-{String(v.folio_interno).padStart(4, '0')}</span>
                           <span className={`inline-flex px-2 py-0.5 rounded border uppercase tracking-widest text-[9px] items-center gap-1 ${getBadgeColor(v.estatus)}`}>
                             {v.estatus}
                           </span>
-                          <span className="text-[11px] text-slate-500 mt-0.5">{v.fecha_salida?.slice(0, 10)}</span>
+                          <span className="text-[11px] text-slate-500 mt-0.5 font-medium">{v.fecha_salida?.slice(0, 10)}</span>
                         </div>
                       </td>
 
-                      <td className="p-4 align-middle">
-                        <div className="flex flex-col gap-0.5">
-                          <span className="text-white truncate max-w-[180px]" title={v.clientes?.nombre}>{v.clientes?.nombre || 'Sin Cliente'}</span>
+                      {/* 2. CLIENTE / REF */}
+                      <td className="p-4 whitespace-nowrap align-middle">
+                        <div className="flex flex-col gap-1.5 items-start">
+                          <span className="text-white text-sm font-semibold truncate max-w-[200px]" title={v.clientes?.nombre}>
+                            {v.clientes?.nombre || 'Sin Cliente'}
+                          </span>
                           {v.referencia ? (
-                             <span className="text-blue-400 text-[11px] font-mono mt-1 px-2 py-0.5 bg-blue-900/20 rounded inline-block w-fit">PO: {v.referencia}</span>
+                            <span className="text-blue-400 text-[10px] font-mono font-black uppercase tracking-widest px-2 py-0.5 bg-blue-500/10 border border-blue-500/20 rounded">
+                              PO: {v.referencia}
+                            </span>
                           ) : (
-                             v.clientes?.rfc && <span className="text-slate-500 text-[11px] font-mono">RFC: {v.clientes.rfc}</span>
+                            v.clientes?.rfc && <span className="text-slate-500 text-[10px] font-mono tracking-widest">RFC: {v.clientes.rfc}</span>
                           )}
                         </div>
                       </td>
 
-                      <td className="p-4 align-middle max-w-[220px]">
-                        <div className="flex flex-col gap-1.5">
-                          <div className="flex items-center gap-2 text-white truncate" title={v.origen?.nombre_lugar}>
-                            <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0"/> <span className="truncate">{v.origen?.nombre_lugar || 'Sin Origen'}</span>
+                      {/* 3. RUTA OPERATIVA */}
+                      <td className="p-4 whitespace-nowrap align-middle">
+                        <div className="flex flex-col gap-2">
+                          <div className="flex items-center gap-2 text-slate-200 text-xs">
+                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)] shrink-0"/> 
+                            <span className="truncate max-w-[220px]" title={v.origen?.nombre_lugar}>{v.origen?.nombre_lugar || 'Sin Origen'}</span>
                           </div>
-                          <div className="flex items-center gap-2 text-white truncate" title={v.destino?.nombre_lugar}>
-                            <div className="w-1.5 h-1.5 rounded-full bg-purple-500 shrink-0"/> <span className="truncate">{v.destino?.nombre_lugar || 'Sin Destino'}</span>
+                          <div className="flex items-center gap-2 text-slate-200 text-xs">
+                            <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)] shrink-0"/> 
+                            <span className="truncate max-w-[220px]" title={v.destino?.nombre_lugar}>{v.destino?.nombre_lugar || 'Sin Destino'}</span>
                           </div>
                         </div>
                       </td>
 
-                      <td className="p-4 align-middle">
-                        <div className="flex flex-col gap-0.5">
-                          <span className="text-white uppercase truncate max-w-[180px]" title={v.operadores?.nombre_completo}>{v.operadores?.nombre_completo || 'Sin Operador'}</span>
-                          <span className="text-slate-500 font-mono flex items-center gap-1.5 text-[11px]">
-                            <Truck size={10} className="text-slate-600"/> 
-                            {v.unidades?.numero_economico || 'N/A'} {v.remolques ? `+ Caja ${v.remolques.placas}` : ''}
+                      {/* 4. ASIGNACIÓN */}
+                      <td className="p-4 whitespace-nowrap align-middle">
+                        <div className="flex flex-col gap-1 items-start">
+                          <span className="text-white text-xs font-semibold uppercase truncate max-w-[200px]" title={v.operadores?.nombre_completo}>
+                            {v.operadores?.nombre_completo || 'Sin Operador'}
+                          </span>
+                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-300 font-mono text-[10px]">
+                            <Truck size={10} className="text-blue-400"/> 
+                            {v.unidades?.numero_economico || 'N/A'} {v.remolques ? `+ ${v.remolques.placas}` : ''}
                           </span>
                         </div>
                       </td>
 
-                      <td className="p-4 align-middle">
-                        <div className="flex flex-col gap-0.5">
-                          <span className="text-slate-300">{v.peso_total_kg} KG</span>
-                          <span className="text-slate-500 uppercase text-[11px]">{v.mercancias_detalle ? v.mercancias_detalle.length : 1} Productos</span>
+                      {/* 5. DETALLE CARGA */}
+                      <td className="p-4 whitespace-nowrap align-middle">
+                        <div className="flex flex-col items-start gap-1">
+                          <span className="text-[13px] text-white font-mono font-medium">{v.peso_total_kg} KG</span>
                         </div>
                       </td>
 
-                      <td className="p-4 pr-8 align-middle">
-                        <div className="flex items-center justify-end gap-1.5 opacity-20 group-hover:opacity-100 transition-opacity">
+                      {/* 6. ACCIONES */}
+                      <td className="p-4 pr-8 whitespace-nowrap text-center align-middle">
+                        <div className="flex items-center justify-end gap-1.5 opacity-30 group-hover:opacity-100 transition-opacity">
                           
-                      {v.estatus === 'Borrador' && (
-                        <>
-                          <button onClick={() => eliminarViaje(v.id)} title="Eliminar Viaje" className="p-2 text-slate-500 hover:bg-red-500/10 hover:text-red-500 rounded-lg transition-colors"><Trash2 size={16}/></button>
-                          <button onClick={() => editarViaje(v)} title="Editar Viaje" className="p-2 text-slate-400 hover:bg-orange-500/10 hover:text-orange-400 rounded-lg transition-colors mr-2"><Edit2 size={16}/></button> 
-                          {/* NUEVO BOTÓN: Previsualizar Borrador */}
+                          {v.estatus === 'Borrador' && (
+                            <>
+                              <button onClick={() => eliminarViaje(v.id)} title="Eliminar Viaje" className="p-2 text-slate-500 hover:bg-red-500/10 hover:text-red-500 rounded-lg transition-colors"><Trash2 size={16}/></button>
+                              <button onClick={() => editarViaje(v)} title="Editar Viaje" className="p-2 text-slate-400 hover:bg-orange-500/10 hover:text-orange-400 rounded-lg transition-colors mr-2"><Edit2 size={16}/></button> 
 
-                         {puedeVerAdmin && (
-                          <button onClick={() => generarPDFCartaPorte(v, perfilEmisor)} title="Previsualizar PDF (Borrador)" className="p-2 bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white rounded-lg transition-colors mr-2">
-                            <FileText size={16}/>
-                          </button>  )}
-                          {puedeVerAdmin && (
-                          <button onClick={() => timbrarCartaPorte(v)} disabled={loading} className="px-3 py-1.5 bg-blue-600/10 text-blue-500 hover:bg-blue-600 hover:text-white border border-blue-500/20 rounded-lg uppercase tracking-widest text-[10px] flex items-center gap-1.5 transition-colors">
-                            {loading ? <Loader2 size={14} className="animate-spin"/> : <ShieldCheck size={14}/>} Timbrar
-                          </button>  )}
-                           
-                        </>
-                         
-                      )}
+                             {puedeVerAdmin && (
+                              <button onClick={() => generarPDFCartaPorte(v, perfilEmisor)} title="Previsualizar PDF (Borrador)" className="p-2 bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white rounded-lg transition-colors mr-2">
+                                <FileText size={16}/>
+                              </button>  )}
+
+                              {puedeVerAdmin && (
+                              <button onClick={() => timbrarCartaPorte(v)} disabled={loading} className="px-3 py-1.5 bg-blue-600/10 text-blue-500 hover:bg-blue-600 hover:text-white border border-blue-500/20 rounded-lg uppercase tracking-widest text-[10px] flex items-center gap-1.5 transition-colors">
+                                {loading ? <Loader2 size={14} className="animate-spin"/> : <ShieldCheck size={14}/>} Timbrar
+                              </button>  )}
+                            </>
+                          )}
 
                           {v.estatus === 'Emitido (Timbrado)' && (
                             <>
@@ -815,6 +805,7 @@ if (formData.gasto_monto && parseFloat(formData.gasto_monto) > 0) {
                               <button onClick={() => generarPDFCartaPorte(v, perfilEmisor)} title="Descargar Carta Porte" className="p-2 bg-blue-600/10 text-blue-500 hover:bg-blue-600 hover:text-white rounded-lg transition-colors"><FileText size={16}/></button>
                             </>
                           )}
+
                           {v.estatus === 'Cancelado' && (
                             <>
                               <button onClick={() => eliminarViaje(v.id)} title="Eliminar Definitivamente" className="p-2 text-slate-500 hover:bg-red-500/10 hover:text-red-500 rounded-lg transition-colors mr-2"><Trash2 size={16}/></button>
@@ -831,7 +822,7 @@ if (formData.gasto_monto && parseFloat(formData.gasto_monto) > 0) {
                     <tr>
                       <td colSpan="6" className="py-16 text-center">
                         <Navigation size={32} className="mx-auto text-slate-700 mb-3" />
-                        <p className="text-slate-500 uppercase tracking-widest text-sm">No hay viajes en este periodo o categoría</p>
+                        <p className="text-slate-500 uppercase tracking-widest text-sm font-black">No hay despachos en este periodo</p>
                       </td>
                     </tr>
                   )}
@@ -840,22 +831,23 @@ if (formData.gasto_monto && parseFloat(formData.gasto_monto) > 0) {
             </div>
           </div>
 
+          {/* ========================================================= */}
+          {/* MODAL DE REGISTRO */}
+          {/* ========================================================= */}
           {mostrarModal && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
               <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-md" />
-              <div className="relative bg-slate-900 border border-slate-800 w-full max-w-5xl rounded-[2.5rem] p-10 shadow-2xl overflow-y-auto max-h-[90vh]">
+              <div className="relative bg-slate-900 border border-slate-800 w-full max-w-5xl rounded-[2.5rem] p-10 shadow-2xl overflow-y-auto max-h-[90vh] custom-scrollbar">
                 <button onClick={cerrarModal} className="absolute top-8 right-8 text-slate-500 hover:text-white"><X size={24} /></button>
                 <h2 className="text-2xl font-black text-white italic uppercase mb-8">{editandoId ? 'Editar' : 'Programar'} <span className="text-blue-500">Operación</span></h2>
                 
                 <form onSubmit={registrarViaje} className="space-y-6">
                   
-                  {/* SECCIÓN 1: TRACTOR Y REMOLQUE (LÓGICA INTELIGENTE) */}
                   <div className={`grid gap-4 ${esCamionArticulado ? 'grid-cols-3' : 'grid-cols-2'}`}>
                     <select required className="bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white" 
                       value={formData.unidad_id} 
                       onChange={e => {
                         setFormData({...formData, unidad_id: e.target.value});
-                        // Si cambiamos de tracto a rabón, limpiamos el remolque para que no se envíe por error
                         const unidadElegida = catalogos.unidades.find(u => u.id === e.target.value);
                         if (unidadElegida && !unidadElegida.configuracion_vehicular.includes('T') && !unidadElegida.configuracion_vehicular.includes('R')) {
                            setFormData(prev => ({...prev, unidad_id: e.target.value, remolque_id: ''}));
@@ -892,8 +884,8 @@ if (formData.gasto_monto && parseFloat(formData.gasto_monto) > 0) {
 
                   <div className="p-6 border border-blue-500/20 bg-blue-900/10 rounded-2xl space-y-4">
                     <div className="flex justify-between items-center mb-2">
-                      <p className="text-[10px] text-blue-400 uppercase flex items-center gap-2"><Package size={14}/> Detalle de Carga y Seguros</p>
-                      <button type="button" onClick={agregarFilaMercancia} className="text-[9px] bg-blue-600 text-white px-3 py-1.5 rounded-lg uppercase hover:bg-blue-500 transition-colors">+ Agregar Producto</button>
+                      <p className="text-[10px] text-blue-400 uppercase flex items-center gap-2 font-black tracking-widest"><Package size={14}/> Detalle de Carga y Seguros</p>
+                      <button type="button" onClick={agregarFilaMercancia} className="text-[9px] font-black tracking-widest bg-blue-600 text-white px-3 py-1.5 rounded-lg uppercase hover:bg-blue-500 transition-colors">+ Agregar Producto</button>
                     </div>
 
                     {formData.mercancias_detalle.map((item, index) => (
@@ -919,14 +911,13 @@ if (formData.gasto_monto && parseFloat(formData.gasto_monto) > 0) {
                         <button type="button" onClick={() => eliminarFilaMercancia(index)} disabled={formData.mercancias_detalle.length === 1} className="col-span-1 text-slate-500 hover:text-red-500 flex justify-center disabled:opacity-30 transition-colors"><Trash2 size={16}/></button>
                       </div>
                     ))}
-                    <div className="text-right mt-2"><p className="text-[10px] text-slate-400 uppercase">Peso Total: <span className="text-white text-xs">{calcularPesoTotal().toLocaleString('es-MX', {minimumFractionDigits: 2})} KG</span></p></div>
+                    <div className="text-right mt-2"><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Peso Total: <span className="text-white text-xs ml-1">{calcularPesoTotal().toLocaleString('es-MX', {minimumFractionDigits: 2})} KG</span></p></div>
                   </div>
 
-<div className="grid grid-cols-2 gap-4 mb-4">
-  <input type="text" placeholder="TAG de Casetas (Ejemplo: Pase-123)" className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white" value={formData.tag_casetas} onChange={e => setFormData({...formData, tag_casetas: e.target.value})} />
-  <input type="text" placeholder="Tarjeta de Gasolina (Ejemplo: Edenred-456)" className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white" value={formData.tarjeta_gasolina} onChange={e => setFormData({...formData, tarjeta_gasolina: e.target.value})} />
-</div>
-
+                  <div className="grid grid-cols-2 gap-4 mb-4">
+                    <input type="text" placeholder="TAG de Casetas (Ejemplo: Pase-123)" className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white" value={formData.tag_casetas} onChange={e => setFormData({...formData, tag_casetas: e.target.value})} />
+                    <input type="text" placeholder="Tarjeta de Gasolina (Ejemplo: Edenred-456)" className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white" value={formData.tarjeta_gasolina} onChange={e => setFormData({...formData, tarjeta_gasolina: e.target.value})} />
+                  </div>
 
                   <div className="grid grid-cols-3 gap-4">
                     <select required className="col-span-1 bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white" value={formData.cliente_id} onChange={e => setFormData({...formData, cliente_id: e.target.value})}>
@@ -934,14 +925,13 @@ if (formData.gasto_monto && parseFloat(formData.gasto_monto) > 0) {
                       {clientes.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
                     </select>
                     <input type="text" placeholder="Orden de Compra / Referencia (Opcional)" className="col-span-1 bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white" value={formData.referencia} onChange={e => setFormData({...formData, referencia: e.target.value})} />
-{puedeVerAdmin && (
-                    <input type="number" placeholder="Monto Flete ($)" className="col-span-1 bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white" value={formData.monto_flete} onChange={e => setFormData({...formData, monto_flete: e.target.value})} />
-                                        )}
+                    
+                    {puedeVerAdmin && (
+                      <input type="number" placeholder="Monto Flete ($)" className="col-span-1 bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white font-mono" value={formData.monto_flete} onChange={e => setFormData({...formData, monto_flete: e.target.value})} />
+                    )}
                   </div>
-                   
-
                                       
-                  <button type="submit" disabled={loading} className={`w-full py-5 rounded-2xl uppercase text-sm tracking-widest transition-all ${editandoId ? 'bg-orange-500 hover:bg-orange-400' : 'bg-blue-600 hover:bg-blue-500'} text-white`}>
+                  <button type="submit" disabled={loading} className={`w-full py-5 rounded-2xl uppercase font-black text-[11px] tracking-widest shadow-xl transition-all ${editandoId ? 'bg-orange-500 hover:bg-orange-400' : 'bg-blue-600 hover:bg-blue-500'} text-white`}>
                     {loading ? "Procesando..." : (editandoId ? "Guardar Cambios" : "Confirmar Viaje")}
                   </button>
                 </form>
