@@ -248,20 +248,34 @@ export default function ViajesPage() {
       if (!op?.rfc) throw new Error(`El operador ${op?.nombre_completo} NO tiene RFC registrado.`);
       if (!op?.numero_licencia) throw new Error(`El operador ${op?.nombre_completo} NO tiene Número de Licencia.`);
 
-      const arregloMercanciasFacturapi = (viaje.mercancias_detalle || []).map((item, index) => {
+const arregloMercanciasFacturapi = (viaje.mercancias_detalle || []).map((item, index) => {
         if (!item.clave_sat) throw new Error(`Falta la Clave SAT en el producto #${index + 1}`);
         if (!item.descripcion) throw new Error(`Falta la Descripción en el producto #${index + 1}`);
         if (!item.embalaje) throw new Error(`Falta el Embalaje (Clave Unidad) en el producto #${index + 1}`);
         if (!item.peso_kg || parseFloat(item.peso_kg) <= 0) throw new Error(`Falta el Peso (KG) en el producto #${index + 1}`);
 
-        let mercancia = {
-          BienesTransp: item.clave_sat,        
+        // === INICIO DEL BLINDAJE DE LIMPIEZA ===
+        // Forzamos a que sea string, quitamos espacios en los extremos y borramos cualquier cosa que no sea número
+        const claveSatLimpia = String(item.clave_sat).trim().replace(/[^0-9]/g, '');
+
+        if (claveSatLimpia.length !== 8) {
+          throw new Error(`🛑 ERROR SAT: La Clave SAT del producto "${item.descripcion}" ("${item.clave_sat}") está corrupta. Se detectaron ${claveSatLimpia.length} dígitos numéricos válidos en lugar de 8. Revisa el catálogo de mercancías y elimina espacios o letras.`);
+        }
+        // === FIN DEL BLINDAJE ===
+
+let mercancia = {
+          BienesTransp: claveSatLimpia,
           Descripcion: item.descripcion,        
           Cantidad: parseFloat(item.cantidad),  
           ClaveUnidad: item.embalaje,           
-          PesoEnKg: parseFloat(item.peso_kg),
-          MaterialPeligroso: item.material_peligroso ? "Sí" : "No"
+          PesoEnKg: parseFloat(item.peso_kg)
         };
+
+        // Regla SAT CP150: Si no es peligroso, omitimos el campo por completo. 
+        // Si sí es peligroso, lo declaramos explícitamente.
+        if (item.material_peligroso) {
+          mercancia.MaterialPeligroso = "Sí";
+        }
 
         if (item.valor && parseFloat(item.valor) > 0) {
           mercancia.ValorMercancia = parseFloat(item.valor);
@@ -398,7 +412,10 @@ export default function ViajesPage() {
         alert(`🎉 ¡CARTA PORTE TIMBRADA!\nUUID: ${res.uuid}`);
         obtenerViajes(empresaId);
       } else {
-        alert(traducirErrorFacturapi(res));
+        // === BYPASS DE DIAGNÓSTICO ===
+        // Apagamos temporalmente el traductor para ver qué dice exactamente el SAT
+        console.error("ERROR CRUDO FACTURAPI:", res);
+        alert(`ERROR TÉCNICO DEL SAT:\n\n${JSON.stringify(res, null, 2)}`);
       }
     } catch (err) { alert(err.message); } finally { setLoading(false); }
   }; 
