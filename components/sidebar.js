@@ -20,7 +20,9 @@ import {
   Users,
   KeyRound,
   Lock,
-  X
+  X,
+  Eye,      // <--- NUEVO
+  EyeOff    // <--- NUEVO
 } from 'lucide-react';
 
 // === DICCIONARIO DE RUTAS Y PERMISOS ===
@@ -44,6 +46,7 @@ export default function Sidebar() {
   const [nuevaPassword, setNuevaPassword] = useState('');
   const [confirmarPassword, setConfirmarPassword] = useState('');
   const [loadingPassword, setLoadingPassword] = useState(false);
+  const [verPassword, setVerPassword] = useState(false); // <--- NUEVO: Estado para ver/ocultar
 
   useEffect(() => {
     const obtenerRol = async () => {
@@ -64,6 +67,12 @@ export default function Sidebar() {
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     window.location.href = '/'; 
+  };
+
+  // 1. PREGUNTA DE SEGURIDAD ANTES DE ABRIR MODAL
+  const confirmarAperturaPassword = () => {
+    const seguro = window.confirm("¿Estás seguro de que deseas cambiar tu contraseña actual?");
+    if (seguro) setMostrarModalPassword(true);
   };
 
   const cambiarContrasena = async (e) => {
@@ -87,18 +96,17 @@ export default function Sidebar() {
       setMostrarModalPassword(false);
       setNuevaPassword('');
       setConfirmarPassword('');
+      setVerPassword(false); // Resetear vista
     }
     setLoadingPassword(false);
   };
 
-  // === FILTRO MAESTRO DEL MENÚ ===
   const menuPermitido = menuItems.filter(item => item.roles.includes(rolUsuario));
 
   return (
     <>
       <nav className="w-64 h-screen p-6 border-r border-slate-800 bg-slate-950 flex flex-col gap-2 sticky top-0 overflow-y-auto shrink-0 z-40">
         
-        {/* SECCIÓN DEL LOGOTIPO */}
         <div className="mb-8 px-2 flex flex-col items-start select-none">
           <div className="flex items-center gap-2 mb-1">
             <Truck size={28} className="text-emerald-500" strokeWidth={2} />
@@ -117,7 +125,6 @@ export default function Sidebar() {
           </div>
         </div>
 
-        {/* RENDERIZADO DINÁMICO DEL MENÚ */}
         <div className="flex flex-col gap-1 flex-1">
           {menuPermitido.map((item) => {
             const isActive = pathname === item.href;
@@ -143,7 +150,6 @@ export default function Sidebar() {
           })}
         </div>
 
-        {/* SECCIÓN INFERIOR: MANTRA Y CONFIGURACIÓN */}
         <div className="mt-auto pt-6 border-t border-slate-800/50 px-1 space-y-4 pb-2">
           <p className="text-[8px] text-slate-600 font-black uppercase tracking-widest italic leading-relaxed px-2">
             "Version BETA 1.0.1"
@@ -177,7 +183,7 @@ export default function Sidebar() {
                   </>
                 )}
                 
-                <button onClick={() => setMostrarModalPassword(true)} className="w-full flex items-center gap-2 text-slate-400 hover:text-blue-400 hover:bg-blue-600/10 px-3 py-2.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-colors text-left">
+                <button onClick={confirmarAperturaPassword} className="w-full flex items-center gap-2 text-slate-400 hover:text-blue-400 hover:bg-blue-600/10 px-3 py-2.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-colors text-left">
                   <KeyRound size={14} />
                   Cambiar Contraseña
                 </button>
@@ -186,7 +192,6 @@ export default function Sidebar() {
                   <LogOut size={14} />
                   Cerrar Sesión
                 </button>
-                
               </div>
             )}
           </div>
@@ -206,18 +211,33 @@ export default function Sidebar() {
             </h2>
             
             <form onSubmit={cambiarContrasena} className="space-y-4">
-              <div>
+              <div className="relative">
                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1">Nueva Contraseña</label>
-                <input required type="password" placeholder="••••••••" 
-                  className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white focus:border-emerald-500 outline-none transition-all" 
-                  value={nuevaPassword} onChange={e => setNuevaPassword(e.target.value)} />
+                <input 
+                  required 
+                  type={verPassword ? "text" : "password"}  
+                  className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white focus:border-emerald-500 outline-none transition-all pr-12" 
+                  value={nuevaPassword} 
+                  onChange={e => setNuevaPassword(e.target.value)} 
+                />
+                <button 
+                  type="button" 
+                  onClick={() => setVerPassword(!verPassword)}
+                  className="absolute right-4 top-[38px] text-slate-600 hover:text-slate-300 transition-colors"
+                >
+                  {verPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
               </div>
 
               <div>
                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1">Confirmar Contraseña</label>
-                <input required type="password" placeholder="••••••••" 
-                  className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white focus:border-emerald-500 outline-none transition-all" 
-                  value={confirmarPassword} onChange={e => setConfirmarPassword(e.target.value)} />
+                <input 
+                  required 
+                  type={verPassword ? "text" : "password"} 
+                  className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white focus:border-emerald-500 outline-none transition-all pr-12" 
+                  value={confirmarPassword} 
+                  onChange={e => setConfirmarPassword(e.target.value)} 
+                />
               </div>
 
               <button type="submit" disabled={loadingPassword} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-4 rounded-xl font-black uppercase text-[11px] tracking-widest shadow-xl transition-all mt-6 flex justify-center items-center">

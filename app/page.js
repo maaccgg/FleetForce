@@ -327,7 +327,7 @@ export default function Page() {
               <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1">Contraseña</label>
               <div className="relative">
                 <Lock className="absolute left-4 top-4 text-slate-500" size={16} />
-                <input type="password" required placeholder="••••••••"
+                <input type="password" required placeholder= ""
                   className="w-full bg-slate-950 border border-slate-800 pl-12 p-3.5 rounded-2xl text-sm text-white focus:border-blue-500 outline-none transition-all"
                   value={password} onChange={(e) => setPassword(e.target.value)} />
               </div>
