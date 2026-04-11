@@ -3,31 +3,11 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient'; 
-import { useTheme } from 'next-themes'; // <-- NUEVO HOOK
+import { useTheme } from 'next-themes';
 import { 
-  LayoutDashboard, 
-  Wrench, 
-  FileCheck, 
-  Map, 
-  ReceiptText, 
-  Scale, 
-  Truck,
-  LogOut,
-  TrendingUp,
-  Settings,
-  History,
-  ChevronDown,
-  ChevronUp,
-  Users,
-  KeyRound,
-  Lock,
-  X,
-  Eye,      
-  EyeOff,
-  AlertTriangle,
-  Loader2,
-  Sun, // <-- NUEVO ICONO
-  Moon // <-- NUEVO ICONO
+  LayoutDashboard, Wrench, FileCheck, Map, ReceiptText, Scale, Truck, LogOut,
+  TrendingUp, Settings, History, ChevronDown, ChevronUp, Users, KeyRound, Lock, X,
+  Eye, EyeOff, AlertTriangle, Loader2, Sun, Moon, Menu // <-- Añadido Menu
 } from 'lucide-react';
 
 import { useToast } from '@/components/toastprovider';
@@ -36,7 +16,7 @@ const menuItems = [
   { name: 'Inicio', href: '/', icon: LayoutDashboard, roles: ['administrador', 'operaciones', 'facturacion', 'miembro'] },
   { name: 'Viajes', href: '/viajes', icon: FileCheck, roles: ['administrador', 'operaciones', 'miembro'] },
   { name: 'Facturas', href: '/facturas', icon: ReceiptText, roles: ['administrador', 'facturacion'] },
-  { name: 'Gasto operativo', href: '/gastos', icon: TrendingUp, roles: ['administrador',] },
+  { name: 'Gasto operativo', href: '/gastos', icon: TrendingUp, roles: ['administrador'] },
   { name: 'Unidades', href: '/unidades', icon: Truck, roles: ['administrador', 'operaciones', 'facturacion', 'miembro'] },
   { name: 'Info - SAT', href: '/sat', icon: Scale, roles: ['administrador', 'operaciones', 'facturacion', 'miembro'] },
 ];
@@ -44,13 +24,14 @@ const menuItems = [
 export default function Sidebar() {
   const pathname = usePathname();
   const { mostrarAlerta } = useToast();
-  
-  // === ESTADO DEL TEMA ===
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [rolUsuario, setRolUsuario] = useState('miembro'); 
+  
+  // === NUEVO: ESTADO PARA MÓVIL ===
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
 
   const [dialogoConfirmacion, setDialogoConfirmacion] = useState({ visible: false, mensaje: '', accion: null });
   const [mostrarModalPassword, setMostrarModalPassword] = useState(false);
@@ -64,11 +45,7 @@ export default function Sidebar() {
     const obtenerRol = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
-        const { data } = await supabase
-          .from('perfiles')
-          .select('rol')
-          .eq('id', session.user.id)
-          .single();
+        const { data } = await supabase.from('perfiles').select('rol').eq('id', session.user.id).single();
         if (data?.rol) setRolUsuario(data.rol);
       }
     };
@@ -109,7 +86,7 @@ export default function Sidebar() {
     if (error) {
       mostrarAlerta("Error al actualizar: " + error.message, "error");
     } else {
-      mostrarAlerta("Contraseña actualizada con éxito. Tu cuenta está segura.", "exito");
+      mostrarAlerta("Contraseña actualizada con éxito.", "exito");
       setMostrarModalPassword(false);
       setNuevaPassword('');
       setConfirmarPassword('');
@@ -120,17 +97,45 @@ export default function Sidebar() {
 
   const menuPermitido = menuItems.filter(item => item.roles.includes(rolUsuario));
 
-  // Evitar error de hidratación con el tema
   if (!mounted) return <div className="w-64 h-screen border-r border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 shrink-0 sticky top-0"></div>;
 
   return (
     <>
-      {/* EL CONTENEDOR PRINCIPAL:
-        bg-slate-50 (Claro) vs bg-slate-950 (Oscuro)
-        border-slate-200 (Claro) vs border-slate-800 (Oscuro)
-      */}
-      <nav className="w-64 h-screen p-6 border-r border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 flex flex-col gap-2 sticky top-0 overflow-y-auto shrink-0 z-40 transition-colors duration-300">
+      {/* BOTÓN HAMBURGUESA (Solo móvil) */}
+      <button 
+        onClick={() => setIsMobileOpen(true)}
+        className="md:hidden fixed top-4 left-4 z-50 p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-md transition-colors"
+      >
+        <Menu size={24} className="text-slate-600 dark:text-slate-300" />
+      </button>
+
+      {/* FONDO OSCURO AL ABRIR EN MÓVIL */}
+      {isMobileOpen && (
+        <div 
+          className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-40 md:hidden"
+          onClick={() => setIsMobileOpen(false)}
+        />
+      )}
+
+      {/* NAVEGACIÓN (Clases ajustadas para responsividad) */}
+      <nav className={`
+        fixed md:sticky top-0 left-0 z-40
+        w-64 h-screen p-6 
+        border-r border-slate-200 dark:border-slate-800 
+        bg-slate-50 dark:bg-slate-950 
+        flex flex-col gap-2 overflow-y-auto shrink-0 
+        transition-all duration-300
+        ${isMobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
+      `}>
         
+        {/* BOTÓN CERRAR (Solo móvil) */}
+        <button 
+          onClick={() => setIsMobileOpen(false)}
+          className="md:hidden absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-white"
+        >
+          <X size={20} />
+        </button>
+
         <div className="mb-8 px-2 flex flex-col items-start select-none">
           <div className="flex items-center gap-2 mb-1">
             <Truck size={28} className="text-emerald-500" strokeWidth={2} />
@@ -156,6 +161,7 @@ export default function Sidebar() {
               <Link 
                 key={item.name} 
                 href={item.href} 
+                onClick={() => setIsMobileOpen(false)} // Cerrar al hacer click en móvil
                 className={`flex items-center gap-3 p-3 rounded-xl transition-all group ${
                   isActive 
                   ? 'bg-blue-600/10 text-blue-600 dark:text-blue-400 border border-blue-600/20' 
@@ -174,26 +180,22 @@ export default function Sidebar() {
           })}
         </div>
 
-{/* SECCIÓN INFERIOR: CONFIGURACIÓN FLOTANTE */}
         <div className="mt-auto pt-6 border-t border-slate-200 dark:border-slate-800/50 px-1 pb-2">
           <p className="text-[8px] text-slate-400 dark:text-slate-600 font-black uppercase tracking-widest italic leading-relaxed px-2 mb-4">
             "Version BETA 1.0.1"
           </p>
           
-          {/* Contenedor relativo para anclar el menú flotante */}
           <div className="relative">
-            
-            {/* EL MENÚ FLOTANTE (POPOVER) */}
             {isConfigOpen && (
               <div className="absolute bottom-full left-0 mb-3 w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl p-2 flex flex-col gap-1 z-50 animate-in slide-in-from-bottom-2 fade-in duration-200">
                 
                 {rolUsuario === 'administrador' && (
                   <>
-                    <Link href="/historico" className="flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-800 px-3 py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-colors">
+                    <Link href="/historico" onClick={() => setIsMobileOpen(false)} className="flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-800 px-3 py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-colors">
                       <History size={14} />
                       Revisar Históricos
                     </Link>
-                    <Link href="/equipo" className="flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-800 px-3 py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-colors">
+                    <Link href="/equipo" onClick={() => setIsMobileOpen(false)} className="flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-800 px-3 py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-colors">
                       <Users size={14} />
                       Gestionar Equipo
                     </Link>
@@ -201,14 +203,13 @@ export default function Sidebar() {
                   </>
                 )}
                 
-                {/* BOTÓN PARA CAMBIAR TEMA */}
                 <button 
                   onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} 
                   className="w-full flex items-center justify-between text-slate-600 dark:text-slate-400 hover:text-orange-500 dark:hover:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-500/10 px-3 py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-colors text-left group"
                 >
                   <span className="flex items-center gap-2">
-                    {theme === 'dark' ? <Sun size={14} className="group-hover:rotate-90 transition-transform duration-500" /> : <Moon size={14} className="group-hover:-rotate-12 transition-transform duration-500" />}
-                    {theme === 'dark' ? 'Activar Modo Claro' : 'Activar Modo Oscuro'}
+                    {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
+                    {theme === 'dark' ? 'Modo Claro' : 'Modo Oscuro'}
                   </span>
                 </button>
 
@@ -226,7 +227,6 @@ export default function Sidebar() {
               </div>
             )}
 
-            {/* BOTÓN GATILLO */}
             <button 
               onClick={() => setIsConfigOpen(!isConfigOpen)} 
               className={`w-full flex items-center justify-between px-4 py-3.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
@@ -246,16 +246,14 @@ export default function Sidebar() {
         </div>
       </nav>
 
-      {/* ========================================================= */}
-      {/* MODAL DE CONFIRMACIÓN (REFACTORIZADO PARA MODO CLARO) */}
-      {/* ========================================================= */}
+      {/* MODALES DE TU CÓDIGO (Sin cambios de diseño) */}
       {dialogoConfirmacion.visible && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/50 dark:bg-slate-950/90 backdrop-blur-sm" onClick={() => setDialogoConfirmacion({ visible: false, mensaje: '', accion: null })} />
           <div className="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 w-full max-w-sm rounded-[2rem] p-8 shadow-2xl flex flex-col items-center text-center animate-in zoom-in-95 duration-200">
             <div className="w-16 h-16 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mb-6"><AlertTriangle size={32} /></div>
-            <h3 className="text-xl font-black text-slate-800 dark:text-white uppercase tracking-widest mb-2">¿Estás Seguro?</h3>
-            <p className="text-slate-500 dark:text-slate-400 text-sm mb-8">{dialogoConfirmacion.mensaje}</p>
+            <h3 className="text-xl font-black text-slate-800 dark:text-white uppercase tracking-widest mb-2 transition-colors">¿Estás Seguro?</h3>
+            <p className="text-slate-500 dark:text-slate-400 text-sm mb-8 transition-colors">{dialogoConfirmacion.mensaje}</p>
             <div className="flex gap-3 w-full">
               <button onClick={() => setDialogoConfirmacion({ visible: false, mensaje: '', accion: null })} className="flex-1 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">Descartar</button>
               <button onClick={ejecutarConfirmacion} className="flex-1 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest bg-red-600 text-white hover:bg-red-500 transition-colors shadow-lg shadow-red-900/20">Sí, Proceder</button>
@@ -264,50 +262,27 @@ export default function Sidebar() {
         </div>
       )}
 
-      {/* ========================================================= */}
-      {/* MODAL DE CAMBIO DE CONTRASEÑA (REFACTORIZADO) */}
-      {/* ========================================================= */}
       {mostrarModalPassword && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/50 dark:bg-slate-950/90 backdrop-blur-sm" onClick={() => setMostrarModalPassword(false)} />
           <div className="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 w-full max-w-sm rounded-[2rem] p-8 shadow-2xl animate-in zoom-in-95">
             <button onClick={() => setMostrarModalPassword(false)} className="absolute top-6 right-6 text-slate-400 dark:text-slate-500 hover:text-slate-800 dark:hover:text-white"><X size={20} /></button>
-            
             <h2 className="text-xl font-black text-slate-800 dark:text-white italic uppercase mb-6 flex items-center gap-2">
               <Lock className="text-emerald-500" size={20}/> 
               Seguridad de <span className="text-emerald-500">Acceso</span>
             </h2>
-            
             <form onSubmit={cambiarContrasena} className="space-y-4">
               <div className="relative">
                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1">Nueva Contraseña</label>
-                <input 
-                  required 
-                  type={verPassword ? "text" : "password"}  
-                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-800 dark:text-white focus:border-emerald-500 outline-none transition-all pr-12" 
-                  value={nuevaPassword} 
-                  onChange={e => setNuevaPassword(e.target.value)} 
-                />
-                <button 
-                  type="button" 
-                  onClick={() => setVerPassword(!verPassword)}
-                  className="absolute right-4 top-[38px] text-slate-400 dark:text-slate-600 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
-                >
+                <input required type={verPassword ? "text" : "password"} className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-800 dark:text-white focus:border-emerald-500 outline-none transition-all pr-12" value={nuevaPassword} onChange={e => setNuevaPassword(e.target.value)} />
+                <button type="button" onClick={() => setVerPassword(!verPassword)} className="absolute right-4 top-[38px] text-slate-400 dark:text-slate-600 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
                   {verPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
-
               <div>
                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1">Confirmar Contraseña</label>
-                <input 
-                  required 
-                  type={verPassword ? "text" : "password"} 
-                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-800 dark:text-white focus:border-emerald-500 outline-none transition-all pr-12" 
-                  value={confirmarPassword} 
-                  onChange={e => setConfirmarPassword(e.target.value)} 
-                />
+                <input required type={verPassword ? "text" : "password"} className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-800 dark:text-white focus:border-emerald-500 outline-none transition-all pr-12" value={confirmarPassword} onChange={e => setConfirmarPassword(e.target.value)} />
               </div>
-
               <button type="submit" disabled={loadingPassword} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-4 rounded-xl font-black uppercase text-[11px] tracking-widest shadow-xl transition-all mt-6 flex justify-center items-center gap-2">
                 {loadingPassword ? <Loader2 size={16} className="animate-spin" /> : null}
                 {loadingPassword ? "Procesando..." : "Actualizar Credencial"}
