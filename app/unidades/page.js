@@ -3,11 +3,17 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { 
   Truck, PlusCircle, Trash2, X, Bell,
-  ShieldCheck, Calendar, Wrench, AlertTriangle, CheckCircle, FileText, CreditCard, UploadCloud
+  ShieldCheck, Calendar, Wrench, AlertTriangle, CheckCircle, FileText, CreditCard, UploadCloud, Loader2
 } from 'lucide-react';
 import Sidebar from '@/components/sidebar';
 
+// === SISTEMA DE ALERTAS ===
+import { useToast } from '@/components/toastprovider';
+
 export default function UnidadesPage() {
+  const { mostrarAlerta } = useToast();
+  const [dialogoConfirmacion, setDialogoConfirmacion] = useState({ visible: false, mensaje: '', accion: null });
+
   const [sesion, setSesion] = useState(null);
   const [loading, setLoading] = useState(false);
   const [unidades, setUnidades] = useState([]);
@@ -45,12 +51,10 @@ export default function UnidadesPage() {
     setLoading(true);
     const { data: perfilData } = await supabase.from('perfiles').select('empresa_id').eq('id', userId).single();
     
-    // idInstitucion es el ID de la empresa a la que pertenece el usuario
     const idInstitucion = perfilData?.empresa_id || userId; 
     setEmpresaId(idInstitucion);
 
     try {
-      // CORRECCIÓN 1: Ahora consultamos por empresa_id para que todo el equipo vea lo mismo
       const { data, error } = await supabase
         .from('unidades')
         .select('*')
@@ -73,12 +77,13 @@ export default function UnidadesPage() {
     setAlertas(data || []);
   }
 
+  const pedirConfirmacion = (mensaje, accion) => setDialogoConfirmacion({ visible: true, mensaje, accion });
+  const ejecutarConfirmacion = async () => { if (dialogoConfirmacion.accion) await dialogoConfirmacion.accion(); setDialogoConfirmacion({ visible: false, mensaje: '', accion: null }); };
+
   const guardarUnidad = async (e) => {
     e.preventDefault();
     setLoading(true);
     
-    // CORRECCIÓN 2: Eliminamos usuario_id del payload. 
-    // Supabase lo pondrá en automático (Default: auth.uid())
     const payload = { 
       ...formData, 
       placas: formData.placas.toUpperCase(),
@@ -91,20 +96,28 @@ export default function UnidadesPage() {
       ? await supabase.from('unidades').update(payload).eq('id', unidadSeleccionada.id)
       : await supabase.from('unidades').insert([payload]);
 
-    if (error) alert("Error al guardar: " + error.message);
-    else {
-      alert("✅ Datos actualizados correctamente.");
+    if (error) {
+      mostrarAlerta("Error al guardar: " + error.message, "error");
+    } else {
+      mostrarAlerta("Datos actualizados correctamente.", "exito");
       obtenerUnidades(sesion.user.id);
       if (unidadSeleccionada) setUnidadSeleccionada({...unidadSeleccionada, kilometraje_actual: formData.kilometraje_actual});
     }
     setLoading(false);
   };
 
-  const eliminarUnidad = async (id) => {
-    if (!confirm("¿Deseas eliminar esta unidad permanentemente?")) return;
-    const { error } = await supabase.from('unidades').delete().eq('id', id);
-    if (error) alert("No tienes permisos para eliminar (Solo Admins)");
-    else obtenerUnidades(sesion.user.id);
+  const eliminarUnidad = (id) => {
+    pedirConfirmacion("¿Deseas eliminar esta unidad permanentemente? Esta acción es irreversible.", async () => {
+      setLoading(true);
+      const { error } = await supabase.from('unidades').delete().eq('id', id);
+      if (error) {
+        mostrarAlerta("No tienes permisos para eliminar (Solo Admins).", "error");
+      } else {
+        mostrarAlerta("Unidad eliminada correctamente.", "exito");
+        obtenerUnidades(sesion.user.id);
+      }
+      setLoading(false);
+    });
   };
 
   const registrarMantenimiento = async (e) => {
@@ -112,7 +125,6 @@ export default function UnidadesPage() {
     if (!nuevoMantenimiento.descripcion || !nuevoMantenimiento.costo) return;
     setLoading(true);
 
-    // CORRECCIÓN 3: Dejamos que Supabase estampe el usuario_id y empresa_id
     const { error } = await supabase.from('mantenimientos').insert([{ 
       unidad_id: unidadSeleccionada.id, 
       fecha: nuevoMantenimiento.fecha, 
@@ -121,8 +133,10 @@ export default function UnidadesPage() {
       costo: parseFloat(nuevoMantenimiento.costo) 
     }]);
 
-    if (error) alert("Error: " + error.message);
-    else { 
+    if (error) {
+      mostrarAlerta("Error: " + error.message, "error");
+    } else { 
+      mostrarAlerta("Mantenimiento registrado con éxito.", "exito");
       setNuevoMantenimiento({ fecha: new Date().toISOString().split('T')[0], tipo: 'Preventivo', descripcion: '', costo: '' }); 
       cargarMantenimientos(unidadSeleccionada.id); 
     }
@@ -134,15 +148,16 @@ export default function UnidadesPage() {
     if (!nuevaAlerta.kilometraje_meta || !nuevaAlerta.mensaje) return;
     setLoading(true);
 
-    // CORRECCIÓN 4: Limpieza de IDs manuales
     const { error } = await supabase.from('alertas_mantenimiento').insert([{ 
       unidad_id: unidadSeleccionada.id, 
       kilometraje_meta: parseFloat(nuevaAlerta.kilometraje_meta), 
       mensaje: nuevaAlerta.mensaje 
     }]);
 
-    if (error) alert("Error: " + error.message);
-    else { 
+    if (error) {
+      mostrarAlerta("Error: " + error.message, "error");
+    } else { 
+      mostrarAlerta("Alerta registrada correctamente.", "exito");
       setNuevaAlerta({ kilometraje_meta: '', mensaje: '' }); 
       cargarAlertas(unidadSeleccionada.id); 
     }
@@ -185,16 +200,26 @@ export default function UnidadesPage() {
     setUnidadSeleccionada(null);
   };
 
-  const eliminarMantenimiento = async (id) => {
-    if (!confirm("¿Borrar registro?")) return;
-    await supabase.from('mantenimientos').delete().eq('id', id);
-    cargarMantenimientos(unidadSeleccionada.id);
+  const eliminarMantenimiento = (id) => {
+    pedirConfirmacion("¿Borrar registro de mantenimiento?", async () => {
+      const { error } = await supabase.from('mantenimientos').delete().eq('id', id);
+      if (error) mostrarAlerta("Error al borrar: " + error.message, "error");
+      else {
+        mostrarAlerta("Registro eliminado.", "exito");
+        cargarMantenimientos(unidadSeleccionada.id);
+      }
+    });
   };
 
-  const eliminarAlerta = async (id) => {
-    if (!confirm("¿Eliminar alerta?")) return;
-    await supabase.from('alertas_mantenimiento').delete().eq('id', id);
-    cargarAlertas(unidadSeleccionada.id);
+  const eliminarAlerta = (id) => {
+    pedirConfirmacion("¿Eliminar alerta de kilometraje?", async () => {
+      const { error } = await supabase.from('alertas_mantenimiento').delete().eq('id', id);
+      if (error) mostrarAlerta("Error al borrar: " + error.message, "error");
+      else {
+        mostrarAlerta("Alerta eliminada.", "exito");
+        cargarAlertas(unidadSeleccionada.id);
+      }
+    });
   };
 
   const verificarVigencia = (fecha) => {
@@ -220,27 +245,40 @@ export default function UnidadesPage() {
       if (updateError) throw updateError;
       setFormData({ ...formData, [campo]: fileName });
       obtenerUnidades(sesion.user.id);
-      alert("✅ Documento guardado.");
-    } catch (error) { alert("❌ Error: " + error.message); } finally { setLoading(false); }
+      mostrarAlerta("Documento subido y guardado exitosamente.", "exito");
+    } catch (error) { 
+      mostrarAlerta("Error: " + error.message, "error"); 
+    } finally { 
+      setLoading(false); 
+    }
   };
 
   const verArchivoPrivado = async (path) => {
     if (!path) return;
     const { data, error } = await supabase.storage.from('expedientes').createSignedUrl(path, 60);
-    if (error) alert("Error de acceso: " + error.message);
-    else window.open(data.signedUrl, '_blank');
+    if (error) {
+      mostrarAlerta("Error de acceso: " + error.message, "error");
+    } else {
+      window.open(data.signedUrl, '_blank');
+    }
   };
 
-  const borrarDocumentoUnidad = async (campo) => {
-    if (!confirm("¿Eliminar documento?")) return;
-    setLoading(true);
-    try {
-      const filePath = formData[campo];
-      if (filePath) await supabase.storage.from('expedientes').remove([filePath]);
-      await supabase.from('unidades').update({ [campo]: null }).eq('id', unidadSeleccionada.id);
-      setFormData({ ...formData, [campo]: '' });
-      obtenerUnidades(sesion.user.id);
-    } catch (error) { alert("❌ Error: " + error.message); } finally { setLoading(false); }
+  const borrarDocumentoUnidad = (campo) => {
+    pedirConfirmacion("¿Eliminar documento de la bóveda? Se borrará permanentemente.", async () => {
+      setLoading(true);
+      try {
+        const filePath = formData[campo];
+        if (filePath) await supabase.storage.from('expedientes').remove([filePath]);
+        await supabase.from('unidades').update({ [campo]: null }).eq('id', unidadSeleccionada.id);
+        setFormData({ ...formData, [campo]: '' });
+        obtenerUnidades(sesion.user.id);
+        mostrarAlerta("Documento eliminado correctamente.", "exito");
+      } catch (error) { 
+        mostrarAlerta("Error: " + error.message, "error"); 
+      } finally { 
+        setLoading(false); 
+      }
+    });
   };
 
   if (!sesion) return null;
@@ -349,6 +387,27 @@ export default function UnidadesPage() {
             </div>
           </div>
 
+          {/* ========================================================= */}
+          {/* MODAL DE CONFIRMACIÓN CUSTOM */}
+          {/* ========================================================= */}
+          {dialogoConfirmacion.visible && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+              <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-sm" onClick={() => setDialogoConfirmacion({ visible: false, mensaje: '', accion: null })} />
+              <div className="relative bg-slate-900 border border-slate-800 w-full max-w-sm rounded-[2rem] p-8 shadow-2xl flex flex-col items-center text-center animate-in zoom-in-95 duration-200">
+                <div className="w-16 h-16 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mb-6"><AlertTriangle size={32} /></div>
+                <h3 className="text-xl font-black text-white uppercase tracking-widest mb-2">¿Estás Seguro?</h3>
+                <p className="text-slate-400 text-sm mb-8">{dialogoConfirmacion.mensaje}</p>
+                <div className="flex gap-3 w-full">
+                  <button onClick={() => setDialogoConfirmacion({ visible: false, mensaje: '', accion: null })} disabled={loading} className="flex-1 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest bg-slate-800 text-slate-300 hover:bg-slate-700 transition-colors">Descartar</button>
+                  <button onClick={ejecutarConfirmacion} disabled={loading} className="flex-1 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest bg-red-600 text-white hover:bg-red-500 transition-colors shadow-lg shadow-red-900/20">{loading ? <Loader2 size={14} className="animate-spin mx-auto" /> : "Sí, Proceder"}</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ========================================================= */}
+          {/* MODAL DEL EXPEDIENTE */}
+          {/* ========================================================= */}
           {mostrarModal && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
               <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-sm" onClick={cerrarModal} />
@@ -518,7 +577,8 @@ export default function UnidadesPage() {
                         </div>
                       </div>
 
-                      <button type="submit" disabled={loading} className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black uppercase text-[11px] tracking-widest shadow-xl hover:bg-blue-500 transition-all">
+                      <button type="submit" disabled={loading} className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black uppercase text-[11px] tracking-widest shadow-xl hover:bg-blue-500 transition-all flex items-center justify-center">
+                        {loading ? <Loader2 size={16} className="animate-spin mr-2" /> : null}
                         {loading ? "Guardando..." : "Guardar Ficha Técnica"}
                       </button>
                     </form>

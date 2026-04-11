@@ -21,9 +21,14 @@ import {
   KeyRound,
   Lock,
   X,
-  Eye,      // <--- NUEVO
-  EyeOff    // <--- NUEVO
+  Eye,      
+  EyeOff,
+  AlertTriangle, // <-- Añadido para el modal
+  Loader2        // <-- Añadido por consistencia
 } from 'lucide-react';
+
+// === SISTEMA DE ALERTAS ===
+import { useToast } from '@/components/toastprovider';
 
 // === DICCIONARIO DE RUTAS Y PERMISOS ===
 const menuItems = [
@@ -37,16 +42,20 @@ const menuItems = [
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const { mostrarAlerta } = useToast();
   
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [rolUsuario, setRolUsuario] = useState('miembro'); 
+
+  // === ESTADOS PARA MODAL DE CONFIRMACIÓN ===
+  const [dialogoConfirmacion, setDialogoConfirmacion] = useState({ visible: false, mensaje: '', accion: null });
 
   // === ESTADOS PARA CAMBIO DE CONTRASEÑA ===
   const [mostrarModalPassword, setMostrarModalPassword] = useState(false);
   const [nuevaPassword, setNuevaPassword] = useState('');
   const [confirmarPassword, setConfirmarPassword] = useState('');
   const [loadingPassword, setLoadingPassword] = useState(false);
-  const [verPassword, setVerPassword] = useState(false); // <--- NUEVO: Estado para ver/ocultar
+  const [verPassword, setVerPassword] = useState(false);
 
   useEffect(() => {
     const obtenerRol = async () => {
@@ -69,20 +78,27 @@ export default function Sidebar() {
     window.location.href = '/'; 
   };
 
-  // 1. PREGUNTA DE SEGURIDAD ANTES DE ABRIR MODAL
+  const pedirConfirmacion = (mensaje, accion) => setDialogoConfirmacion({ visible: true, mensaje, accion });
+  const ejecutarConfirmacion = async () => { 
+    if (dialogoConfirmacion.accion) await dialogoConfirmacion.accion(); 
+    setDialogoConfirmacion({ visible: false, mensaje: '', accion: null }); 
+  };
+
+  // 1. PREGUNTA DE SEGURIDAD ANTES DE ABRIR MODAL CON NUEVA LÓGICA
   const confirmarAperturaPassword = () => {
-    const seguro = window.confirm("¿Estás seguro de que deseas cambiar tu contraseña actual?");
-    if (seguro) setMostrarModalPassword(true);
+    pedirConfirmacion("¿Estás seguro de que deseas cambiar tu contraseña actual?", () => {
+      setMostrarModalPassword(true);
+    });
   };
 
   const cambiarContrasena = async (e) => {
     e.preventDefault();
     if (nuevaPassword !== confirmarPassword) {
-      alert("🛑 Las contraseñas no coinciden.");
+      mostrarAlerta("Las contraseñas no coinciden.", "error");
       return;
     }
     if (nuevaPassword.length < 6) {
-      alert("🛑 La contraseña debe tener al menos 6 caracteres por seguridad.");
+      mostrarAlerta("La contraseña debe tener al menos 6 caracteres por seguridad.", "error");
       return;
     }
     
@@ -90,13 +106,13 @@ export default function Sidebar() {
     const { error } = await supabase.auth.updateUser({ password: nuevaPassword });
     
     if (error) {
-      alert("Error al actualizar: " + error.message);
+      mostrarAlerta("Error al actualizar: " + error.message, "error");
     } else {
-      alert("✅ Contraseña actualizada con éxito. Tu cuenta está segura.");
+      mostrarAlerta("Contraseña actualizada con éxito. Tu cuenta está segura.", "exito");
       setMostrarModalPassword(false);
       setNuevaPassword('');
       setConfirmarPassword('');
-      setVerPassword(false); // Resetear vista
+      setVerPassword(false); 
     }
     setLoadingPassword(false);
   };
@@ -198,7 +214,27 @@ export default function Sidebar() {
         </div>
       </nav>
 
+      {/* ========================================================= */}
+      {/* MODAL DE CONFIRMACIÓN CUSTOM */}
+      {/* ========================================================= */}
+      {dialogoConfirmacion.visible && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-sm" onClick={() => setDialogoConfirmacion({ visible: false, mensaje: '', accion: null })} />
+          <div className="relative bg-slate-900 border border-slate-800 w-full max-w-sm rounded-[2rem] p-8 shadow-2xl flex flex-col items-center text-center animate-in zoom-in-95 duration-200">
+            <div className="w-16 h-16 bg-yellow-500/10 text-yellow-500 rounded-full flex items-center justify-center mb-6"><AlertTriangle size={32} /></div>
+            <h3 className="text-xl font-black text-white uppercase tracking-widest mb-2">¿Estás Seguro?</h3>
+            <p className="text-slate-400 text-sm mb-8">{dialogoConfirmacion.mensaje}</p>
+            <div className="flex gap-3 w-full">
+              <button onClick={() => setDialogoConfirmacion({ visible: false, mensaje: '', accion: null })} className="flex-1 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest bg-slate-800 text-slate-300 hover:bg-slate-700 transition-colors">Descartar</button>
+              <button onClick={ejecutarConfirmacion} className="flex-1 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest bg-yellow-600 text-white hover:bg-yellow-500 transition-colors shadow-lg shadow-yellow-900/20">Sí, Proceder</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
       {/* MODAL DE CAMBIO DE CONTRASEÑA */}
+      {/* ========================================================= */}
       {mostrarModalPassword && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-sm" onClick={() => setMostrarModalPassword(false)} />
@@ -240,7 +276,8 @@ export default function Sidebar() {
                 />
               </div>
 
-              <button type="submit" disabled={loadingPassword} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-4 rounded-xl font-black uppercase text-[11px] tracking-widest shadow-xl transition-all mt-6 flex justify-center items-center">
+              <button type="submit" disabled={loadingPassword} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-4 rounded-xl font-black uppercase text-[11px] tracking-widest shadow-xl transition-all mt-6 flex justify-center items-center gap-2">
+                {loadingPassword ? <Loader2 size={16} className="animate-spin" /> : null}
                 {loadingPassword ? "Procesando..." : "Actualizar Credencial"}
               </button>
             </form>

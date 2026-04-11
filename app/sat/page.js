@@ -9,6 +9,9 @@ import {
 import Sidebar from '@/components/sidebar';
 import * as XLSX from 'xlsx';
 
+// === SISTEMA DE ALERTAS ===
+import { useToast } from '@/components/toastprovider';
+
 // Mapa Operativo de Documentos de Bóveda para Operadores
 const DOCS_OPERADOR = [
   { id: 'doc_ine', label: 'INE / Identificación', icon: User },
@@ -53,6 +56,9 @@ const extraerSerieCER = async (archivoCer) => {
 };
 
 export default function SATConfigPage() {
+  const { mostrarAlerta } = useToast();
+  const [dialogoConfirmacion, setDialogoConfirmacion] = useState({ visible: false, mensaje: '', accion: null });
+
   const [sesion, setSesion] = useState(null);
   const [activeTab, setActiveTab] = useState('operadores');
   const [loading, setLoading] = useState(false);
@@ -98,11 +104,13 @@ export default function SATConfigPage() {
   // === INICIO DE LÓGICA DE IMPORTACIÓN MASIVA (EXCEL MULTI-TAB) ===
   const [importingInfo, setImportingInfo] = useState(false);
 
+  const pedirConfirmacion = (mensaje, accion) => setDialogoConfirmacion({ visible: true, mensaje, accion });
+  const ejecutarConfirmacion = async () => { if (dialogoConfirmacion.accion) await dialogoConfirmacion.accion(); setDialogoConfirmacion({ visible: false, mensaje: '', accion: null }); };
+
   // Genera un Excel real (.xlsx) con todas las pestañas necesarias
   const descargarPlantillaMaestra = () => {
     const wb = XLSX.utils.book_new();
 
-    // Definición de todas las estructuras de la Institución
     const estructuras = {
       'operadores': ['nombre_completo', 'rfc', 'numero_licencia', 'vencimiento_licencia', 'telefono'],
       'remolques': ['numero_economico', 'placas', 'tipo_placa', 'subtipo_remolque'],
@@ -111,13 +119,11 @@ export default function SATConfigPage() {
       'mercancias': ['descripcion', 'clave_sat', 'clave_unidad', 'peso_unitario_kg', 'clave_embalaje', 'material_peligroso']
     };
 
-    // Crear una pestaña por cada módulo
     for (const [nombreHoja, headers] of Object.entries(estructuras)) {
       const ws = XLSX.utils.aoa_to_sheet([headers]);
       XLSX.utils.book_append_sheet(wb, ws, nombreHoja);
     }
 
-    // Descargar el archivo maestro
     XLSX.writeFile(wb, 'Plantilla_FleetForce_General.xlsx');
   };
 
@@ -125,7 +131,7 @@ export default function SATConfigPage() {
     const file = e.target.files[0];
     if (!file) return;
     if (!file.name.toLowerCase().endsWith('.xlsx')) {
-      alert("🛑 Formato incorrecto. Por favor sube un archivo de Excel (.xlsx)");
+      mostrarAlerta("Formato incorrecto. Por favor sube un archivo de Excel (.xlsx)", "error");
       e.target.value = null;
       return;
     }
@@ -138,7 +144,6 @@ export default function SATConfigPage() {
         const data = new Uint8Array(evento.target.result);
         const workbook = XLSX.read(data, { type: 'array' });
 
-        // Validamos que el Excel contenga la pestaña del módulo actual
         if (!workbook.SheetNames.includes(activeTab)) {
           throw new Error(`No se encontró la pestaña llamada '${activeTab}' en este Excel.`);
         }
@@ -148,7 +153,6 @@ export default function SATConfigPage() {
 
         if (registros.length === 0) throw new Error(`La pestaña '${activeTab}' está vacía.`);
 
-        // CORRECCIÓN 1: Inyectamos empresa_id en lugar de usuario_id
         const payloadMasivo = registros.map(reg => {
           let limpio = { empresa_id: empresaId, activo: true };
           for (const key in reg) {
@@ -169,12 +173,12 @@ export default function SATConfigPage() {
         const { error } = await supabase.from(activeTab).insert(payloadMasivo);
         if (error) throw error;
 
-        alert(`✅ Carga Operativa Exitosa: ${payloadMasivo.length} registros añadidos a ${activeTab}.`);
+        mostrarAlerta(`Carga Operativa Exitosa: ${payloadMasivo.length} registros añadidos a ${activeTab}.`, "exito");
         cargarDatos(sesion.user.id);
 
       } catch (err) {
         console.error(err);
-        alert(`❌ Error en importación: ${err.message}\nAsegúrate de usar la plantilla de FleetForce.`);
+        mostrarAlerta(`Error en importación: ${err.message}. Asegúrate de usar la plantilla correcta.`, "error");
       } finally {
         setImportingInfo(false);
         e.target.value = null; 
@@ -182,14 +186,13 @@ export default function SATConfigPage() {
     };
     
     reader.onerror = () => {
-      alert("❌ Fallo en la lectura del archivo.");
+      mostrarAlerta("Fallo en la lectura del archivo.", "error");
       setImportingInfo(false);
       e.target.value = null;
     };
 
     reader.readAsArrayBuffer(file);
   };
-  // === FIN DE LÓGICA DE IMPORTACIÓN MASIVA ===
 
   const tituloSingular = { operadores: 'Operador', remolques: 'Remolque', ubicaciones: 'Ubicación', mercancias: 'Mercancía', clientes: 'Cliente' };
 
@@ -202,18 +205,12 @@ export default function SATConfigPage() {
   async function cargarDatos(userId) {
     setLoading(true);
     try {
-      // 1. OBTENER ADN DE LA INSTITUCIÓN Y ROL
-      const { data: perfilData } = await supabase
-        .from('perfiles')
-        .select('empresa_id, rol')
-        .eq('id', userId)
-        .single();
+      const { data: perfilData } = await supabase.from('perfiles').select('empresa_id, rol').eq('id', userId).single();
 
       const idInstitucion = perfilData?.empresa_id || userId;
       setEmpresaId(idInstitucion);
       if (perfilData?.rol) setRolUsuario(perfilData.rol);
 
-      // CORRECCIÓN 2: CARGAR CATÁLOGOS USANDO empresa_id
       if (activeTab === 'fiscal') {
         const { data } = await supabase.from('perfil_emisor').select('*').eq('empresa_id', idInstitucion).single();
         if (data) {
@@ -238,7 +235,6 @@ export default function SATConfigPage() {
         if (activeTab === 'remolques') setRemolques(data || []);
         if (activeTab === 'clientes') setClientes(data || []);
       }
-
     } catch (err) { console.error("Error al cargar datos:", err.message); }
     setLoading(false);
   }
@@ -248,7 +244,6 @@ export default function SATConfigPage() {
     setLoading(true);
     let payload = {};
 
-    // CORRECCIÓN 3: Cambiamos usuario_id por empresa_id para delegar tenencia
     if (activeTab === 'operadores') payload = { ...formDataOp, empresa_id: empresaId, rfc: formDataOp.rfc.toUpperCase() };
     if (activeTab === 'ubicaciones') payload = { ...formDataUb, empresa_id: empresaId, rfc_ubicacion: formDataUb.rfc_ubicacion.toUpperCase() };
     if (activeTab === 'mercancias') payload = { ...formDataMe, empresa_id: empresaId };
@@ -259,21 +254,29 @@ export default function SATConfigPage() {
       ? await supabase.from(activeTab).update(payload).eq('id', editandoId) 
       : await supabase.from(activeTab).insert([payload]);
 
-    if (error) alert("Error al guardar: " + error.message);
-    else { cerrarModal(); cargarDatos(sesion.user.id); }
+    if (error) {
+      mostrarAlerta("Error al guardar: " + error.message, "error");
+    } else { 
+      mostrarAlerta("Registro guardado exitosamente.", "exito");
+      cerrarModal(); 
+      cargarDatos(sesion.user.id); 
+    }
     setLoading(false);
   };
 
   const guardarPerfilFiscal = async () => {
     setLoading(true);
-    // CORRECCIÓN 4: Asignamos empresa_id para que el perfil fiscal sea único por compañía
     const { error } = await supabase.from('perfil_emisor').upsert({ 
         ...perfilFiscal, 
         empresa_id: empresaId, 
         rfc: perfilFiscal.rfc.toUpperCase(), 
         updated_at: new Date().toISOString()
     });
-    if (error) alert(error.message); else alert("✅ Configuración Fiscal Guardada.");
+    if (error) {
+      mostrarAlerta(error.message, "error");
+    } else {
+      mostrarAlerta("Configuración Fiscal Guardada.", "exito");
+    }
     setLoading(false);
   };
 
@@ -289,9 +292,9 @@ export default function SATConfigPage() {
         ...prev, 
         no_certificado: numeroCertificado 
       }));
-      alert(`✅ Certificado leído correctamente.\nNo. de Serie: ${numeroCertificado}`);
+      mostrarAlerta(`Certificado leído correctamente. No. de Serie: ${numeroCertificado}`, "exito");
     } catch (error) {
-      alert(`❌ ${error.message}`);
+      mostrarAlerta(error.message, "error");
       e.target.value = null;
       setCerFile(null);
     }
@@ -299,14 +302,13 @@ export default function SATConfigPage() {
 
   const subirSellosCSD = async (e) => {
     e.preventDefault();
-    if (!cerFile || !keyFile || !csdPassword) return alert("Por favor selecciona los archivos .cer, .key y escribe la contraseña.");
-    if (!cerFile.name.toLowerCase().endsWith('.cer') || !keyFile.name.toLowerCase().endsWith('.key')) return alert("Archivos inválidos.");
+    if (!cerFile || !keyFile || !csdPassword) return mostrarAlerta("Por favor selecciona los archivos .cer, .key y escribe la contraseña.", "error");
+    if (!cerFile.name.toLowerCase().endsWith('.cer') || !keyFile.name.toLowerCase().endsWith('.key')) return mostrarAlerta("Archivos inválidos.", "error");
 
     setIsUploadingCSD(true);
     try {
       await new Promise(resolve => setTimeout(resolve, 2000)); 
       
-      // CORRECCIÓN 5: empresa_id para sellos compartidos en equipo
       const { error } = await supabase.from('perfil_emisor').upsert({ 
           ...perfilFiscal, 
           empresa_id: empresaId, 
@@ -315,28 +317,29 @@ export default function SATConfigPage() {
       });
       if (error) throw error;
       setPerfilFiscal({ ...perfilFiscal, tiene_csd: true });
-      alert("✅ ¡Sellos Digitales vinculados exitosamente a FleetForce!");
+      mostrarAlerta("¡Sellos Digitales vinculados exitosamente a FleetForce!", "exito");
       setCerFile(null); setKeyFile(null); setCsdPassword('');
-    } catch (err) { alert("Error: " + err.message); } finally { setIsUploadingCSD(false); }
+    } catch (err) { 
+      mostrarAlerta("Error: " + err.message, "error"); 
+    } finally { 
+      setIsUploadingCSD(false); 
+    }
   };
   
-  const eliminarRegistro = async (id) => {
-    if (!confirm("¿Deseas dar de baja (archivar) este registro? Ya no aparecerá para crear nuevos viajes, pero se conservará en tu historial contable.")) return;
-    
-    setLoading(true);
-    try {
-      const { error } = await supabase
-        .from(activeTab)
-        .update({ activo: false })
-        .eq('id', id);
-
-      if (error) throw error;
-      cargarDatos(empresaId || sesion.user.id);
-    } catch (error) {
-      alert("Error al archivar: " + error.message);
-    } finally {
-      setLoading(false);
-    }
+  const eliminarRegistro = (id) => {
+    pedirConfirmacion("¿Deseas dar de baja (archivar) este registro? Ya no aparecerá para crear nuevos viajes, pero se conservará en tu historial contable.", async () => {
+      setLoading(true);
+      try {
+        const { error } = await supabase.from(activeTab).update({ activo: false }).eq('id', id);
+        if (error) throw error;
+        mostrarAlerta("Registro archivado exitosamente.", "exito");
+        cargarDatos(empresaId || sesion.user.id);
+      } catch (error) {
+        mostrarAlerta("Error al archivar: " + error.message, "error");
+      } finally {
+        setLoading(false);
+      }
+    });
   };
 
   const cerrarModal = () => {
@@ -348,7 +351,7 @@ export default function SATConfigPage() {
     });
     setFormDataUb({ nombre_lugar: '', rfc_ubicacion: '', codigo_postal: '', estado: '', municipio: '', calle_numero: '', colonia: '' });
     setFormDataMe({ descripcion: '', clave_sat: '', clave_unidad: 'KGM', peso_unitario_kg: '', clave_embalaje: '4G', material_peligroso: false });
-    setFormDataRe({ numero_economico: '', placas: '', subtipo_remolque: 'CTR02' });
+    setFormDataRe({ numero_economico: '', placas: '', tipo_placa: 'Federal', subtipo_remolque: 'CTR02' });
     setFormDataCl({ 
       nombre: '', rfc: '', regimen_fiscal: '601', codigo_postal: '', dias_credito: 0, uso_cfdi: 'G03',
       calle_numero: '', colonia: '', municipio: '', estado: ''
@@ -384,27 +387,29 @@ export default function SATConfigPage() {
   const verArchivoPrivado = async (path) => {
     if (!path) return;
     const { data, error } = await supabase.storage.from('expedientes').createSignedUrl(path, 60);
-    if (error) alert("Error al generar acceso: " + error.message);
+    if (error) mostrarAlerta("Error al generar acceso: " + error.message, "error");
     else window.open(data.signedUrl, '_blank');
   };
 
   const gestionarDocOperador = async (e, campo, accion) => {
     if (!editandoId) {
-      alert("⚠️ Primero debes guardar la Ficha de Identidad del operador antes de subir documentos.");
+      mostrarAlerta("⚠️ Primero debes guardar la Ficha de Identidad del operador antes de subir documentos.", "error");
       return;
     }
 
     if (accion === 'borrar') {
-      if (!confirm("¿Seguro que deseas eliminar este documento de la bóveda?")) return;
-      setLoading(true);
-      try {
-        const path = formDataOp[campo];
-        if (path) await supabase.storage.from('expedientes').remove([path]);
-        await supabase.from('operadores').update({ [campo]: null }).eq('id', editandoId);
-        setFormDataOp({ ...formDataOp, [campo]: '' });
-        cargarDatos(sesion.user.id);
-      } catch (err) { alert("Error al borrar: " + err.message); }
-      setLoading(false);
+      pedirConfirmacion("¿Seguro que deseas eliminar este documento de la bóveda?", async () => {
+        setLoading(true);
+        try {
+          const path = formDataOp[campo];
+          if (path) await supabase.storage.from('expedientes').remove([path]);
+          await supabase.from('operadores').update({ [campo]: null }).eq('id', editandoId);
+          setFormDataOp({ ...formDataOp, [campo]: '' });
+          mostrarAlerta("Documento eliminado correctamente.", "exito");
+          cargarDatos(sesion.user.id);
+        } catch (err) { mostrarAlerta("Error al borrar: " + err.message, "error"); }
+        setLoading(false);
+      });
       return;
     }
 
@@ -424,9 +429,9 @@ export default function SATConfigPage() {
 
       setFormDataOp({ ...formDataOp, [campo]: fileName });
       cargarDatos(sesion.user.id);
-      alert("✅ Documento archivado correctamente en el búnker.");
+      mostrarAlerta("Documento archivado correctamente en el búnker.", "exito");
     } catch (err) { 
-      alert("Error al subir: " + err.message); 
+      mostrarAlerta("Error al subir: " + err.message, "error"); 
     }
     setLoading(false);
   };
@@ -674,7 +679,7 @@ export default function SATConfigPage() {
                           onChange={(e) => {
                             const file = e.target.files[0];
                             if (!file) return;
-                            if (file.size > 1024 * 1024) return alert("El logo debe pesar menos de 1MB");
+                            if (file.size > 1024 * 1024) return mostrarAlerta("El logo debe pesar menos de 1MB", "error");
                             
                             const reader = new FileReader();
                             reader.onloadend = () => setPerfilFiscal({...perfilFiscal, logo_base64: reader.result});
@@ -697,6 +702,24 @@ export default function SATConfigPage() {
                 </button>
               </div>
 
+            </div>
+          )}
+
+          {/* ========================================================= */}
+          {/* MODAL DE CONFIRMACIÓN CUSTOM */}
+          {/* ========================================================= */}
+          {dialogoConfirmacion.visible && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+              <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-sm" onClick={() => setDialogoConfirmacion({ visible: false, mensaje: '', accion: null })} />
+              <div className="relative bg-slate-900 border border-slate-800 w-full max-w-sm rounded-[2rem] p-8 shadow-2xl flex flex-col items-center text-center animate-in zoom-in-95 duration-200">
+                <div className="w-16 h-16 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mb-6"><AlertTriangle size={32} /></div>
+                <h3 className="text-xl font-black text-white uppercase tracking-widest mb-2">¿Estás Seguro?</h3>
+                <p className="text-slate-400 text-sm mb-8">{dialogoConfirmacion.mensaje}</p>
+                <div className="flex gap-3 w-full">
+                  <button onClick={() => setDialogoConfirmacion({ visible: false, mensaje: '', accion: null })} disabled={loading} className="flex-1 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest bg-slate-800 text-slate-300 hover:bg-slate-700 transition-colors">Descartar</button>
+                  <button onClick={ejecutarConfirmacion} disabled={loading} className="flex-1 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest bg-red-600 text-white hover:bg-red-500 transition-colors shadow-lg shadow-red-900/20">{loading ? <Loader2 size={14} className="animate-spin mx-auto" /> : "Sí, Proceder"}</button>
+                </div>
+              </div>
             </div>
           )}
 
@@ -874,6 +897,7 @@ export default function SATConfigPage() {
                           </div>
 
                           <button type="submit" disabled={loading} className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black uppercase text-[11px] tracking-widest shadow-xl hover:bg-blue-500 transition-all flex justify-center items-center gap-2">
+                            {loading ? <Loader2 size={16} className="animate-spin mr-2" /> : null}
                             {loading ? "Guardando Expediente..." : "Guardar Ficha Operativa"}
                           </button>
                         </form>
