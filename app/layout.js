@@ -1,9 +1,9 @@
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
-
-// 1. IMPORTAMOS EL SISTEMA GLOBAL DE ALERTAS
-import { ToastProvider } from "../components/toastprovider"; 
+// IMPORTACIONES DE PROVEEDORES GLOBALES
+import { ToastProvider } from "@/components/toastprovider"; 
+import { ThemeProvider } from "@/components/themeprovider"; // <-- NUEVO
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -22,22 +22,26 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="es">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-slate-950 text-slate-200 flex`}
-      >
-        {/* 2. ENVOLVEMOS LA APLICACIÓN CON EL PROVEEDOR */}
-        <ToastProvider>
-          {/* Lado Derecho: Contenido Dinámico */}
-          <main className="flex-1 h-screen overflow-y-auto relative bg-slate-950">
-            {/* Añadimos un contenedor interno con padding para que 
-                el contenido de cada página no choque con los bordes 
-            */}
-            <div className="min-h-full">
-              {children}
-            </div>
-          </main>
-        </ToastProvider>
+    // suppressHydrationWarning es vital para que next-themes no genere errores al leer el tema del sistema
+    <html lang="es" suppressHydrationWarning>
+      {/* 🛑 Eliminamos bg-slate-950 y text-slate-200. globals.css ahora manda. */}
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased flex`}>
+        
+        {/* ENVOLVEMOS TODO EN EL TEMA PRIMERO */}
+        <ThemeProvider>
+          <ToastProvider>
+            
+            {/* Lado Derecho: Contenido Dinámico */}
+            {/* 🛑 También quitamos el bg-slate-950 de aquí */}
+            <main className="flex-1 h-screen overflow-y-auto relative">
+              <div className="min-h-full">
+                {children}
+              </div>
+            </main>
+
+          </ToastProvider>
+        </ThemeProvider>
+
       </body>
     </html>
   );

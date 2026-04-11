@@ -437,30 +437,30 @@ export default function SATConfigPage() {
   };
 
   const verificarVigencia = (fecha) => {
-    if (!fecha) return { texto: 'Sin registro', color: 'text-slate-500', bg: 'bg-slate-800' };
+    if (!fecha) return { texto: 'Sin registro', color: 'text-slate-500', bg: 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700' };
     const hoy = new Date();
     const fechaVenc = new Date(fecha + 'T23:59:59');
     const diasRestantes = Math.ceil((fechaVenc - hoy) / (1000 * 60 * 60 * 24));
 
-    if (diasRestantes < 0) return { texto: 'Licencia Vencida', color: 'text-red-500', bg: 'bg-red-500/10 border-red-500/30' };
-    if (diasRestantes <= 30) return { texto: `Vence en ${diasRestantes} días`, color: 'text-orange-400', bg: 'bg-orange-500/10 border-orange-500/30' };
-    return { texto: 'Licencia Vigente', color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/30' };
+    if (diasRestantes < 0) return { texto: 'Licencia Vencida', color: 'text-red-600 dark:text-red-500', bg: 'bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/30' };
+    if (diasRestantes <= 30) return { texto: `Vence en ${diasRestantes} días`, color: 'text-orange-600 dark:text-orange-400', bg: 'bg-orange-50 dark:bg-orange-500/10 border-orange-200 dark:border-orange-500/30' };
+    return { texto: 'Licencia Vigente', color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/30' };
   };
 
   if (!sesion) return null;
 
   return (
-    <div className="flex bg-slate-950 min-h-screen text-slate-200">
+    <div className="flex bg-transparent min-h-screen text-slate-900 dark:text-slate-200 transition-colors duration-300">
       <Sidebar />
-      <main className="flex-1 p-8 overflow-y-auto">
+      <main className="flex-1 p-4 sm:p-8 overflow-y-auto">
         <div className="max-w-6xl mx-auto">
           
-          <header className="mb-10">
-            <h1 className="text-3xl font-black tracking-tighter uppercase italic text-white leading-none">Cumplimiento <span className="text-blue-500">SAT</span></h1>
-            <p className="text-slate-500 text-[9px] font-black uppercase tracking-[0.3em] mt-2">Configuración Carta Porte 3.1</p>
+          <header className="mb-8 sm:mb-10 transition-colors">
+            <h1 className="text-3xl font-black tracking-tighter uppercase italic text-slate-900 dark:text-white leading-none transition-colors">Cumplimiento <span className="text-blue-600 dark:text-blue-500">SAT</span></h1>
+            <p className="text-slate-500 text-[9px] font-black uppercase tracking-[0.3em] mt-2 transition-colors">Configuración Carta Porte 3.1</p>
           </header>
 
-          <div className="flex flex-wrap gap-2 mb-10 bg-slate-900/50 p-1.5 rounded-2xl border border-slate-800 w-fit backdrop-blur-md">
+          <div className="flex flex-wrap gap-2 mb-8 sm:mb-10 bg-white/50 dark:bg-slate-900/50 p-1.5 rounded-2xl border border-slate-200 dark:border-slate-800 w-fit backdrop-blur-md transition-colors">
             {[ 
               { id: 'operadores', label: 'Operadores', icon: User },
                { id: 'remolques', label: 'Remolques', icon: Truck }, 
@@ -474,7 +474,7 @@ export default function SATConfigPage() {
               return tab.id !== 'fiscal' && tab.id !== 'clientes';
             })
             .map((tab) => (
-              <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex items-center gap-2 px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${ activeTab === tab.id ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20' : 'text-slate-500 hover:text-slate-300' }`}>
+              <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex items-center gap-2 px-4 sm:px-5 py-2 rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all ${ activeTab === tab.id ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300' }`}>
                 <tab.icon size={14} /> {tab.label}
               </button>
             ))}
@@ -483,47 +483,47 @@ export default function SATConfigPage() {
           {activeTab !== 'fiscal' ? (
             <div className="animate-in fade-in duration-500">
 
-<div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8 px-2">
-    <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">Gestión de {activeTab}</h3>
-    
-<div className="flex items-center gap-3">
-      <button onClick={descargarPlantillaMaestra} className="text-slate-500 hover:text-emerald-400 font-black uppercase text-[9px] tracking-widest transition-colors flex items-center gap-1" title="Descargar plantilla general con todas las pestañas">
-        <FileText size={14}/> Plantilla general (.xlsx)
-      </button>
-      
-      <label className={`cursor-pointer bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2 rounded-xl text-[9px] font-black uppercase flex items-center gap-2 transition-all border border-slate-700 ${importingInfo ? 'opacity-50 pointer-events-none' : ''}`}>
-        {importingInfo ? <Loader2 size={14} className="animate-spin" /> : <UploadCloud size={14} />}
-        {importingInfo ? 'Procesando...' : 'Subir Excel'}
-        <input type="file" accept=".xlsx" className="hidden" onChange={handleFileUploadExcel} disabled={importingInfo} />
-      </label>
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 sm:mb-8 px-2 transition-colors">
+                <h3 className="text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-[0.2em] transition-colors">Gestión de {activeTab}</h3>
+                
+                <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 sm:gap-3 w-full sm:w-auto">
+                  <button onClick={descargarPlantillaMaestra} className="text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400 font-black uppercase text-[9px] tracking-widest transition-colors flex items-center gap-1" title="Descargar plantilla general con todas las pestañas">
+                    <FileText size={14}/> Plantilla general (.xlsx)
+                  </button>
+                  
+                  <label className={`cursor-pointer bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 px-3 sm:px-4 py-2 rounded-xl text-[9px] font-black uppercase flex items-center gap-2 transition-all border border-slate-200 dark:border-slate-700 ${importingInfo ? 'opacity-50 pointer-events-none' : ''}`}>
+                    {importingInfo ? <Loader2 size={14} className="animate-spin" /> : <UploadCloud size={14} />}
+                    {importingInfo ? 'Procesando...' : 'Subir Excel'}
+                    <input type="file" accept=".xlsx" className="hidden" onChange={handleFileUploadExcel} disabled={importingInfo} />
+                  </label>
 
-      <button onClick={() => setMostrarModal(true)} className="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2 rounded-xl text-[9px] font-black uppercase flex items-center gap-2 transition-all shadow-lg shadow-blue-900/20">
-        <PlusCircle size={14} /> Registrar {tituloSingular[activeTab]}
-      </button>
-    </div>
-  </div>
+                  <button onClick={() => setMostrarModal(true)} className="bg-blue-600 hover:bg-blue-500 text-white px-4 sm:px-5 py-2 rounded-xl text-[9px] font-black uppercase flex items-center gap-2 transition-all shadow-lg shadow-blue-900/20">
+                    <PlusCircle size={14} /> Registrar {tituloSingular[activeTab]}
+                  </button>
+                </div>
+              </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 
                 {activeTab === 'operadores' && operadores.map(op => {
                   const vigencia = verificarVigencia(op.vencimiento_licencia);
                   return (
-                    <div key={op.id} className="bg-slate-900 border border-slate-800 p-6 rounded-[2rem] group hover:border-blue-500/40 transition-all shadow-xl flex flex-col justify-between h-full">
+                    <div key={op.id} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-[2rem] group hover:border-blue-400 dark:hover:border-blue-500/40 transition-all shadow-sm dark:shadow-xl flex flex-col justify-between h-full">
                       <div>
                         <div className="flex justify-between items-start mb-4">
-                          <div className="bg-slate-950 p-3 rounded-2xl text-blue-500 border border-slate-800"><User size={20} /></div>
-                          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
-                            <button onClick={() => editarOperador(op)} className="p-2 text-slate-500 hover:text-blue-500 bg-slate-950 rounded-lg"><Edit2 size={14}/></button>
-                            <button onClick={() => eliminarRegistro(op.id)} className="p-2 text-slate-500 hover:text-red-500 bg-slate-950 rounded-lg"><Trash2 size={14}/></button>
+                          <div className="bg-slate-50 dark:bg-slate-950 p-3 rounded-2xl text-blue-600 dark:text-blue-500 border border-slate-100 dark:border-slate-800 transition-colors"><User size={20} /></div>
+                          <div className="flex gap-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-all">
+                            <button onClick={() => editarOperador(op)} className="p-2 text-slate-400 dark:text-slate-500 hover:text-blue-600 dark:hover:text-blue-500 bg-slate-50 dark:bg-slate-950 rounded-lg transition-colors"><Edit2 size={14}/></button>
+                            <button onClick={() => eliminarRegistro(op.id)} className="p-2 text-slate-400 dark:text-slate-500 hover:text-red-600 dark:hover:text-red-500 bg-slate-50 dark:bg-slate-950 rounded-lg transition-colors"><Trash2 size={14}/></button>
                           </div>
                         </div>
-                        <h4 className="text-white font-black uppercase text-sm italic mb-1 leading-tight">{op.nombre_completo}</h4>
-                        <p className="text-[10px] text-slate-500 font-mono">RFC: {op.rfc}</p>
+                        <h4 className="text-slate-900 dark:text-white font-black uppercase text-sm italic mb-1 leading-tight transition-colors">{op.nombre_completo}</h4>
+                        <p className="text-[10px] text-slate-500 font-mono transition-colors">RFC: {op.rfc}</p>
                       </div>
                       
-                      <div className={`mt-5 p-2.5 rounded-xl border flex items-center justify-between ${vigencia.bg}`}>
+                      <div className={`mt-5 p-2.5 rounded-xl border flex items-center justify-between transition-colors ${vigencia.bg}`}>
                         <div className="flex flex-col">
-                          <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Estado Licencia</span>
+                          <span className="text-[8px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest transition-colors">Estado Licencia</span>
                           <span className={`text-[9px] font-bold uppercase ${vigencia.color}`}>{vigencia.texto}</span>
                         </div>
                         <ShieldCheck size={16} className={vigencia.color} />
@@ -533,13 +533,13 @@ export default function SATConfigPage() {
                 })}
 
                 {activeTab === 'clientes' && clientes.map(cl => (
-                  <div key={cl.id} className="bg-slate-900 border border-slate-800 p-6 rounded-[2rem] group hover:border-blue-500/40 transition-all">
+                  <div key={cl.id} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-[2rem] group hover:border-blue-400 dark:hover:border-blue-500/40 transition-all shadow-sm dark:shadow-xl">
                     <div className="flex justify-between items-start">
                       <div className="flex gap-4">
-                        <div className="bg-slate-950 p-3 rounded-2xl text-blue-500"><Users size={20} /></div>
-                        <div><h4 className="text-white font-black uppercase text-xs italic truncate max-w-[150px]">{cl.nombre}</h4><p className="text-[10px] text-slate-500 font-mono mt-0.5">{cl.rfc || 'SIN RFC'}</p><p className="text-[9px] text-slate-600 font-bold mt-1">CP: {cl.codigo_postal || '---'} | Reg: {cl.regimen_fiscal}</p></div>
+                        <div className="bg-slate-50 dark:bg-slate-950 p-3 rounded-2xl text-blue-600 dark:text-blue-500 transition-colors"><Users size={20} /></div>
+                        <div><h4 className="text-slate-900 dark:text-white font-black uppercase text-xs italic truncate max-w-[150px] transition-colors">{cl.nombre}</h4><p className="text-[10px] text-slate-500 font-mono mt-0.5 transition-colors">{cl.rfc || 'SIN RFC'}</p><p className="text-[9px] text-slate-700 dark:text-slate-400 font-bold mt-1 transition-colors">CP: {cl.codigo_postal || '---'} | Reg: {cl.regimen_fiscal}</p></div>
                       </div>
-                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all"><button onClick={() => editarCliente(cl)} className="p-2 text-slate-500 hover:text-blue-500"><Edit2 size={14}/></button><button onClick={() => eliminarRegistro(cl.id)} className="p-2 text-slate-500 hover:text-red-500"><Trash2 size={14}/></button></div>
+                      <div className="flex gap-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-all"><button onClick={() => editarCliente(cl)} className="p-2 text-slate-400 dark:text-slate-500 hover:text-blue-600 dark:hover:text-blue-500 transition-colors"><Edit2 size={14}/></button><button onClick={() => eliminarRegistro(cl.id)} className="p-2 text-slate-400 dark:text-slate-500 hover:text-red-600 dark:hover:text-red-500 transition-colors"><Trash2 size={14}/></button></div>
                     </div>
                   </div>
                 ))} 
@@ -548,42 +548,42 @@ export default function SATConfigPage() {
                   const catalogoSAT = { "CTR01": "Caja Seca (Camión)", "CTR02": "Caja Seca (Tráiler)", "CTR03": "Caja Refrigerada", "CTR04": "Plataforma", "CTR05": "Cama Baja", "CTR06": "Portacontenedor", "CTR08": "Tolva", "CTR10": "Tanque", "CTR12": "Góndola" };
                   const nombreTipo = catalogoSAT[r.subtipo_remolque] || r.subtipo_remolque;
                   return (
-                    <div key={r.id} className="bg-slate-900 border border-slate-800 p-6 rounded-[2rem] group hover:border-blue-500/40 transition-all">
+                    <div key={r.id} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-[2rem] group hover:border-blue-400 dark:hover:border-blue-500/40 transition-all shadow-sm dark:shadow-xl">
                       <div className="flex justify-between items-start">
                         <div className="flex gap-4">
-                          <div className="bg-slate-950 p-3 rounded-2xl text-blue-500"><Truck size={20} /></div>
-                          <div><h4 className="text-white font-black uppercase text-xs italic">{r.numero_economico}</h4><p className="text-[11px] text-slate-400 font-mono mt-1">Placas: {r.placas}</p><p className="text-[9px] text-slate-500 font-bold mt-1 uppercase tracking-wider">{nombreTipo}</p></div>
+                          <div className="bg-slate-50 dark:bg-slate-950 p-3 rounded-2xl text-blue-600 dark:text-blue-500 transition-colors"><Truck size={20} /></div>
+                          <div><h4 className="text-slate-900 dark:text-white font-black uppercase text-xs italic transition-colors">{r.numero_economico}</h4><p className="text-[11px] text-slate-500 dark:text-slate-400 font-mono mt-1 transition-colors">Placas: {r.placas}</p><p className="text-[9px] text-slate-600 dark:text-slate-400 font-bold mt-1 uppercase tracking-wider transition-colors">{nombreTipo}</p></div>
                         </div>
-                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all"><button onClick={() => editarRemolque(r)} className="p-2 text-slate-500 hover:text-blue-500"><Edit2 size={14}/></button><button onClick={() => eliminarRegistro(r.id)} className="p-2 text-slate-500 hover:text-red-500"><Trash2 size={14}/></button></div>
+                        <div className="flex gap-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-all"><button onClick={() => editarRemolque(r)} className="p-2 text-slate-400 dark:text-slate-500 hover:text-blue-600 dark:hover:text-blue-500 transition-colors"><Edit2 size={14}/></button><button onClick={() => eliminarRegistro(r.id)} className="p-2 text-slate-400 dark:text-slate-500 hover:text-red-600 dark:hover:text-red-500 transition-colors"><Trash2 size={14}/></button></div>
                       </div>
                     </div>
                   );
                 })}
 
                 {activeTab === 'ubicaciones' && ubicaciones.map(ub => (
-                  <div key={ub.id} className="bg-slate-900 border border-slate-800 p-6 rounded-[2rem] group hover:border-blue-500/40 transition-all">
+                  <div key={ub.id} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-[2rem] group hover:border-blue-400 dark:hover:border-blue-500/40 transition-all shadow-sm dark:shadow-xl">
                     <div className="flex justify-between items-start">
                       <div className="flex gap-4">
-                        <div className="bg-slate-950 p-3 rounded-2xl text-blue-500"><MapPin size={20} /></div>
-                        <div><h4 className="text-white font-black uppercase text-xs italic">{ub.nombre_lugar}</h4><p className="text-[10px] text-slate-500 font-bold mt-0.5">CP: {ub.codigo_postal}</p></div>
+                        <div className="bg-slate-50 dark:bg-slate-950 p-3 rounded-2xl text-blue-600 dark:text-blue-500 transition-colors"><MapPin size={20} /></div>
+                        <div><h4 className="text-slate-900 dark:text-white font-black uppercase text-xs italic transition-colors">{ub.nombre_lugar}</h4><p className="text-[10px] text-slate-600 dark:text-slate-400 font-bold mt-0.5 transition-colors">CP: {ub.codigo_postal}</p></div>
                       </div>
-                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all"><button onClick={() => editarUbicacion(ub)} className="p-2 text-slate-500 hover:text-blue-500"><Edit2 size={14}/></button><button onClick={() => eliminarRegistro(ub.id)} className="p-2 text-slate-500 hover:text-red-500"><Trash2 size={14}/></button></div>
+                      <div className="flex gap-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-all"><button onClick={() => editarUbicacion(ub)} className="p-2 text-slate-400 dark:text-slate-500 hover:text-blue-600 dark:hover:text-blue-500 transition-colors"><Edit2 size={14}/></button><button onClick={() => eliminarRegistro(ub.id)} className="p-2 text-slate-400 dark:text-slate-500 hover:text-red-600 dark:hover:text-red-500 transition-colors"><Trash2 size={14}/></button></div>
                     </div>
                   </div>
                 ))}
 
                 {activeTab === 'mercancias' && mercancias.map(me => (
-                  <div key={me.id} className={`bg-slate-900 border ${me.material_peligroso ? 'border-red-500/30' : 'border-slate-800'} p-6 rounded-[2rem] group hover:border-blue-500/40 transition-all`}>
+                  <div key={me.id} className={`bg-white dark:bg-slate-900 border ${me.material_peligroso ? 'border-red-200 dark:border-red-500/30' : 'border-slate-200 dark:border-slate-800'} p-6 rounded-[2rem] group hover:border-blue-400 dark:hover:border-blue-500/40 transition-all shadow-sm dark:shadow-xl`}>
                     <div className="flex justify-between items-start">
                       <div className="flex gap-4">
-                        <div className={`bg-slate-950 p-3 rounded-2xl ${me.material_peligroso ? 'text-red-500' : 'text-blue-500'}`}><Package size={20} /></div>
+                        <div className={`bg-slate-50 dark:bg-slate-950 p-3 rounded-2xl transition-colors ${me.material_peligroso ? 'text-red-600 dark:text-red-500' : 'text-blue-600 dark:text-blue-500'}`}><Package size={20} /></div>
                         <div>
-                          <h4 className="text-white font-black uppercase text-xs italic truncate max-w-[150px]">{me.descripcion}</h4>
-                          <p className="text-[10px] text-slate-500 font-mono mt-0.5">SAT: {me.clave_sat} | EMB: {me.clave_embalaje || '4G'}</p>
-                          {me.material_peligroso && <p className="text-[8px] text-red-500 font-black uppercase mt-1 tracking-widest bg-red-500/10 w-fit px-2 py-0.5 rounded-md">⚠️ Material Peligroso</p>}
+                          <h4 className="text-slate-900 dark:text-white font-black uppercase text-xs italic truncate max-w-[150px] transition-colors">{me.descripcion}</h4>
+                          <p className="text-[10px] text-slate-500 font-mono mt-0.5 transition-colors">SAT: {me.clave_sat} | EMB: {me.clave_embalaje || '4G'}</p>
+                          {me.material_peligroso && <p className="text-[8px] text-red-600 dark:text-red-400 font-black uppercase mt-1 tracking-widest bg-red-50 dark:bg-red-500/10 w-fit px-2 py-0.5 rounded-md transition-colors">⚠️ Material Peligroso</p>}
                         </div>
                       </div>
-                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all"><button onClick={() => editarMercancia(me)} className="p-2 text-slate-500 hover:text-blue-500"><Edit2 size={14}/></button><button onClick={() => eliminarRegistro(me.id)} className="p-2 text-slate-500 hover:text-red-500"><Trash2 size={14}/></button></div>
+                      <div className="flex gap-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-all"><button onClick={() => editarMercancia(me)} className="p-2 text-slate-400 dark:text-slate-500 hover:text-blue-600 dark:hover:text-blue-500 transition-colors"><Edit2 size={14}/></button><button onClick={() => eliminarRegistro(me.id)} className="p-2 text-slate-400 dark:text-slate-500 hover:text-red-600 dark:hover:text-red-500 transition-colors"><Trash2 size={14}/></button></div>
                     </div>
                   </div>
                 ))}
@@ -591,59 +591,59 @@ export default function SATConfigPage() {
             </div>
           ) : (
             // =========================================================
-            // PESTAÑA EMISOR FISCAL RESTAURADA
+            // PESTAÑA EMISOR FISCAL RESTAURADA Y ADAPTADA A MODO CLARO
             // =========================================================
-            <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-2">
+            <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-2 transition-colors">
               
               {/* FILA 1: PERFIL Y LOGOTIPO */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 
                 {/* Tarjeta 1: Datos de Facturación */}
-                <div className="bg-slate-900 border border-slate-800 p-8 rounded-[2.5rem] flex flex-col">
-                  <Building2 className="text-blue-500 mb-5" size={32} />
-                  <h3 className="text-xl font-black text-white italic uppercase mb-1">Perfil del <span className="text-blue-500">Transportista</span></h3>
-                  <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-6">Datos de Facturación</p>
+                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 sm:p-8 rounded-[2.5rem] flex flex-col shadow-sm dark:shadow-xl transition-colors">
+                  <Building2 className="text-blue-600 dark:text-blue-500 mb-5 transition-colors" size={32} />
+                  <h3 className="text-xl font-black text-slate-900 dark:text-white italic uppercase mb-1 transition-colors">Perfil del <span className="text-blue-600 dark:text-blue-500">Transportista</span></h3>
+                  <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-6 transition-colors">Datos de Facturación</p>
                   
                   <div className="grid grid-cols-1 gap-5">
                     <div>
-                      <label className="text-[9px] font-black text-slate-500 uppercase ml-1 mb-2 block">Razón Social</label>
-                      <input className="w-full bg-slate-950 border border-slate-800 p-4 rounded-2xl text-sm text-white outline-none focus:border-blue-500 uppercase" 
+                      <label className="text-[9px] font-black text-slate-500 uppercase ml-1 mb-2 block transition-colors">Razón Social</label>
+                      <input className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl text-sm text-slate-900 dark:text-white outline-none focus:border-blue-500 uppercase transition-colors" 
                         value={perfilFiscal.razon_social} onChange={e => setPerfilFiscal({...perfilFiscal, razon_social: e.target.value.toUpperCase()})} />
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
-                        <label className="text-[9px] font-black text-slate-500 uppercase ml-1 mb-2 block">RFC</label>
-                        <input className="w-full bg-slate-950 border border-slate-800 p-4 rounded-2xl text-sm text-white uppercase font-mono" 
+                        <label className="text-[9px] font-black text-slate-500 uppercase ml-1 mb-2 block transition-colors">RFC</label>
+                        <input className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl text-sm text-slate-900 dark:text-white uppercase font-mono transition-colors" 
                           value={perfilFiscal.rfc} onChange={e => setPerfilFiscal({...perfilFiscal, rfc: e.target.value})} />
                       </div>
                       <div>
-                        <label className="text-[9px] font-black text-slate-500 uppercase ml-1 mb-2 block">CP Fiscal</label>
-                        <input className="w-full bg-slate-950 border border-slate-800 p-4 rounded-2xl text-sm text-white" 
+                        <label className="text-[9px] font-black text-slate-500 uppercase ml-1 mb-2 block transition-colors">CP Fiscal</label>
+                        <input className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl text-sm text-slate-900 dark:text-white transition-colors" 
                           value={perfilFiscal.codigo_postal} onChange={e => setPerfilFiscal({...perfilFiscal, codigo_postal: e.target.value})} />
                       </div>
                     </div>
                     
-                    <div className="pt-4 border-t border-slate-800 mt-2">
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Dirección Comercial</p>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="col-span-2">
-                          <label className="text-[9px] font-black text-slate-500 uppercase ml-1 mb-2 block">Calle y Número</label>
-                          <input className="w-full bg-slate-950 border border-slate-800 p-3 rounded-xl text-sm text-white" 
+                    <div className="pt-4 border-t border-slate-200 dark:border-slate-800 mt-2 transition-colors">
+                      <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-4 transition-colors">Dirección Comercial</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="sm:col-span-2">
+                          <label className="text-[9px] font-black text-slate-500 uppercase ml-1 mb-2 block transition-colors">Calle y Número</label>
+                          <input className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-3 rounded-xl text-sm text-slate-900 dark:text-white transition-colors" 
                             placeholder="Ej. Av. Universidad 123" value={perfilFiscal.calle_numero} onChange={e => setPerfilFiscal({...perfilFiscal, calle_numero: e.target.value})} />
                         </div>
-                        <div className="col-span-2">
-                          <label className="text-[9px] font-black text-slate-500 uppercase ml-1 mb-2 block">Colonia</label>
-                          <input className="w-full bg-slate-950 border border-slate-800 p-3 rounded-xl text-sm text-white" 
+                        <div className="sm:col-span-2">
+                          <label className="text-[9px] font-black text-slate-500 uppercase ml-1 mb-2 block transition-colors">Colonia</label>
+                          <input className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-3 rounded-xl text-sm text-slate-900 dark:text-white transition-colors" 
                             placeholder="Ej. Centro" value={perfilFiscal.colonia} onChange={e => setPerfilFiscal({...perfilFiscal, colonia: e.target.value})} />
                         </div>
                         <div>
-                          <label className="text-[9px] font-black text-slate-500 uppercase ml-1 mb-2 block">Municipio</label>
-                          <input className="w-full bg-slate-950 border border-slate-800 p-3 rounded-xl text-sm text-white" 
+                          <label className="text-[9px] font-black text-slate-500 uppercase ml-1 mb-2 block transition-colors">Municipio</label>
+                          <input className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-3 rounded-xl text-sm text-slate-900 dark:text-white transition-colors" 
                             placeholder="Ej. Monterrey" value={perfilFiscal.municipio} onChange={e => setPerfilFiscal({...perfilFiscal, municipio: e.target.value})} />
                         </div>
                         <div>
-                          <label className="text-[9px] font-black text-slate-500 uppercase ml-1 mb-2 block">Estado</label>
-                          <input className="w-full bg-slate-950 border border-slate-800 p-3 rounded-xl text-sm text-white" 
+                          <label className="text-[9px] font-black text-slate-500 uppercase ml-1 mb-2 block transition-colors">Estado</label>
+                          <input className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-3 rounded-xl text-sm text-slate-900 dark:text-white transition-colors" 
                             placeholder="Ej. Nuevo León" value={perfilFiscal.estado} onChange={e => setPerfilFiscal({...perfilFiscal, estado: e.target.value})} />
                         </div>
                       </div>
@@ -652,29 +652,29 @@ export default function SATConfigPage() {
                 </div>
 
                 {/* Tarjeta 2: LOGOTIPO */}
-                <div className="bg-slate-900 border border-slate-800 p-8 rounded-[2.5rem] flex flex-col">
-                  <ImageIcon className="text-orange-500 mb-5" size={32} />
-                  <h3 className="text-xl font-black text-white italic uppercase mb-1">Imagen <span className="text-orange-500">Corporativa</span></h3>
-                  <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-8">Logotipo para Facturas y Carta Porte</p>
+                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 sm:p-8 rounded-[2.5rem] flex flex-col shadow-sm dark:shadow-xl transition-colors">
+                  <ImageIcon className="text-orange-500 mb-5 transition-colors" size={32} />
+                  <h3 className="text-xl font-black text-slate-900 dark:text-white italic uppercase mb-1 transition-colors">Imagen <span className="text-orange-500">Corporativa</span></h3>
+                  <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-8 transition-colors">Logotipo para Facturas y Carta Porte</p>
                   
                   <div className="flex flex-col items-center justify-center gap-8 flex-1">
-                    <div className="w-56 h-56 bg-slate-950 rounded-[2rem] border-2 border-dashed border-slate-700 flex items-center justify-center overflow-hidden p-4 relative group">
+                    <div className="w-48 h-48 sm:w-56 sm:h-56 bg-slate-50 dark:bg-slate-950 rounded-[2rem] border-2 border-dashed border-slate-300 dark:border-slate-700 flex items-center justify-center overflow-hidden p-4 relative group transition-colors">
                       {perfilFiscal.logo_base64 ? (
                         <img src={perfilFiscal.logo_base64} alt="Logo Empresa" className="w-full h-full object-contain" />
                       ) : (
                         <div className="text-center">
-                          <ImageIcon className="text-slate-700 mx-auto mb-2" size={32} />
-                          <span className="text-xs text-slate-600 font-black uppercase tracking-widest">Sin Logotipo</span>
+                          <ImageIcon className="text-slate-400 dark:text-slate-700 mx-auto mb-2 transition-colors" size={32} />
+                          <span className="text-xs text-slate-500 dark:text-slate-600 font-black uppercase tracking-widest transition-colors">Sin Logotipo</span>
                         </div>
                       )}
                     </div>
                     
                     <div className="w-full">
-                      <label className="w-full flex flex-col items-center justify-center p-4 rounded-2xl border border-slate-800 bg-slate-950 hover:bg-slate-800 cursor-pointer transition-all">
-                        <span className="text-[10px] font-black text-white uppercase tracking-widest flex items-center gap-2">
+                      <label className="w-full flex flex-col items-center justify-center p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer transition-all">
+                        <span className="text-[10px] font-black text-slate-900 dark:text-white uppercase tracking-widest flex items-center gap-2 transition-colors">
                           <ImageIcon size={14} /> Seleccionar Nueva Imagen
                         </span>
-                        <span className="text-[8px] text-slate-500 mt-1 uppercase">PNG o JPG (Max 1MB)</span>
+                        <span className="text-[8px] text-slate-500 mt-1 uppercase transition-colors">PNG o JPG (Max 1MB)</span>
                         <input type="file" accept="image/png, image/jpeg" className="hidden"
                           onChange={(e) => {
                             const file = e.target.files[0];
@@ -696,8 +696,8 @@ export default function SATConfigPage() {
               {/* BOTÓN GIGANTE */}
               <div className="mt-4">
                 <button type="button" onClick={guardarPerfilFiscal} disabled={loading} 
-                  className={`w-full py-6 rounded-[2rem] font-black uppercase text-sm tracking-[0.2em] shadow-2xl flex justify-center items-center gap-3 transition-all 
-                  ${loading ? 'bg-slate-800 text-slate-500 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-500'}`}>
+                  className={`w-full py-6 rounded-[2rem] font-black uppercase text-sm tracking-[0.2em] shadow-lg flex justify-center items-center gap-3 transition-all 
+                  ${loading ? 'bg-slate-200 dark:bg-slate-800 text-slate-500 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-500 shadow-blue-900/20'}`}>
                   <Save size={20}/> {loading ? "Sincronizando..." : "Guardar Datos"}
                 </button>
               </div>
@@ -710,13 +710,13 @@ export default function SATConfigPage() {
           {/* ========================================================= */}
           {dialogoConfirmacion.visible && (
             <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-              <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-sm" onClick={() => setDialogoConfirmacion({ visible: false, mensaje: '', accion: null })} />
-              <div className="relative bg-slate-900 border border-slate-800 w-full max-w-sm rounded-[2rem] p-8 shadow-2xl flex flex-col items-center text-center animate-in zoom-in-95 duration-200">
-                <div className="w-16 h-16 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mb-6"><AlertTriangle size={32} /></div>
-                <h3 className="text-xl font-black text-white uppercase tracking-widest mb-2">¿Estás Seguro?</h3>
-                <p className="text-slate-400 text-sm mb-8">{dialogoConfirmacion.mensaje}</p>
+              <div className="absolute inset-0 bg-slate-900/50 dark:bg-slate-950/90 backdrop-blur-sm" onClick={() => setDialogoConfirmacion({ visible: false, mensaje: '', accion: null })} />
+              <div className="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 w-full max-w-sm rounded-[2rem] p-8 shadow-2xl flex flex-col items-center text-center animate-in zoom-in-95 duration-200 transition-colors">
+                <div className="w-16 h-16 bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-500 rounded-full flex items-center justify-center mb-6 transition-colors"><AlertTriangle size={32} /></div>
+                <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-widest mb-2 transition-colors">¿Estás Seguro?</h3>
+                <p className="text-slate-500 dark:text-slate-400 text-sm mb-8 transition-colors">{dialogoConfirmacion.mensaje}</p>
                 <div className="flex gap-3 w-full">
-                  <button onClick={() => setDialogoConfirmacion({ visible: false, mensaje: '', accion: null })} disabled={loading} className="flex-1 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest bg-slate-800 text-slate-300 hover:bg-slate-700 transition-colors">Descartar</button>
+                  <button onClick={() => setDialogoConfirmacion({ visible: false, mensaje: '', accion: null })} disabled={loading} className="flex-1 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">Descartar</button>
                   <button onClick={ejecutarConfirmacion} disabled={loading} className="flex-1 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest bg-red-600 text-white hover:bg-red-500 transition-colors shadow-lg shadow-red-900/20">{loading ? <Loader2 size={14} className="animate-spin mx-auto" /> : "Sí, Proceder"}</button>
                 </div>
               </div>
@@ -728,72 +728,72 @@ export default function SATConfigPage() {
           {/* ============================================================================== */}
           {mostrarModal && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-              <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-md" onClick={cerrarModal} />
+              <div className="absolute inset-0 bg-slate-900/50 dark:bg-slate-950/90 backdrop-blur-md transition-colors" onClick={cerrarModal} />
               
-              <div className={`relative bg-slate-900 border border-slate-800 w-full ${activeTab === 'operadores' ? 'max-w-4xl' : 'max-w-2xl'} flex flex-col max-h-[90vh] rounded-[2.5rem] shadow-2xl animate-in zoom-in-95 overflow-hidden`}>
+              <div className={`relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 w-full ${activeTab === 'operadores' ? 'max-w-4xl' : 'max-w-2xl'} flex flex-col max-h-[90vh] rounded-[2.5rem] shadow-2xl animate-in zoom-in-95 overflow-hidden transition-colors`}>
                 
-                <div className={`p-8 border-b border-slate-800 flex justify-between items-center bg-slate-900 shrink-0 ${activeTab !== 'operadores' ? 'pb-6' : ''}`}>
+                <div className={`p-6 sm:p-8 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-900 shrink-0 transition-colors ${activeTab !== 'operadores' ? 'pb-6' : ''}`}>
                   <div>
-                    <h2 className="text-2xl font-black text-white italic uppercase leading-none">
+                    <h2 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white italic uppercase leading-none transition-colors">
                       {activeTab === 'operadores' && editandoId ? `Expediente Operativo` : `Registrar ${tituloSingular[activeTab]}`}
                     </h2>
-                    {activeTab === 'operadores' && editandoId && <p className="text-slate-400 text-[11px] font-mono mt-2 text-blue-400 font-bold uppercase tracking-widest">{formDataOp.nombre_completo}</p>}
+                    {activeTab === 'operadores' && editandoId && <p className="text-slate-500 dark:text-slate-400 text-[11px] font-mono mt-2 text-blue-600 dark:text-blue-400 font-bold uppercase tracking-widest transition-colors">{formDataOp.nombre_completo}</p>}
                   </div>
-                  <button onClick={cerrarModal} className="text-slate-500 hover:text-white bg-slate-950 p-2 rounded-full"><X size={20} /></button>
+                  <button onClick={cerrarModal} className="text-slate-400 hover:text-slate-600 dark:hover:text-white bg-slate-100 dark:bg-slate-950 p-2 rounded-full transition-colors"><X size={20} /></button>
                 </div>
 
                 {activeTab === 'operadores' && (
-                  <div className="flex px-8 border-b border-slate-800 bg-slate-950 shrink-0">
-                    <button onClick={() => setTabOperador('ficha')} className={`py-4 px-6 text-[10px] font-black uppercase tracking-widest transition-all border-b-2 flex items-center gap-2 ${tabOperador === 'ficha' ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-500 hover:text-slate-300'}`}>
+                  <div className="flex px-4 sm:px-8 border-b border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-950 shrink-0 overflow-x-auto scrollbar-hide transition-colors">
+                    <button onClick={() => setTabOperador('ficha')} className={`py-4 px-4 sm:px-6 text-[10px] font-black uppercase tracking-widest transition-all border-b-2 flex items-center gap-2 shrink-0 ${tabOperador === 'ficha' ? 'border-blue-600 dark:border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>
                       <User size={14}/> Ficha de Identidad
                     </button>
-                    <button onClick={() => setTabOperador('documentos')} className={`py-4 px-6 text-[10px] font-black uppercase tracking-widest transition-all border-b-2 flex items-center gap-2 ${tabOperador === 'documentos' ? 'border-purple-500 text-purple-400' : 'border-transparent text-slate-500 hover:text-slate-300'}`}>
+                    <button onClick={() => setTabOperador('documentos')} className={`py-4 px-4 sm:px-6 text-[10px] font-black uppercase tracking-widest transition-all border-b-2 flex items-center gap-2 shrink-0 ${tabOperador === 'documentos' ? 'border-purple-600 dark:border-purple-500 text-purple-600 dark:text-purple-400' : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>
                       <FileText size={14}/> Bóveda Digital
                     </button>
                   </div>
                 )}
 
-                <div className="p-8 overflow-y-auto bg-slate-900 flex-1">
+                <div className="p-4 sm:p-8 overflow-y-auto bg-white dark:bg-slate-900 flex-1 custom-scrollbar transition-colors">
                   
                   {/* FORMULARIOS ESTÁNDAR RESTAURADOS */}
                   {activeTab !== 'operadores' && (
                     <form onSubmit={guardarRegistro} className="space-y-6">
                       
                       {activeTab === 'clientes' && (
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="col-span-2 bg-yellow-500/10 border border-yellow-500/20 p-4 rounded-xl mb-2"><p className="text-[10px] text-yellow-500 font-bold uppercase tracking-wider flex items-center gap-2">⚠️ Regla CFDI 4.0 del SAT</p><p className="text-[9px] text-yellow-400/80 mt-1">El Nombre y Código Postal deben capturarse <strong>exactamente</strong> como aparecen en la Constancia de Situación Fiscal. Omite el "S.A. DE C.V.".</p></div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div className="sm:col-span-2 bg-yellow-50 dark:bg-yellow-500/10 border border-yellow-200 dark:border-yellow-500/20 p-4 rounded-xl mb-2 transition-colors"><p className="text-[10px] text-yellow-600 dark:text-yellow-500 font-bold uppercase tracking-wider flex items-center gap-2 transition-colors">⚠️ Regla CFDI 4.0 del SAT</p><p className="text-[9px] text-yellow-700 dark:text-yellow-400/80 mt-1 transition-colors">El Nombre y Código Postal deben capturarse <strong>exactamente</strong> como aparecen en la Constancia de Situación Fiscal. Omite el "S.A. DE C.V.".</p></div>
                           
-                          <div className="col-span-2"><label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1">Razón Social del Cliente</label><input required className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white font-bold uppercase" value={formDataCl.nombre} onChange={e => setFormDataCl({...formDataCl, nombre: e.target.value.toUpperCase()})} /></div>
-                          <div><label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1">RFC</label><input required className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white uppercase font-mono" value={formDataCl.rfc} onChange={e => setFormDataCl({...formDataCl, rfc: e.target.value})} /></div>
-                          <div><label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1">CP Fiscal</label><input required className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white" value={formDataCl.codigo_postal} onChange={e => setFormDataCl({...formDataCl, codigo_postal: e.target.value})} /></div>
+                          <div className="sm:col-span-2"><label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1 transition-colors">Razón Social del Cliente</label><input required className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white font-bold uppercase transition-colors" value={formDataCl.nombre} onChange={e => setFormDataCl({...formDataCl, nombre: e.target.value.toUpperCase()})} /></div>
+                          <div><label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1 transition-colors">RFC</label><input required className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white uppercase font-mono transition-colors" value={formDataCl.rfc} onChange={e => setFormDataCl({...formDataCl, rfc: e.target.value})} /></div>
+                          <div><label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1 transition-colors">CP Fiscal</label><input required className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white transition-colors" value={formDataCl.codigo_postal} onChange={e => setFormDataCl({...formDataCl, codigo_postal: e.target.value})} /></div>
                           
-                          <div className="col-span-2 mt-2"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-800 pb-2">Domicilio del Cliente</p></div>
-                          <div className="col-span-2"><label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1">Calle y Número</label><input className="w-full bg-slate-950 border border-slate-800 p-3 rounded-xl text-sm text-white" value={formDataCl.calle_numero} onChange={e => setFormDataCl({...formDataCl, calle_numero: e.target.value})} /></div>
-                          <div className="col-span-2"><label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1">Colonia</label><input className="w-full bg-slate-950 border border-slate-800 p-3 rounded-xl text-sm text-white" value={formDataCl.colonia} onChange={e => setFormDataCl({...formDataCl, colonia: e.target.value})} /></div>
-                          <div><label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1">Municipio</label><input className="w-full bg-slate-950 border border-slate-800 p-3 rounded-xl text-sm text-white" value={formDataCl.municipio} onChange={e => setFormDataCl({...formDataCl, municipio: e.target.value})} /></div>
-                          <div><label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1">Estado</label><input className="w-full bg-slate-950 border border-slate-800 p-3 rounded-xl text-sm text-white" value={formDataCl.estado} onChange={e => setFormDataCl({...formDataCl, estado: e.target.value})} /></div>
+                          <div className="sm:col-span-2 mt-2"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-200 dark:border-slate-800 pb-2 transition-colors">Domicilio del Cliente</p></div>
+                          <div className="sm:col-span-2"><label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1 transition-colors">Calle y Número</label><input className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-3 rounded-xl text-sm text-slate-900 dark:text-white transition-colors" value={formDataCl.calle_numero} onChange={e => setFormDataCl({...formDataCl, calle_numero: e.target.value})} /></div>
+                          <div className="sm:col-span-2"><label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1 transition-colors">Colonia</label><input className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-3 rounded-xl text-sm text-slate-900 dark:text-white transition-colors" value={formDataCl.colonia} onChange={e => setFormDataCl({...formDataCl, colonia: e.target.value})} /></div>
+                          <div><label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1 transition-colors">Municipio</label><input className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-3 rounded-xl text-sm text-slate-900 dark:text-white transition-colors" value={formDataCl.municipio} onChange={e => setFormDataCl({...formDataCl, municipio: e.target.value})} /></div>
+                          <div><label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1 transition-colors">Estado</label><input className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-3 rounded-xl text-sm text-slate-900 dark:text-white transition-colors" value={formDataCl.estado} onChange={e => setFormDataCl({...formDataCl, estado: e.target.value})} /></div>
                           
-                          <div className="col-span-2 mt-2"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-800 pb-2">Datos Fiscales</p></div>
-                          <div className="col-span-2"><label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1">Régimen Fiscal</label><select className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white font-bold" value={formDataCl.regimen_fiscal} onChange={e => setFormDataCl({...formDataCl, regimen_fiscal: e.target.value})}><option value="601">601 - General de Ley Personas Morales</option><option value="612">612 - Personas Físicas con Actividad Empresarial</option><option value="626">626 - Régimen Simplificado de Confianza (RESICO)</option></select></div>
-                          <div className="col-span-2"><label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1">Uso de CFDI</label><select className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white font-bold" value={formDataCl.uso_cfdi} onChange={e => setFormDataCl({...formDataCl, uso_cfdi: e.target.value})}><option value="G03">G03 - Gastos en general</option><option value="G01">G01 - Adquisición de mercancías</option><option value="S01">S01 - Sin efectos fiscales</option></select></div>
+                          <div className="sm:col-span-2 mt-2"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-200 dark:border-slate-800 pb-2 transition-colors">Datos Fiscales</p></div>
+                          <div className="sm:col-span-2"><label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1 transition-colors">Régimen Fiscal</label><select className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white font-bold transition-colors" value={formDataCl.regimen_fiscal} onChange={e => setFormDataCl({...formDataCl, regimen_fiscal: e.target.value})}><option value="601">601 - General de Ley Personas Morales</option><option value="612">612 - Personas Físicas con Actividad Empresarial</option><option value="626">626 - Régimen Simplificado de Confianza (RESICO)</option></select></div>
+                          <div className="sm:col-span-2"><label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1 transition-colors">Uso de CFDI</label><select className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white font-bold transition-colors" value={formDataCl.uso_cfdi} onChange={e => setFormDataCl({...formDataCl, uso_cfdi: e.target.value})}><option value="G03">G03 - Gastos en general</option><option value="G01">G01 - Adquisición de mercancías</option><option value="S01">S01 - Sin efectos fiscales</option></select></div>
                         </div>
                       )}
 
                       {activeTab === 'remolques' && (
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="col-span-2"><label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1">Número Económico (Alias)</label><input required className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white font-bold" placeholder="Ej: CAJA-01" value={formDataRe.numero_economico} onChange={e => setFormDataRe({...formDataRe, numero_economico: e.target.value})} /></div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div className="sm:col-span-2"><label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1 transition-colors">Número Económico (Alias)</label><input required className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white font-bold transition-colors" placeholder="Ej: CAJA-01" value={formDataRe.numero_economico} onChange={e => setFormDataRe({...formDataRe, numero_economico: e.target.value})} /></div>
                           
-                          <div className="col-span-2 flex gap-2">
-                            <select className="bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white w-1/3" value={formDataRe.tipo_placa} onChange={e => setFormDataRe({...formDataRe, tipo_placa: e.target.value})}>
+                          <div className="sm:col-span-2 flex flex-col sm:flex-row gap-2">
+                            <select className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white w-full sm:w-1/3 transition-colors" value={formDataRe.tipo_placa} onChange={e => setFormDataRe({...formDataRe, tipo_placa: e.target.value})}>
                               <option value="Federal">Federal</option>
                               <option value="Estatal">Estatal</option>
                             </select>
-                            <input required className="flex-1 bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white uppercase font-mono" placeholder="Placas (Ej: 456ABC)" value={formDataRe.placas} onChange={e => setFormDataRe({...formDataRe, placas: e.target.value})} />
+                            <input required className="flex-1 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white uppercase font-mono transition-colors" placeholder="Placas (Ej: 456ABC)" value={formDataRe.placas} onChange={e => setFormDataRe({...formDataRe, placas: e.target.value})} />
                           </div>
 
-                          <div className="col-span-2">
-                            <label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1">Tipo de Remolque (Catálogo SAT 3.1)</label>
-                            <select className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white" value={formDataRe.subtipo_remolque} onChange={e => setFormDataRe({...formDataRe, subtipo_remolque: e.target.value})}>
+                          <div className="sm:col-span-2">
+                            <label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1 transition-colors">Tipo de Remolque (Catálogo SAT 3.1)</label>
+                            <select className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white transition-colors" value={formDataRe.subtipo_remolque} onChange={e => setFormDataRe({...formDataRe, subtipo_remolque: e.target.value})}>
                               <option value="CTR01">CTR01 - Caja Seca (Camión / Rabón)</option>
                               <option value="CTR02">CTR02 - Caja Seca (Tráiler / Full)</option>
                               <option value="CTR03">CTR03 - Caja Refrigerada</option>
@@ -809,42 +809,42 @@ export default function SATConfigPage() {
                       )}
 
                       {activeTab === 'ubicaciones' && (
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="col-span-2 bg-blue-500/10 border border-blue-500/20 p-4 rounded-xl mb-2">
-                            <p className="text-[10px] text-blue-500 font-bold uppercase tracking-wider flex items-center gap-2">⚠️ Dato Obligatorio</p>
-                            <p className="text-[9px] text-blue-400/80 mt-1">El <strong>RFC y el Estado (3 letras)</strong> son indispensables. Si no los registras, el SAT no te permitirá timbrar la Carta Porte.</p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div className="sm:col-span-2 bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 p-4 rounded-xl mb-2 transition-colors">
+                            <p className="text-[10px] text-blue-600 dark:text-blue-500 font-bold uppercase tracking-wider flex items-center gap-2 transition-colors">⚠️ Dato Obligatorio</p>
+                            <p className="text-[9px] text-blue-700 dark:text-blue-400/80 mt-1 transition-colors">El <strong>RFC y el Estado (3 letras)</strong> son indispensables. Si no los registras, el SAT no te permitirá timbrar la Carta Porte.</p>
                           </div>
                           
-                          <div className="col-span-2"><label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1">Nombre / Alias del Lugar</label><input required className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white" placeholder="Ej: CEDIS Monterrey" value={formDataUb.nombre_lugar} onChange={e => setFormDataUb({...formDataUb, nombre_lugar: e.target.value})} /></div>
-                          <div><label className="text-[9px] font-black text-blue-500 uppercase block mb-2 ml-1">Código Postal</label><input required className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white" value={formDataUb.codigo_postal} onChange={e => setFormDataUb({...formDataUb, codigo_postal: e.target.value})} /></div>
-                          <div><label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1">RFC Ubicación</label><input required className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white uppercase" value={formDataUb.rfc_ubicacion} onChange={e => setFormDataUb({...formDataUb, rfc_ubicacion: e.target.value})} /></div>
+                          <div className="sm:col-span-2"><label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1 transition-colors">Nombre / Alias del Lugar</label><input required className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white transition-colors" placeholder="Ej: CEDIS Monterrey" value={formDataUb.nombre_lugar} onChange={e => setFormDataUb({...formDataUb, nombre_lugar: e.target.value})} /></div>
+                          <div><label className="text-[9px] font-black text-blue-600 dark:text-blue-500 uppercase block mb-2 ml-1 transition-colors">Código Postal</label><input required className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white transition-colors" value={formDataUb.codigo_postal} onChange={e => setFormDataUb({...formDataUb, codigo_postal: e.target.value})} /></div>
+                          <div><label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1 transition-colors">RFC Ubicación</label><input required className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white uppercase transition-colors" value={formDataUb.rfc_ubicacion} onChange={e => setFormDataUb({...formDataUb, rfc_ubicacion: e.target.value})} /></div>
                           
-                          <div className="col-span-2 mt-2"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-800 pb-2">Domicilio de la Ubicación</p></div>
-                          <div className="col-span-2"><label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1">Calle y Número</label><input className="w-full bg-slate-950 border border-slate-800 p-3 rounded-xl text-sm text-white" value={formDataUb.calle_numero} onChange={e => setFormDataUb({...formDataUb, calle_numero: e.target.value})} /></div>
-                          <div className="col-span-2"><label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1">Colonia</label><input className="w-full bg-slate-950 border border-slate-800 p-3 rounded-xl text-sm text-white" value={formDataUb.colonia} onChange={e => setFormDataUb({...formDataUb, colonia: e.target.value})} /></div>
-                          <div><label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1">Municipio</label><input className="w-full bg-slate-950 border border-slate-800 p-3 rounded-xl text-sm text-white" value={formDataUb.municipio} onChange={e => setFormDataUb({...formDataUb, municipio: e.target.value})} /></div>
-                          <div><label className="text-[9px] font-black text-blue-500 uppercase block mb-2 ml-1">Estado (Clave SAT Ej: NLE)</label><input required className="w-full bg-slate-950 border border-slate-800 p-3 rounded-xl text-sm text-white uppercase" placeholder="Ej: NLE, JAL, CMX, TAM" value={formDataUb.estado} onChange={e => setFormDataUb({...formDataUb, estado: e.target.value.toUpperCase().slice(0,3)})} /></div>
+                          <div className="sm:col-span-2 mt-2"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-200 dark:border-slate-800 pb-2 transition-colors">Domicilio de la Ubicación</p></div>
+                          <div className="sm:col-span-2"><label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1 transition-colors">Calle y Número</label><input className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-3 rounded-xl text-sm text-slate-900 dark:text-white transition-colors" value={formDataUb.calle_numero} onChange={e => setFormDataUb({...formDataUb, calle_numero: e.target.value})} /></div>
+                          <div className="sm:col-span-2"><label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1 transition-colors">Colonia</label><input className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-3 rounded-xl text-sm text-slate-900 dark:text-white transition-colors" value={formDataUb.colonia} onChange={e => setFormDataUb({...formDataUb, colonia: e.target.value})} /></div>
+                          <div><label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1 transition-colors">Municipio</label><input className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-3 rounded-xl text-sm text-slate-900 dark:text-white transition-colors" value={formDataUb.municipio} onChange={e => setFormDataUb({...formDataUb, municipio: e.target.value})} /></div>
+                          <div><label className="text-[9px] font-black text-blue-600 dark:text-blue-500 uppercase block mb-2 ml-1 transition-colors">Estado (Clave SAT Ej: NLE)</label><input required className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-3 rounded-xl text-sm text-slate-900 dark:text-white uppercase transition-colors" placeholder="Ej: NLE, JAL, CMX, TAM" value={formDataUb.estado} onChange={e => setFormDataUb({...formDataUb, estado: e.target.value.toUpperCase().slice(0,3)})} /></div>
                         </div>
                       )}
 
                       {activeTab === 'mercancias' && (
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="col-span-2"><label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1">Descripción del Bien</label><input required className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white" value={formDataMe.descripcion} onChange={e => setFormDataMe({...formDataMe, descripcion: e.target.value})} /></div>
-                          <div><label className="text-[9px] font-black text-blue-500 uppercase block mb-2 ml-1">Clave SAT (Producto)</label><input required className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white" placeholder="Ej: 31181701" value={formDataMe.clave_sat} onChange={e => setFormDataMe({...formDataMe, clave_sat: e.target.value})} /></div>
-                          <div><label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1">Peso Estimado (KG)</label><input required type="number" className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white" value={formDataMe.peso_unitario_kg} onChange={e => setFormDataMe({...formDataMe, peso_unitario_kg: e.target.value})} /></div>
-                          <div className="col-span-2 mt-2 pt-4 border-t border-slate-800">
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Configuración de Envío</p>
-                            <div className="grid grid-cols-2 gap-4 items-center">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div className="sm:col-span-2"><label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1 transition-colors">Descripción del Bien</label><input required className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white transition-colors" value={formDataMe.descripcion} onChange={e => setFormDataMe({...formDataMe, descripcion: e.target.value})} /></div>
+                          <div><label className="text-[9px] font-black text-blue-600 dark:text-blue-500 uppercase block mb-2 ml-1 transition-colors">Clave SAT (Producto)</label><input required className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white transition-colors" placeholder="Ej: 31181701" value={formDataMe.clave_sat} onChange={e => setFormDataMe({...formDataMe, clave_sat: e.target.value})} /></div>
+                          <div><label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1 transition-colors">Peso Estimado (KG)</label><input required type="number" className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white transition-colors" value={formDataMe.peso_unitario_kg} onChange={e => setFormDataMe({...formDataMe, peso_unitario_kg: e.target.value})} /></div>
+                          <div className="sm:col-span-2 mt-2 pt-4 border-t border-slate-200 dark:border-slate-800 transition-colors">
+                            <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-4 transition-colors">Configuración de Envío</p>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
                               <div>
-                                <label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1">Embalaje (Clave Unidad)</label>
-                                <select className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white" value={formDataMe.clave_embalaje} onChange={e => setFormDataMe({...formDataMe, clave_embalaje: e.target.value})}>
+                                <label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1 transition-colors">Embalaje (Clave Unidad)</label>
+                                <select className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white transition-colors" value={formDataMe.clave_embalaje} onChange={e => setFormDataMe({...formDataMe, clave_embalaje: e.target.value})}>
                                   <option value="4G">4G - Cajas de Cartón</option><option value="XG">XG - Tarima (Pallet)</option><option value="H87">H87 - Pieza (Suelto)</option><option value="E48">E48 - Unidad de servicio</option><option value="KGM">KGM - Kilogramo</option>
                                 </select>
                               </div>
-                              <div className="flex items-center justify-center bg-slate-950 border border-slate-800 p-4 rounded-xl h-full">
+                              <div className="flex items-center justify-center bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl h-full transition-colors">
                                 <label className="flex items-center gap-3 cursor-pointer w-full justify-center">
-                                  <input type="checkbox" className="w-5 h-5 accent-red-500 rounded bg-slate-950 border-slate-800 cursor-pointer" checked={formDataMe.material_peligroso} onChange={e => setFormDataMe({...formDataMe, material_peligroso: e.target.checked})} />
-                                  <span className={`text-[10px] font-black uppercase tracking-widest ${formDataMe.material_peligroso ? 'text-red-500' : 'text-slate-500'}`}>¿Material Peligroso?</span>
+                                  <input type="checkbox" className="w-5 h-5 accent-red-600 dark:accent-red-500 rounded bg-white dark:bg-slate-950 border-slate-300 dark:border-slate-800 cursor-pointer transition-colors" checked={formDataMe.material_peligroso} onChange={e => setFormDataMe({...formDataMe, material_peligroso: e.target.checked})} />
+                                  <span className={`text-[10px] font-black uppercase tracking-widest transition-colors ${formDataMe.material_peligroso ? 'text-red-600 dark:text-red-500' : 'text-slate-500'}`}>¿Material Peligroso?</span>
                                 </label>
                               </div>
                             </div>
@@ -852,7 +852,7 @@ export default function SATConfigPage() {
                         </div>
                       )}
                       
-                      <button type="submit" disabled={loading} className={`w-full py-4 rounded-xl font-black uppercase text-[11px] tracking-widest shadow-xl transition-all ${loading ? 'bg-slate-800 text-slate-500 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-500'}`}>
+                      <button type="submit" disabled={loading} className={`w-full py-4 rounded-xl font-black uppercase text-[11px] tracking-widest shadow-lg transition-all ${loading ? 'bg-slate-200 dark:bg-slate-800 text-slate-500 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-500 shadow-blue-900/20'}`}>
                         {loading ? "Procesando..." : "Guardar Registro"}
                       </button>
                     </form>
@@ -863,40 +863,40 @@ export default function SATConfigPage() {
                     <>
                       {tabOperador === 'ficha' && (
                         <form onSubmit={guardarRegistro} className="space-y-6">
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-6 bg-slate-950 rounded-2xl border border-slate-800">
-                            <div className="col-span-2 md:col-span-4 text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2">Identidad y Fiscales</div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 p-4 sm:p-6 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800 transition-colors">
+                            <div className="sm:col-span-2 md:col-span-4 text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 transition-colors">Identidad y Fiscales</div>
                             
-                            <div className="col-span-2 md:col-span-4">
-                              <label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1">Nombre Completo</label>
-                              <input required className="w-full bg-slate-900 border border-slate-800 p-4 rounded-xl text-sm text-white font-bold uppercase" value={formDataOp.nombre_completo} onChange={e => setFormDataOp({...formDataOp, nombre_completo: e.target.value.toUpperCase()})} />
+                            <div className="sm:col-span-2 md:col-span-4">
+                              <label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1 transition-colors">Nombre Completo</label>
+                              <input required className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white font-bold uppercase transition-colors" value={formDataOp.nombre_completo} onChange={e => setFormDataOp({...formDataOp, nombre_completo: e.target.value.toUpperCase()})} />
                             </div>
                             
-                            <div className="col-span-2 md:col-span-2">
-                              <label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1">RFC (Obligatorio SAT)</label>
-                              <input required className="w-full bg-slate-900 border border-slate-800 p-4 rounded-xl text-sm text-white uppercase font-mono" value={formDataOp.rfc} onChange={e => setFormDataOp({...formDataOp, rfc: e.target.value})} />
+                            <div className="sm:col-span-1 md:col-span-2">
+                              <label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1 transition-colors">RFC (Obligatorio SAT)</label>
+                              <input required className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white uppercase font-mono transition-colors" value={formDataOp.rfc} onChange={e => setFormDataOp({...formDataOp, rfc: e.target.value})} />
                             </div>
 
-                            <div className="col-span-2 md:col-span-2">
-                              <label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1">Teléfono Móvil</label>
-                              <input className="w-full bg-slate-900 border border-slate-800 p-4 rounded-xl text-sm text-white" placeholder="10 dígitos" value={formDataOp.telefono} onChange={e => setFormDataOp({...formDataOp, telefono: e.target.value})} />
+                            <div className="sm:col-span-1 md:col-span-2">
+                              <label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1 transition-colors">Teléfono Móvil</label>
+                              <input className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white transition-colors" placeholder="10 dígitos" value={formDataOp.telefono} onChange={e => setFormDataOp({...formDataOp, telefono: e.target.value})} />
                             </div>
                           </div>
 
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-6 bg-blue-900/10 rounded-2xl border border-blue-500/20">
-                            <div className="col-span-2 md:col-span-4 text-[9px] font-black text-blue-400 uppercase tracking-widest mb-2 flex items-center gap-2"><ShieldCheck size={14} /> Permisos y Vigencias</div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 p-4 sm:p-6 bg-blue-50 dark:bg-blue-900/10 rounded-2xl border border-blue-200 dark:border-blue-500/20 transition-colors">
+                            <div className="sm:col-span-2 md:col-span-4 text-[9px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest mb-2 flex items-center gap-2 transition-colors"><ShieldCheck size={14} /> Permisos y Vigencias</div>
                             
-                            <div className="col-span-2 md:col-span-2">
-                              <label className="text-[9px] font-black text-blue-400/80 uppercase block mb-2 ml-1">Número de Licencia</label>
-                              <input required className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white font-mono uppercase" value={formDataOp.numero_licencia} onChange={e => setFormDataOp({...formDataOp, numero_licencia: e.target.value})} />
+                            <div className="sm:col-span-1 md:col-span-2">
+                              <label className="text-[9px] font-black text-blue-700 dark:text-blue-400/80 uppercase block mb-2 ml-1 transition-colors">Número de Licencia</label>
+                              <input required className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white font-mono uppercase transition-colors" value={formDataOp.numero_licencia} onChange={e => setFormDataOp({...formDataOp, numero_licencia: e.target.value})} />
                             </div>
 
-                            <div className="col-span-2 md:col-span-2">
-                              <label className="text-[9px] font-black text-blue-400/80 uppercase block mb-2 ml-1">Vencimiento de Licencia</label>
-                              <input required type="date" className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white" value={formDataOp.vencimiento_licencia} onChange={e => setFormDataOp({...formDataOp, vencimiento_licencia: e.target.value})} />
+                            <div className="sm:col-span-1 md:col-span-2">
+                              <label className="text-[9px] font-black text-blue-700 dark:text-blue-400/80 uppercase block mb-2 ml-1 transition-colors">Vencimiento de Licencia</label>
+                              <input required type="date" className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white transition-colors" value={formDataOp.vencimiento_licencia} onChange={e => setFormDataOp({...formDataOp, vencimiento_licencia: e.target.value})} />
                             </div>
                           </div>
 
-                          <button type="submit" disabled={loading} className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black uppercase text-[11px] tracking-widest shadow-xl hover:bg-blue-500 transition-all flex justify-center items-center gap-2">
+                          <button type="submit" disabled={loading} className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black uppercase text-[11px] tracking-widest shadow-lg shadow-blue-900/20 hover:bg-blue-500 transition-all flex justify-center items-center gap-2">
                             {loading ? <Loader2 size={16} className="animate-spin mr-2" /> : null}
                             {loading ? "Guardando Expediente..." : "Guardar Ficha Operativa"}
                           </button>
@@ -906,42 +906,42 @@ export default function SATConfigPage() {
                       {/* NUEVA BÓVEDA DIGITAL DE OPERADORES EN GRID */}
                       {tabOperador === 'documentos' && (
                         <div className="space-y-6 animate-in fade-in">
-                          <div className="bg-purple-500/10 border border-purple-500/30 p-6 rounded-2xl text-center mb-6">
-                            <FileText className="text-purple-500 mx-auto mb-3" size={32} />
-                            <h4 className="text-white font-bold uppercase text-sm mb-2">Bóveda Documental</h4>
-                            <p className="text-[10px] text-slate-400 leading-relaxed max-w-md mx-auto">
+                          <div className="bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/30 p-6 rounded-2xl text-center mb-6 transition-colors">
+                            <FileText className="text-purple-600 dark:text-purple-500 mx-auto mb-3 transition-colors" size={32} />
+                            <h4 className="text-slate-900 dark:text-white font-bold uppercase text-sm mb-2 transition-colors">Bóveda Documental</h4>
+                            <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed max-w-md mx-auto transition-colors">
                               Respaldo digitalizado (PDF o JPG) del expediente del operador. Los documentos se almacenan de forma segura y privada.
                             </p>
                           </div>
 
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             {DOCS_OPERADOR.map((doc) => (
-                              <div key={doc.id} className="bg-slate-950 border border-slate-800 p-5 rounded-2xl flex flex-col justify-between hover:border-purple-500/30 transition-all group">
+                              <div key={doc.id} className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-5 rounded-2xl flex flex-col justify-between hover:border-purple-400 dark:hover:border-purple-500/30 transition-all group">
                                 <div className="flex justify-between items-start mb-4">
                                   <div className="flex items-center gap-3">
-                                    <div className={`p-2 rounded-lg ${formDataOp[doc.id] ? 'bg-emerald-500/10 text-emerald-500' : 'bg-slate-900 text-slate-500'}`}>
+                                    <div className={`p-2 rounded-lg transition-colors ${formDataOp[doc.id] ? 'bg-emerald-100 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-500' : 'bg-white dark:bg-slate-900 text-slate-500'}`}>
                                       <doc.icon size={18} />
                                     </div>
                                     <div>
-                                      <p className="text-[10px] font-black text-white uppercase tracking-widest">{doc.label}</p>
-                                      <p className="text-[8px] text-slate-500 uppercase">{formDataOp[doc.id] ? 'Archivo en Bóveda' : 'Pendiente de subir'}</p>
+                                      <p className="text-[10px] font-black text-slate-900 dark:text-white uppercase tracking-widest transition-colors">{doc.label}</p>
+                                      <p className="text-[8px] text-slate-500 uppercase transition-colors">{formDataOp[doc.id] ? 'Archivo en Bóveda' : 'Pendiente de subir'}</p>
                                     </div>
                                   </div>
-                                  {formDataOp[doc.id] && <CheckCircle size={14} className="text-emerald-500" />}
+                                  {formDataOp[doc.id] && <CheckCircle size={14} className="text-emerald-600 dark:text-emerald-500 transition-colors" />}
                                 </div>
 
                                 <div className="flex gap-2">
                                   {formDataOp[doc.id] ? (
                                     <>
-                                      <button onClick={() => verArchivoPrivado(formDataOp[doc.id])} className="flex-1 flex items-center justify-center gap-2 bg-purple-600/10 text-purple-400 text-[9px] font-black uppercase py-2.5 rounded-xl hover:bg-purple-600 hover:text-white transition-all">
+                                      <button onClick={() => verArchivoPrivado(formDataOp[doc.id])} className="flex-1 flex items-center justify-center gap-2 bg-purple-100 dark:bg-purple-600/10 text-purple-700 dark:text-purple-400 text-[9px] font-black uppercase py-2.5 rounded-xl hover:bg-purple-600 hover:text-white transition-all">
                                         <FileText size={12}/> Ver
                                       </button>
-                                      <button onClick={() => gestionarDocOperador(null, doc.id, 'borrar')} disabled={loading} className="px-4 flex items-center justify-center bg-red-500/10 text-red-500 rounded-xl hover:bg-red-500 hover:text-white transition-all">
+                                      <button onClick={() => gestionarDocOperador(null, doc.id, 'borrar')} disabled={loading} className="px-4 flex items-center justify-center bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-500 rounded-xl hover:bg-red-600 hover:text-white transition-all">
                                         <Trash2 size={14}/>
                                       </button>
                                     </>
                                   ) : (
-                                    <label className="w-full flex items-center justify-center gap-2 bg-slate-900 border border-slate-800 text-slate-400 text-[9px] font-black uppercase py-2.5 rounded-xl text-center cursor-pointer hover:bg-slate-800 hover:text-white transition-all">
+                                    <label className="w-full flex items-center justify-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 text-[9px] font-black uppercase py-2.5 rounded-xl text-center cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-white transition-all">
                                       <UploadCloud size={14}/> Subir Archivo
                                       <input type="file" className="hidden" accept=".pdf,image/*" onChange={(e) => gestionarDocOperador(e, doc.id, 'subir')} disabled={loading} />
                                     </label>

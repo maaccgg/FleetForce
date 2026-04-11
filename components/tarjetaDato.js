@@ -1,20 +1,26 @@
 // components/tarjetaDato.js
 
-
-//Aqui definimos que debe de traer la funcion. Llleva un titulo, valor y color. Definimos tambien como será el color, si lo elegimos.
 export default function TarjetaDato({ titulo, valor, color = "slate" }) {
+  // Se agregan las paletas duales (Modo Claro / Modo Oscuro) y la variante 'emerald'
   const estilosColor = {
-    blue: "border-blue-500/50 text-blue-400",
-    green: "border-green-500/50 text-green-400",
-    red: "border-red-500/50 text-red-400",
-    slate: "border-slate-800 text-slate-400"
+    blue: "border-blue-200 dark:border-blue-500/50 text-blue-600 dark:text-blue-400 bg-blue-50/50 dark:bg-transparent",
+    green: "border-green-200 dark:border-green-500/50 text-green-600 dark:text-green-400 bg-green-50/50 dark:bg-transparent",
+    emerald: "border-emerald-200 dark:border-emerald-500/50 text-emerald-600 dark:text-emerald-400 bg-emerald-50/50 dark:bg-transparent",
+    red: "border-red-200 dark:border-red-500/50 text-red-600 dark:text-red-400 bg-red-50/50 dark:bg-transparent",
+    slate: "border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 bg-slate-50/50 dark:bg-transparent"
   };
 
-  //Aqui lo que sucede, es que le pedimos que regrese esta info que está en el className al page.js principal, junto el parametro que ya le habiamos puesto Page.js (Valor=$3,000). En el caso del color, Viene aqui mismo
+  // Validación de seguridad por si en el futuro pasas un color que no existe
+  const colorAplicado = estilosColor[color] || estilosColor.slate;
+
   return (
-    <div className={`bg-slate-900 border ${estilosColor[color]} p-6 rounded-2xl shadow-lg transition-all hover:scale-[1.02]`}>
-      <h3 className="text-xs font-semibold uppercase tracking-widest opacity-80">{titulo}</h3>
-      <p className="text-4xl font-bold mt-2 text-white">{valor}</p>
+    <div className={`border ${colorAplicado} p-6 sm:p-8 rounded-[2rem] shadow-sm dark:shadow-lg transition-all duration-300 hover:scale-[1.02] flex flex-col justify-center`}>
+      <h3 className="text-[10px] sm:text-xs font-black uppercase tracking-widest opacity-80 transition-colors">
+        {titulo}
+      </h3>
+      <p className="text-3xl sm:text-4xl font-black mt-2 text-slate-900 dark:text-white italic tracking-tighter transition-colors">
+        {valor}
+      </p>
     </div>
   );
 }

@@ -71,8 +71,8 @@ export default function ViajesPage() {
   const formInicial = {
     unidad_id: '', remolque_id: '', operador_id: '', origen_id: '', destino_id: '', 
     cliente_id: '', monto_flete: '', 
-    aplica_iva: true, // <-- NUEVO: Checkbox IVA
-    aplica_retencion: true, // <-- NUEVO: Checkbox Retención
+    aplica_iva: true, 
+    aplica_retencion: true, 
     distancia_km: '', referencia: '', fecha_salida: new Date().toISOString().split('T')[0],
     mercancias_detalle: [{ mercancia_id: '', cantidad: 1, peso_kg: '', valor: '', moneda: 'MXN' }],
     gasto_monto: '', gasto_descripcion: 'Viáticos de Ruta',
@@ -148,7 +148,7 @@ export default function ViajesPage() {
     setFormData({
      unidad_id: viaje.unidad_id || '', remolque_id: viaje.remolque_id || '', operador_id: viaje.operador_id || '', origen_id: viaje.origen_id || '', destino_id: viaje.destino_id || '',
      cliente_id: viaje.cliente_id || '', monto_flete: viaje.monto_flete || '', 
-     aplica_iva: viaje.aplica_iva !== false, // Asume true si es null por retrocompatibilidad
+     aplica_iva: viaje.aplica_iva !== false, 
      aplica_retencion: viaje.aplica_retencion !== false, 
      distancia_km: viaje.distancia_km || '', referencia: viaje.referencia || '',
      fecha_salida: viaje.fecha_salida || new Date().toISOString().split('T')[0], mercancias_detalle: detalle,
@@ -265,7 +265,6 @@ export default function ViajesPage() {
 
       setLoading(true);
       
-      // === LOGICA SAT ACTUALIZADA PARA IMPUESTOS DINÁMICOS ===
       const subtotal = parseFloat(viaje.monto_flete || 0);
       let impuestosArray = [];
       if (viaje.aplica_iva !== false) impuestosArray.push({ type: "IVA", rate: 0.16 });
@@ -282,7 +281,7 @@ export default function ViajesPage() {
             description: descripcionServicio, 
             product_key: "78101802", 
             price: subtotal, 
-            taxes: impuestosArray // <-- Se inyecta dinámicamente
+            taxes: impuestosArray 
           } 
         }],
         payment_form: "99", payment_method: "PPD", use: viaje.clientes.uso_cfdi || "G03",
@@ -341,8 +340,8 @@ export default function ViajesPage() {
         distancia_km: parseFloat(formData.distancia_km || 0), unidad_id: formData.unidad_id, remolque_id: remolqueLimpio, operador_id: formData.operador_id, origen_id: formData.origen_id, destino_id: formData.destino_id,
         mercancia_id: formData.mercancias_detalle[0].mercancia_id, mercancias_detalle: mercanciasEnriquecidas, peso_total_kg: calcularPesoTotal(), cliente_id: formData.cliente_id || null, 
         monto_flete: parseFloat(formData.monto_flete || 0), 
-        aplica_iva: formData.aplica_iva, // <-- Guardamos flag
-        aplica_retencion: formData.aplica_retencion, // <-- Guardamos flag
+        aplica_iva: formData.aplica_iva, 
+        aplica_retencion: formData.aplica_retencion, 
         referencia: formData.referencia || '', fecha_salida: formData.fecha_salida, tag_casetas: formData.tag_casetas, tarjeta_gasolina: formData.tarjeta_gasolina
       };
 
@@ -352,12 +351,11 @@ export default function ViajesPage() {
         return mostrarAlerta(validacion.error.issues[0]?.message || "🛑 Revisa los datos ingresados.", "error");
       }
 
-      // === CÁLCULO FINANCIERO DEL TOTAL NETO ===
       let fleteBase = payloadComun.monto_flete;
       let montoCalculado = fleteBase;
       if (payloadComun.aplica_iva) montoCalculado += (fleteBase * 0.16);
       if (payloadComun.aplica_retencion) montoCalculado -= (fleteBase * 0.04);
-      montoCalculado = Number(montoCalculado.toFixed(2)); // Redondeo centesimal exacto
+      montoCalculado = Number(montoCalculado.toFixed(2)); 
 
       if (editandoId) {
         await supabase.from('viajes').update(payloadComun).eq('id', editandoId);
@@ -398,7 +396,11 @@ export default function ViajesPage() {
   };
 
   const getBadgeColor = (estatus) => {
-    switch(estatus) { case 'Emitido (Timbrado)': return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'; case 'Cancelado': return 'bg-red-500/10 text-red-400 border-red-500/20'; default: return 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'; }
+    switch(estatus) { 
+      case 'Emitido (Timbrado)': return 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/20'; 
+      case 'Cancelado': return 'bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 border-red-200 dark:border-red-500/20'; 
+      default: return 'bg-yellow-50 dark:bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-200 dark:border-yellow-500/20'; 
+    }
   };
 
   const filtrarPorPeriodo = (viajeDate) => {
@@ -428,7 +430,7 @@ export default function ViajesPage() {
 
   if (rolUsuario === 'facturacion') {
     return (
-      <div className="flex bg-slate-950 min-h-screen text-slate-200 w-full"><Sidebar /><main className="flex-1 p-8 flex flex-col items-center justify-center"><h2 className="text-2xl text-white font-black uppercase tracking-widest">Acceso Restringido</h2><p className="text-slate-500 text-sm mt-2">Tu perfil no tiene acceso.</p></main></div>
+      <div className="flex bg-transparent min-h-screen text-slate-900 dark:text-slate-200 w-full"><Sidebar /><main className="flex-1 p-8 flex flex-col items-center justify-center"><h2 className="text-2xl text-slate-900 dark:text-white font-black uppercase tracking-widest">Acceso Restringido</h2><p className="text-slate-500 text-sm mt-2">Tu perfil no tiene acceso.</p></main></div>
     );
   }
   
@@ -438,46 +440,57 @@ export default function ViajesPage() {
   };
 
   return (
-    <div className="flex bg-slate-950 min-h-screen text-slate-200">
+    <div className="flex bg-transparent min-h-screen text-slate-900 dark:text-slate-200 transition-colors duration-300">
       <Sidebar />
-      <main className="flex-1 p-8 overflow-y-auto">
+      <main className="flex-1 p-4 sm:p-8 overflow-y-auto">
         <div className="max-w-7xl mx-auto">
           
-        <header className="mb-8 flex justify-between items-end">
-          <div><h1 className="text-3xl font-black tracking-tighter uppercase italic text-white leading-none">Logística <span className="text-blue-500">Operativa</span></h1><p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mt-2">Histórico de Despachos y Carta Porte</p></div>
-          <div className="flex gap-3 items-center"><button onClick={() => setMostrarModal(true)} className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-2xl font-black uppercase text-[10px] flex items-center gap-2 shadow-lg shadow-blue-900/20 transition-all"><PlusCircle size={16} /> Crear Despacho</button></div>
+        <header className="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 transition-colors">
+          <div>
+            <h1 className="text-3xl font-black tracking-tighter uppercase italic text-slate-900 dark:text-white leading-none transition-colors">Logística <span className="text-blue-600 dark:text-blue-500">Operativa</span></h1>
+            <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mt-2 transition-colors">Histórico de Despachos y Carta Porte</p>
+          </div>
+          <div className="flex gap-3 items-center w-full sm:w-auto">
+            <button onClick={() => setMostrarModal(true)} className="w-full sm:w-auto bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-2xl font-black uppercase text-[10px] flex justify-center items-center gap-2 shadow-lg shadow-blue-900/20 transition-all">
+              <PlusCircle size={16} /> Crear Despacho
+            </button>
+          </div>
         </header>
 
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8 border-b border-slate-800 pb-4">
-            <div className="flex gap-2 overflow-x-auto scrollbar-hide w-full sm:w-auto">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8 border-b border-slate-200 dark:border-slate-800 pb-4 transition-colors">
+            <div className="flex gap-2 overflow-x-auto scrollbar-hide w-full sm:w-auto pb-2 sm:pb-0">
               {getFiltrosArray().map(f => (
-                <button key={f.id} onClick={() => setFiltroEstatus(f.id)} className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap border ${filtroEstatus === f.id ? 'bg-slate-800 text-white border-slate-700 shadow-md' : 'bg-slate-900/50 text-slate-500 border-transparent hover:bg-slate-800/50'}`}>
-                  {f.label} <span className={`px-2 py-0.5 rounded-full text-[9px] ${filtroEstatus === f.id ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400'}`}>{f.count}</span>
+                <button key={f.id} onClick={() => setFiltroEstatus(f.id)} className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap border ${filtroEstatus === f.id ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-white border-blue-200 dark:border-slate-700 shadow-sm' : 'bg-slate-50 dark:bg-slate-900/50 text-slate-500 dark:text-slate-400 border-transparent hover:bg-slate-100 dark:hover:bg-slate-800/50'}`}>
+                  {f.label} <span className={`px-2 py-0.5 rounded-full text-[9px] ${filtroEstatus === f.id ? 'bg-blue-100 dark:bg-blue-600 text-blue-600 dark:text-white' : 'bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400'}`}>{f.count}</span>
                 </button>
               ))}
             </div>
 
-            <div className="relative shrink-0 z-20">
-              <button onClick={() => setMostrarFiltro(!mostrarFiltro)} className={`flex items-center gap-3 border px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-sm ${filtroActivo ? 'bg-blue-600/10 border-blue-500/30 text-blue-400' : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white hover:border-slate-700'}`}>
-                <Calendar size={14} className={filtroActivo ? 'text-blue-500' : 'text-slate-500'} /><span>{filtroActivo ? 'Filtros Activos' : 'Filtros y Reportes'}</span><ChevronDown size={14} className={`transition-transform duration-300 ${mostrarFiltro ? 'rotate-180' : ''}`} />
+            <div className="relative shrink-0 z-20 w-full sm:w-auto">
+              <button onClick={() => setMostrarFiltro(!mostrarFiltro)} className={`w-full sm:w-auto flex items-center justify-between gap-3 border px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-sm ${filtroActivo ? 'bg-blue-50 dark:bg-blue-600/10 border-blue-200 dark:border-blue-500/30 text-blue-600 dark:text-blue-400' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'}`}>
+                <div className="flex items-center gap-2">
+                  <Calendar size={14} className={filtroActivo ? 'text-blue-600 dark:text-blue-500' : 'text-slate-500'} />
+                  <span>{filtroActivo ? 'Filtros Activos' : 'Filtros y Reportes'}</span>
+                </div>
+                <ChevronDown size={14} className={`transition-transform duration-300 ${mostrarFiltro ? 'rotate-180' : ''}`} />
               </button>
 
               {mostrarFiltro && (
-                <div className="absolute right-0 mt-2 w-80 bg-slate-900 border border-slate-800 rounded-[1.5rem] shadow-2xl overflow-hidden p-6 animate-in fade-in zoom-in-95 duration-200">
-                  <p className="text-[10px] font-black text-white uppercase tracking-[0.2em] mb-5 border-b border-slate-800 pb-3 text-center">Parámetros de Búsqueda</p>
+                <div className="absolute right-0 sm:right-auto sm:left-0 mt-2 w-full sm:w-80 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[1.5rem] shadow-2xl overflow-hidden p-6 animate-in fade-in zoom-in-95 duration-200 transition-colors">
+                  <p className="text-[10px] font-black text-slate-900 dark:text-white uppercase tracking-[0.2em] mb-5 border-b border-slate-200 dark:border-slate-800 pb-3 text-center transition-colors">Parámetros de Búsqueda</p>
                   <div className="grid grid-cols-2 gap-3 mb-4">
-                    <div><label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1">Desde</label><input type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} className="w-full bg-slate-950 border border-slate-800 text-white text-[11px] rounded-xl p-3 outline-none focus:border-blue-500 transition-colors" /></div>
-                    <div><label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1">Hasta</label><input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} className="w-full bg-slate-950 border border-slate-800 text-white text-[11px] rounded-xl p-3 outline-none focus:border-blue-500 transition-colors" /></div>
+                    <div><label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1">Desde</label><input type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white text-[11px] rounded-xl p-3 outline-none focus:border-blue-500 transition-colors" /></div>
+                    <div><label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1">Hasta</label><input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white text-[11px] rounded-xl p-3 outline-none focus:border-blue-500 transition-colors" /></div>
                   </div>
                   <div className="space-y-4 mb-6">
-                    <div><label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1">Origen de Ruta</label><select value={filtroOrigen} onChange={(e) => setFiltroOrigen(e.target.value)} className="w-full bg-slate-950 border border-slate-800 text-white text-xs rounded-xl p-3 outline-none focus:border-blue-500 appearance-none"><option value="">Todos los Orígenes</option>{catalogos.ubicaciones.map(ub => <option key={ub.id} value={ub.id}>{ub.nombre_lugar}</option>)}</select></div>
-                    <div><label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1">Destino de Ruta</label><select value={filtroDestino} onChange={(e) => setFiltroDestino(e.target.value)} className="w-full bg-slate-950 border border-slate-800 text-white text-xs rounded-xl p-3 outline-none focus:border-blue-500 appearance-none"><option value="">Todos los Destinos</option>{catalogos.ubicaciones.map(ub => <option key={ub.id} value={ub.id}>{ub.nombre_lugar}</option>)}</select></div>
+                    <div><label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1">Origen de Ruta</label><select value={filtroOrigen} onChange={(e) => setFiltroOrigen(e.target.value)} className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white text-xs rounded-xl p-3 outline-none focus:border-blue-500 appearance-none transition-colors"><option value="">Todos los Orígenes</option>{catalogos.ubicaciones.map(ub => <option key={ub.id} value={ub.id}>{ub.nombre_lugar}</option>)}</select></div>
+                    <div><label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1">Destino de Ruta</label><select value={filtroDestino} onChange={(e) => setFiltroDestino(e.target.value)} className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white text-xs rounded-xl p-3 outline-none focus:border-blue-500 appearance-none transition-colors"><option value="">Todos los Destinos</option>{catalogos.ubicaciones.map(ub => <option key={ub.id} value={ub.id}>{ub.nombre_lugar}</option>)}</select></div>
                   </div>
-                  <div className="space-y-2 pt-4 border-t border-slate-800">
+                  <div className="space-y-2 pt-4 border-t border-slate-200 dark:border-slate-800 transition-colors">
                     <button onClick={() => { setFiltroActivo(true); setMostrarFiltro(false); }} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black text-[10px] uppercase tracking-widest py-3.5 rounded-xl transition-all shadow-lg shadow-blue-900/20">Aplicar Filtros</button>
                     <div className="grid grid-cols-2 gap-2 mt-2">
-                      {filtroActivo && (<button onClick={() => { setFiltroActivo(false); setFechaInicio(''); setFechaFin(''); setFiltroOrigen(''); setFiltroDestino(''); setMostrarFiltro(false); }} className="bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white font-black text-[9px] uppercase tracking-widest py-2.5 rounded-xl transition-colors">Limpiar</button>)}
-                      {puedeVerAdmin && (<button onClick={exportarExcelViajes} className={`${filtroActivo ? '' : 'col-span-2'} flex items-center justify-center gap-2 bg-emerald-600/10 hover:bg-emerald-600 text-emerald-500 hover:text-white border border-emerald-500/20 font-black text-[9px] uppercase tracking-widest py-2.5 rounded-xl transition-colors`}><FileText size={12} /> Excel</button>)}
+                      {filtroActivo && (<button onClick={() => { setFiltroActivo(false); setFechaInicio(''); setFechaFin(''); setFiltroOrigen(''); setFiltroDestino(''); setMostrarFiltro(false); }} className="bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400 font-black text-[9px] uppercase tracking-widest py-2.5 rounded-xl transition-colors">Limpiar</button>)}
+                      {puedeVerAdmin && (<button onClick={exportarExcelViajes} className={`${filtroActivo ? '' : 'col-span-2'} flex items-center justify-center gap-2 bg-emerald-50 dark:bg-emerald-600/10 hover:bg-emerald-100 dark:hover:bg-emerald-600 text-emerald-600 dark:text-emerald-500 border border-emerald-200 dark:border-emerald-500/20 font-black text-[9px] uppercase tracking-widest py-2.5 rounded-xl transition-colors`}><FileText size={12} /> Excel</button>)}
                     </div>
                   </div>
                 </div>
@@ -485,52 +498,69 @@ export default function ViajesPage() {
             </div>
           </div>
 
-          <div className="bg-slate-900 border border-slate-800 rounded-[2rem] mb-12 flex flex-col shadow-2xl overflow-hidden">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[2rem] mb-12 flex flex-col shadow-sm dark:shadow-2xl overflow-hidden transition-colors">
             <div className="overflow-x-auto custom-scrollbar pb-2">
               <table className="w-full text-left border-collapse min-w-[1200px]">
                 <thead>
-                  <tr className="bg-slate-950/50 border-b border-slate-800 text-slate-400 text-[11px] font-black uppercase tracking-widest whitespace-nowrap">
+                  <tr className="bg-slate-50 dark:bg-slate-950/50 border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 text-[11px] font-black uppercase tracking-widest whitespace-nowrap transition-colors">
                     <th className="p-5 pl-8 w-32">Folio & Estatus</th><th className="p-5 w-48">Cliente / Referencia</th><th className="p-5 min-w-[220px]">Ruta Operativa</th><th className="p-5 min-w-[200px]">Asignación</th><th className="p-5 w-32">Detalle Carga</th><th className="p-5 pr-8 w-40 text-center">Acciones</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-800/50">
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50 transition-colors">
                   {viajesFiltrados.map((v) => (
-                    <tr key={v.id} className={`hover:bg-slate-800/40 transition-colors group ${v.estatus === 'Cancelado' ? 'opacity-50 grayscale' : ''}`}>
+                    <tr key={v.id} className={`hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors group ${v.estatus === 'Cancelado' ? 'opacity-50 grayscale' : ''}`}>
                       <td className="p-4 pl-8 whitespace-nowrap align-middle">
-                        <div className="flex flex-col items-start gap-1"><span className="text-[14px] text-white font-mono font-medium">V-{String(v.folio_interno).padStart(4, '0')}</span><span className={`inline-flex px-2 py-0.5 rounded border uppercase tracking-widest text-[9px] items-center gap-1 ${getBadgeColor(v.estatus)}`}>{v.estatus}</span><span className="text-[11px] text-slate-500 mt-0.5 font-medium">{v.fecha_salida?.slice(0, 10)}</span></div>
+                        <div className="flex flex-col items-start gap-1">
+                          <span className="text-[14px] text-slate-900 dark:text-white font-mono font-medium transition-colors">V-{String(v.folio_interno).padStart(4, '0')}</span>
+                          <span className={`inline-flex px-2 py-0.5 rounded border uppercase tracking-widest text-[9px] items-center gap-1 ${getBadgeColor(v.estatus)}`}>{v.estatus}</span>
+                          <span className="text-[11px] text-slate-500 mt-0.5 font-medium">{v.fecha_salida?.slice(0, 10)}</span>
+                        </div>
                       </td>
                       <td className="p-4 whitespace-nowrap align-middle">
-                        <div className="flex flex-col gap-1.5 items-start"><span className="text-white text-sm font-semibold truncate max-w-[200px]" title={v.clientes?.nombre}>{v.clientes?.nombre || 'Sin Cliente'}</span>{v.referencia ? (<span className="text-blue-400 text-[10px] font-mono font-black uppercase tracking-widest px-2 py-0.5 bg-blue-500/10 border border-blue-500/20 rounded">PO: {v.referencia}</span>) : (v.clientes?.rfc && <span className="text-slate-500 text-[10px] font-mono tracking-widest">RFC: {v.clientes.rfc}</span>)}</div>
+                        <div className="flex flex-col gap-1.5 items-start">
+                          <span className="text-slate-900 dark:text-white text-sm font-semibold truncate max-w-[200px] transition-colors" title={v.clientes?.nombre}>{v.clientes?.nombre || 'Sin Cliente'}</span>
+                          {v.referencia ? (<span className="text-blue-600 dark:text-blue-400 text-[10px] font-mono font-black uppercase tracking-widest px-2 py-0.5 bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 rounded transition-colors">PO: {v.referencia}</span>) : (v.clientes?.rfc && <span className="text-slate-500 text-[10px] font-mono tracking-widest">RFC: {v.clientes.rfc}</span>)}
+                        </div>
                       </td>
                       <td className="p-4 whitespace-nowrap align-middle">
-                        <div className="flex flex-col gap-2"><div className="flex items-center gap-2 text-slate-200 text-xs"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)] shrink-0"/> <span className="truncate max-w-[220px]" title={v.origen?.nombre_lugar}>{v.origen?.nombre_lugar || 'Sin Origen'}</span></div><div className="flex items-center gap-2 text-slate-200 text-xs"><div className="w-1.5 h-1.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)] shrink-0"/> <span className="truncate max-w-[220px]" title={v.destino?.nombre_lugar}>{v.destino?.nombre_lugar || 'Sin Destino'}</span></div></div>
+                        <div className="flex flex-col gap-2">
+                          <div className="flex items-center gap-2 text-slate-700 dark:text-slate-200 text-xs transition-colors">
+                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)] shrink-0"/> <span className="truncate max-w-[220px]" title={v.origen?.nombre_lugar}>{v.origen?.nombre_lugar || 'Sin Origen'}</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-slate-700 dark:text-slate-200 text-xs transition-colors">
+                            <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)] shrink-0"/> <span className="truncate max-w-[220px]" title={v.destino?.nombre_lugar}>{v.destino?.nombre_lugar || 'Sin Destino'}</span>
+                          </div>
+                        </div>
                       </td>
                       <td className="p-4 whitespace-nowrap align-middle">
-                        <div className="flex flex-col gap-1 items-start"><span className="text-white text-xs font-semibold uppercase truncate max-w-[200px]" title={v.operadores?.nombre_completo}>{v.operadores?.nombre_completo || 'Sin Operador'}</span><span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-300 font-mono text-[10px]"><Truck size={10} className="text-blue-400"/> {v.unidades?.numero_economico || 'N/A'} {v.remolques ? `+ ${v.remolques.placas}` : ''}</span></div>
+                        <div className="flex flex-col gap-1 items-start">
+                          <span className="text-slate-900 dark:text-white text-xs font-semibold uppercase truncate max-w-[200px] transition-colors" title={v.operadores?.nombre_completo}>{v.operadores?.nombre_completo || 'Sin Operador'}</span>
+                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-mono text-[10px] transition-colors"><Truck size={10} className="text-blue-500 dark:text-blue-400"/> {v.unidades?.numero_economico || 'N/A'} {v.remolques ? `+ ${v.remolques.placas}` : ''}</span>
+                        </div>
                       </td>
-                      <td className="p-4 whitespace-nowrap align-middle"><div className="flex flex-col items-start gap-1"><span className="text-[13px] text-white font-mono font-medium">{v.peso_total_kg} KG</span></div></td>
+                      <td className="p-4 whitespace-nowrap align-middle"><div className="flex flex-col items-start gap-1"><span className="text-[13px] text-slate-900 dark:text-white font-mono font-medium transition-colors">{v.peso_total_kg} KG</span></div></td>
                       <td className="p-4 pr-8 whitespace-nowrap text-center align-middle">
                         <div className="flex items-center justify-end gap-1.5 opacity-30 group-hover:opacity-100 transition-opacity">
                           {v.estatus === 'Borrador' && (
                             <>
-                              <button onClick={() => eliminarViaje(v.id)} title="Eliminar Viaje" className="p-2 text-slate-500 hover:bg-red-500/10 hover:text-red-500 rounded-lg transition-colors"><Trash2 size={16}/></button>
-                              <button onClick={() => editarViaje(v)} title="Editar Viaje" className="p-2 text-slate-400 hover:bg-orange-500/10 hover:text-orange-400 rounded-lg transition-colors mr-2"><Edit2 size={16}/></button> 
-                             {puedeVerAdmin && (<button onClick={() => generarPDFCartaPorte(v, perfilEmisor)} title="Previsualizar PDF" className="p-2 bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white rounded-lg transition-colors mr-2"><FileText size={16}/></button>  )}
-                              {puedeVerAdmin && (<button onClick={() => timbrarCartaPorte(v)} disabled={loading} className="px-3 py-1.5 bg-blue-600/10 text-blue-500 hover:bg-blue-600 hover:text-white border border-blue-500/20 rounded-lg uppercase tracking-widest text-[10px] flex items-center gap-1.5 transition-colors">{loading ? <Loader2 size={14} className="animate-spin"/> : <ShieldCheck size={14}/>} Timbrar</button>  )}
+                              <button onClick={() => eliminarViaje(v.id)} title="Eliminar Viaje" className="p-2 text-slate-500 hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-500 rounded-lg transition-colors"><Trash2 size={16}/></button>
+                              <button onClick={() => editarViaje(v)} title="Editar Viaje" className="p-2 text-slate-400 hover:bg-orange-50 dark:hover:bg-orange-500/10 hover:text-orange-500 dark:hover:text-orange-400 rounded-lg transition-colors mr-2"><Edit2 size={16}/></button> 
+                             {puedeVerAdmin && (<button onClick={() => generarPDFCartaPorte(v, perfilEmisor)} title="Previsualizar PDF" className="p-2 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white rounded-lg transition-colors mr-2"><FileText size={16}/></button>  )}
+                              {puedeVerAdmin && (<button onClick={() => timbrarCartaPorte(v)} disabled={loading} className="px-3 py-1.5 bg-blue-50 dark:bg-blue-600/10 text-blue-600 dark:text-blue-500 hover:bg-blue-100 dark:hover:bg-blue-600 hover:text-blue-700 dark:hover:text-white border border-blue-200 dark:border-blue-500/20 rounded-lg uppercase tracking-widest text-[10px] flex items-center gap-1.5 transition-colors">{loading ? <Loader2 size={14} className="animate-spin"/> : <ShieldCheck size={14}/>} Timbrar</button>  )}
                             </>
                           )}
                           {v.estatus === 'Emitido (Timbrado)' && (
                             <>
-                              <button onClick={() => cancelarViaje(v)} disabled={loading} title="Cancelar Carta Porte" className="p-2 text-slate-500 hover:bg-red-500/10 hover:text-red-500 rounded-lg transition-colors mr-2"><XCircle size={16}/></button>
-                              <button onClick={() => descargarXML(v.id)} title="Descargar XML" className="p-2 bg-purple-600/10 text-purple-400 hover:bg-purple-600 hover:text-white rounded-lg transition-colors"><FileCode size={16}/></button>
-                              <button onClick={() => router.push(`/facturas?viaje_id=${v.id}`)} title="Ver Factura" className="p-2 bg-emerald-600/10 text-emerald-500 hover:bg-emerald-600 hover:text-white rounded-lg transition-colors"><Receipt size={16}/></button>
-                              <button onClick={() => generarPDFCartaPorte(v, perfilEmisor)} title="Descargar PDF" className="p-2 bg-blue-600/10 text-blue-500 hover:bg-blue-600 hover:text-white rounded-lg transition-colors"><FileText size={16}/></button>
+                              <button onClick={() => cancelarViaje(v)} disabled={loading} title="Cancelar Carta Porte" className="p-2 text-slate-500 hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-500 rounded-lg transition-colors mr-2"><XCircle size={16}/></button>
+                              <button onClick={() => descargarXML(v.id)} title="Descargar XML" className="p-2 bg-purple-50 dark:bg-purple-600/10 text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-600 hover:text-purple-700 dark:hover:text-white rounded-lg transition-colors"><FileCode size={16}/></button>
+                              <button onClick={() => router.push(`/facturas?viaje_id=${v.id}`)} title="Ver Factura" className="p-2 bg-emerald-50 dark:bg-emerald-600/10 text-emerald-600 dark:text-emerald-500 hover:bg-emerald-100 dark:hover:bg-emerald-600 hover:text-emerald-700 dark:hover:text-white rounded-lg transition-colors"><Receipt size={16}/></button>
+                              <button onClick={() => generarPDFCartaPorte(v, perfilEmisor)} title="Descargar PDF" className="p-2 bg-blue-50 dark:bg-blue-600/10 text-blue-600 dark:text-blue-500 hover:bg-blue-100 dark:hover:bg-blue-600 hover:text-blue-700 dark:hover:text-white rounded-lg transition-colors"><FileText size={16}/></button>
                             </>
                           )}
                           {v.estatus === 'Cancelado' && (
                             <>
-                              <button onClick={() => eliminarViaje(v.id)} title="Eliminar Definitivamente" className="p-2 text-slate-500 hover:bg-red-500/10 hover:text-red-500 rounded-lg transition-colors mr-2"><Trash2 size={16}/></button>
-                              <button onClick={() => generarPDFCartaPorte(v, perfilEmisor)} title="Descargar PDF" className="p-2 bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white rounded-lg transition-colors"><FileText size={16}/></button>
+                              <button onClick={() => eliminarViaje(v.id)} title="Eliminar Definitivamente" className="p-2 text-slate-500 hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-500 rounded-lg transition-colors mr-2"><Trash2 size={16}/></button>
+                              <button onClick={() => generarPDFCartaPorte(v, perfilEmisor)} title="Descargar PDF" className="p-2 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white rounded-lg transition-colors"><FileText size={16}/></button>
                             </>
                           )}
                         </div>
@@ -538,7 +568,7 @@ export default function ViajesPage() {
                     </tr>
                   ))}
                   {viajesFiltrados.length === 0 && (
-                    <tr><td colSpan="6" className="py-16 text-center"><Navigation size={32} className="mx-auto text-slate-700 mb-3" /><p className="text-slate-500 uppercase tracking-widest text-sm font-black">No hay despachos</p></td></tr>
+                    <tr><td colSpan="6" className="py-16 text-center"><Navigation size={32} className="mx-auto text-slate-400 dark:text-slate-700 mb-3" /><p className="text-slate-500 uppercase tracking-widest text-sm font-black">No hay despachos</p></td></tr>
                   )}
                 </tbody>
               </table>
@@ -550,15 +580,15 @@ export default function ViajesPage() {
           {/* ========================================================= */}
           {dialogoConfirmacion.visible && (
             <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-              <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-sm" onClick={() => setDialogoConfirmacion({ visible: false, mensaje: '', accion: null })} />
-              <div className="relative bg-slate-900 border border-slate-800 w-full max-w-sm rounded-[2rem] p-8 shadow-2xl flex flex-col items-center text-center animate-in zoom-in-95 duration-200">
-                <div className="w-16 h-16 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mb-6">
+              <div className="absolute inset-0 bg-slate-900/50 dark:bg-slate-950/90 backdrop-blur-sm" onClick={() => setDialogoConfirmacion({ visible: false, mensaje: '', accion: null })} />
+              <div className="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 w-full max-w-sm rounded-[2rem] p-8 shadow-2xl flex flex-col items-center text-center animate-in zoom-in-95 duration-200 transition-colors">
+                <div className="w-16 h-16 bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-500 rounded-full flex items-center justify-center mb-6">
                   <AlertTriangle size={32} />
                 </div>
-                <h3 className="text-xl font-black text-white uppercase tracking-widest mb-2">¿Estás Seguro?</h3>
-                <p className="text-slate-400 text-sm mb-8">{dialogoConfirmacion.mensaje}</p>
+                <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-widest mb-2 transition-colors">¿Estás Seguro?</h3>
+                <p className="text-slate-500 dark:text-slate-400 text-sm mb-8 transition-colors">{dialogoConfirmacion.mensaje}</p>
                 <div className="flex gap-3 w-full">
-                  <button onClick={() => setDialogoConfirmacion({ visible: false, mensaje: '', accion: null })} disabled={loading} className="flex-1 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest bg-slate-800 text-slate-300 hover:bg-slate-700 transition-colors">
+                  <button onClick={() => setDialogoConfirmacion({ visible: false, mensaje: '', accion: null })} disabled={loading} className="flex-1 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
                     Descartar
                   </button>
                   <button onClick={ejecutarConfirmacion} disabled={loading} className="flex-1 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest bg-red-600 text-white hover:bg-red-500 transition-colors shadow-lg shadow-red-900/20">
@@ -574,14 +604,14 @@ export default function ViajesPage() {
           {/* ========================================================= */}
           {mostrarModal && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-              <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-md" />
-              <div className="relative bg-slate-900 border border-slate-800 w-full max-w-5xl rounded-[2.5rem] p-10 shadow-2xl overflow-y-auto max-h-[90vh] custom-scrollbar">
-                <button onClick={cerrarModal} className="absolute top-8 right-8 text-slate-500 hover:text-white"><X size={24} /></button>
-                <h2 className="text-2xl font-black text-white italic uppercase mb-8">{editandoId ? 'Editar' : 'Programar'} <span className="text-blue-500">Operación</span></h2>
+              <div className="absolute inset-0 bg-slate-900/50 dark:bg-slate-950/90 backdrop-blur-md" />
+              <div className="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 w-full max-w-5xl rounded-[2.5rem] p-6 sm:p-10 shadow-2xl overflow-y-auto max-h-[90vh] custom-scrollbar transition-colors">
+                <button onClick={cerrarModal} className="absolute top-6 right-6 text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors"><X size={24} /></button>
+                <h2 className="text-2xl font-black text-slate-900 dark:text-white italic uppercase mb-8 transition-colors">{editandoId ? 'Editar' : 'Programar'} <span className="text-blue-600 dark:text-blue-500">Operación</span></h2>
                 
                 <form onSubmit={registrarViaje} className="space-y-6">
-                  <div className={`grid gap-4 ${esCamionArticulado ? 'grid-cols-3' : 'grid-cols-2'}`}>
-                    <select required className="bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white" value={formData.unidad_id} 
+                  <div className={`grid gap-4 ${esCamionArticulado ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3' : 'grid-cols-1 sm:grid-cols-2'}`}>
+                    <select required className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white transition-colors" value={formData.unidad_id} 
                       onChange={e => {
                         setFormData({...formData, unidad_id: e.target.value});
                         const unidadElegida = catalogos.unidades.find(u => u.id === e.target.value);
@@ -590,47 +620,61 @@ export default function ViajesPage() {
                         }
                       }}><option value="">Tractocamión / Unidad...</option>{catalogos.unidades.map(u => <option key={u.id} value={u.id}>{u.numero_economico} ({u.configuracion_vehicular})</option>)}</select>
                     {esCamionArticulado && (
-                      <select required className="bg-slate-950 border border-orange-500/50 p-4 rounded-xl text-sm text-white" value={formData.remolque_id} onChange={e => setFormData({...formData, remolque_id: e.target.value})}><option value="">Remolque (OBLIGATORIO)...</option>{catalogos.remolques.map(r => <option key={r.id} value={r.id}>{r.placas} - {r.subtipo_remolque || 'Caja'}</option>)}</select>
+                      <select required className="bg-orange-50 dark:bg-slate-950 border border-orange-200 dark:border-orange-500/50 p-4 rounded-xl text-sm text-slate-900 dark:text-white transition-colors" value={formData.remolque_id} onChange={e => setFormData({...formData, remolque_id: e.target.value})}><option value="">Remolque (OBLIGATORIO)...</option>{catalogos.remolques.map(r => <option key={r.id} value={r.id}>{r.placas} - {r.subtipo_remolque || 'Caja'}</option>)}</select>
                     )}
-                    <select required className="bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white" value={formData.operador_id} onChange={e => setFormData({...formData, operador_id: e.target.value})}><option value="">Operador...</option>{catalogos.operadores.map(o => <option key={o.id} value={o.id}>{o.nombre_completo}</option>)}</select>
+                    <select required className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white transition-colors" value={formData.operador_id} onChange={e => setFormData({...formData, operador_id: e.target.value})}><option value="">Operador...</option>{catalogos.operadores.map(o => <option key={o.id} value={o.id}>{o.nombre_completo}</option>)}</select>
                   </div>
-                  <div className="grid grid-cols-5 gap-4">
-                    <select required className="col-span-2 w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white" value={formData.origen_id} onChange={e => setFormData({...formData, origen_id: e.target.value})}><option value="">Origen...</option>{catalogos.ubicaciones.map(ub => <option key={ub.id} value={ub.id}>{ub.nombre_lugar}</option>)}</select>
-                    <select required className="col-span-2 w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white" value={formData.destino_id} onChange={e => setFormData({...formData, destino_id: e.target.value})}><option value="">Destino...</option>{catalogos.ubicaciones.map(ub => <option key={ub.id} value={ub.id}>{ub.nombre_lugar}</option>)}</select>
-                    <input required type="number" placeholder="KM Total" className="bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white text-center" value={formData.distancia_km} onChange={e => setFormData({...formData, distancia_km: e.target.value})} />
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-5 gap-4">
+                    <select required className="col-span-1 sm:col-span-2 w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white transition-colors" value={formData.origen_id} onChange={e => setFormData({...formData, origen_id: e.target.value})}><option value="">Origen...</option>{catalogos.ubicaciones.map(ub => <option key={ub.id} value={ub.id}>{ub.nombre_lugar}</option>)}</select>
+                    <select required className="col-span-1 sm:col-span-2 w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white transition-colors" value={formData.destino_id} onChange={e => setFormData({...formData, destino_id: e.target.value})}><option value="">Destino...</option>{catalogos.ubicaciones.map(ub => <option key={ub.id} value={ub.id}>{ub.nombre_lugar}</option>)}</select>
+                    <input required type="number" placeholder="KM Total" className="col-span-1 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white text-center transition-colors" value={formData.distancia_km} onChange={e => setFormData({...formData, distancia_km: e.target.value})} />
                   </div>
-                  <div className="p-6 border border-blue-500/20 bg-blue-900/10 rounded-2xl space-y-4">
-                    <div className="flex justify-between items-center mb-2"><p className="text-[10px] text-blue-400 uppercase flex items-center gap-2 font-black tracking-widest"><Package size={14}/> Detalle de Carga</p><button type="button" onClick={agregarFilaMercancia} className="text-[9px] font-black tracking-widest bg-blue-600 text-white px-3 py-1.5 rounded-lg uppercase hover:bg-blue-500 transition-colors">+ Agregar Producto</button></div>
+                  
+                  <div className="p-4 sm:p-6 border border-blue-200 dark:border-blue-500/20 bg-blue-50 dark:bg-blue-900/10 rounded-2xl space-y-4 transition-colors">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-2">
+                      <p className="text-[10px] text-blue-600 dark:text-blue-400 uppercase flex items-center gap-2 font-black tracking-widest"><Package size={14}/> Detalle de Carga</p>
+                      <button type="button" onClick={agregarFilaMercancia} className="w-full sm:w-auto text-[9px] font-black tracking-widest bg-blue-600 text-white px-4 py-2 sm:py-1.5 rounded-lg uppercase hover:bg-blue-500 transition-colors">+ Agregar Producto</button>
+                    </div>
                     {formData.mercancias_detalle.map((item, index) => (
-                      <div key={index} className="grid grid-cols-12 gap-3 items-center bg-slate-950 p-3 rounded-xl border border-slate-800">
-                        <select required className="col-span-4 bg-slate-950 text-sm text-white outline-none" value={item.mercancia_id} onChange={e => actualizarFilaMercancia(index, 'mercancia_id', e.target.value)}><option value="">Seleccionar Producto...</option>{catalogos.mercancias.map(m => <option key={m.id} value={m.id}>{m.descripcion}</option>)}</select>
-                        <input required type="number" placeholder="Cant." className="col-span-2 bg-slate-900 border border-slate-700 p-2 rounded-lg text-xs text-white text-center" value={item.cantidad} onChange={e => actualizarFilaMercancia(index, 'cantidad', e.target.value)} />
-                        <input required type="number" step="0.01" placeholder="Peso (KG)" className="col-span-2 bg-slate-900 border border-slate-700 p-2 rounded-lg text-xs text-white text-center" value={item.peso_kg} onChange={e => actualizarFilaMercancia(index, 'peso_kg', e.target.value)} />
-                        <input type="number" step="0.01" placeholder="Valor ($)" className="col-span-2 bg-slate-900 border border-slate-700 p-2 rounded-lg text-xs text-white text-center" value={item.valor} onChange={e => actualizarFilaMercancia(index, 'valor', e.target.value)} />
-                        <select className="col-span-1 bg-slate-900 border border-slate-700 p-2 rounded-lg text-xs text-white text-center" value={item.moneda} onChange={e => actualizarFilaMercancia(index, 'moneda', e.target.value)}><option value="MXN">MXN</option><option value="USD">USD</option></select>
-                        <button type="button" onClick={() => eliminarFilaMercancia(index)} disabled={formData.mercancias_detalle.length === 1} className="col-span-1 text-slate-500 hover:text-red-500 flex justify-center disabled:opacity-30"><Trash2 size={16}/></button>
+                      <div key={index} className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center bg-white dark:bg-slate-950 p-4 sm:p-3 rounded-xl border border-slate-200 dark:border-slate-800 transition-colors">
+                        <select required className="md:col-span-4 bg-transparent text-sm text-slate-900 dark:text-white outline-none w-full border md:border-0 border-slate-200 dark:border-slate-800 p-2 md:p-0 rounded-lg" value={item.mercancia_id} onChange={e => actualizarFilaMercancia(index, 'mercancia_id', e.target.value)}><option value="">Seleccionar Producto...</option>{catalogos.mercancias.map(m => <option key={m.id} value={m.id}>{m.descripcion}</option>)}</select>
+                        <div className="grid grid-cols-2 gap-3 md:col-span-4">
+                          <input required type="number" placeholder="Cant." className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-2 rounded-lg text-xs text-slate-900 dark:text-white text-center transition-colors w-full" value={item.cantidad} onChange={e => actualizarFilaMercancia(index, 'cantidad', e.target.value)} />
+                          <input required type="number" step="0.01" placeholder="Peso (KG)" className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-2 rounded-lg text-xs text-slate-900 dark:text-white text-center transition-colors w-full" value={item.peso_kg} onChange={e => actualizarFilaMercancia(index, 'peso_kg', e.target.value)} />
+                        </div>
+                        <div className="grid grid-cols-2 gap-3 md:col-span-3">
+                          <input type="number" step="0.01" placeholder="Valor ($)" className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-2 rounded-lg text-xs text-slate-900 dark:text-white text-center transition-colors w-full" value={item.valor} onChange={e => actualizarFilaMercancia(index, 'valor', e.target.value)} />
+                          <select className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-2 rounded-lg text-xs text-slate-900 dark:text-white text-center transition-colors w-full" value={item.moneda} onChange={e => actualizarFilaMercancia(index, 'moneda', e.target.value)}><option value="MXN">MXN</option><option value="USD">USD</option></select>
+                        </div>
+                        <button type="button" onClick={() => eliminarFilaMercancia(index)} disabled={formData.mercancias_detalle.length === 1} className="md:col-span-1 text-slate-400 dark:text-slate-500 hover:text-red-500 flex justify-center py-2 md:py-0 disabled:opacity-30 border md:border-0 border-slate-200 dark:border-slate-800 rounded-lg transition-colors"><Trash2 size={16}/></button>
                       </div>
                     ))}
-                    <div className="text-right mt-2"><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Peso Total: <span className="text-white text-xs ml-1">{calcularPesoTotal().toLocaleString('es-MX', {minimumFractionDigits: 2})} KG</span></p></div>
+                    <div className="text-right mt-2"><p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest transition-colors">Peso Total: <span className="text-slate-900 dark:text-white text-xs ml-1 transition-colors">{calcularPesoTotal().toLocaleString('es-MX', {minimumFractionDigits: 2})} KG</span></p></div>
                   </div>
-                  <div className="grid grid-cols-2 gap-4 mb-4"><input type="text" placeholder="TAG de Casetas (Ejemplo: Pase-123)" className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white" value={formData.tag_casetas} onChange={e => setFormData({...formData, tag_casetas: e.target.value})} /><input type="text" placeholder="Tarjeta de Gasolina (Ejemplo: Edenred-456)" className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white" value={formData.tarjeta_gasolina} onChange={e => setFormData({...formData, tarjeta_gasolina: e.target.value})} /></div>
-                  <div className="grid grid-cols-3 gap-4">
-                    <select required className="col-span-1 bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white" value={formData.cliente_id} onChange={e => setFormData({...formData, cliente_id: e.target.value})}><option value="">Cliente Factura...</option>{clientes.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}</select>
-                    <input type="text" placeholder="Orden de Compra / Referencia" className="col-span-1 bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white" value={formData.referencia} onChange={e => setFormData({...formData, referencia: e.target.value})} />
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                    <input type="text" placeholder="TAG de Casetas (Ejemplo: Pase-123)" className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white transition-colors" value={formData.tag_casetas} onChange={e => setFormData({...formData, tag_casetas: e.target.value})} />
+                    <input type="text" placeholder="Tarjeta de Gasolina (Ejemplo: Edenred-456)" className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white transition-colors" value={formData.tarjeta_gasolina} onChange={e => setFormData({...formData, tarjeta_gasolina: e.target.value})} />
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <select required className="col-span-1 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white transition-colors" value={formData.cliente_id} onChange={e => setFormData({...formData, cliente_id: e.target.value})}><option value="">Cliente Factura...</option>{clientes.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}</select>
+                    <input type="text" placeholder="Orden de Compra / Referencia" className="col-span-1 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white transition-colors" value={formData.referencia} onChange={e => setFormData({...formData, referencia: e.target.value})} />
                     
                     {puedeVerAdmin && (
                       <div className="col-span-1 flex flex-col gap-2">
-                        <input type="number" placeholder="Monto Flete Base ($)" className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white font-mono" value={formData.monto_flete} onChange={e => setFormData({...formData, monto_flete: e.target.value})} />
+                        <input type="number" placeholder="Monto Flete Base ($)" className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white font-mono transition-colors" value={formData.monto_flete} onChange={e => setFormData({...formData, monto_flete: e.target.value})} />
                         
-                        {/* === NUEVOS CONTROLES DE IMPUESTO === */}
-                        <div className="flex gap-4 px-2">
+                        {/* === CONTROLES DE IMPUESTO === */}
+                        <div className="flex gap-4 px-2 mt-1">
                           <label className="flex items-center gap-2 cursor-pointer group">
-                            <input type="checkbox" className="w-4 h-4 accent-blue-500 rounded bg-slate-950 border-slate-800 cursor-pointer" checked={formData.aplica_iva} onChange={e => setFormData({...formData, aplica_iva: e.target.checked})} />
-                            <span className="text-[9px] font-black uppercase text-slate-400 group-hover:text-blue-400 transition-colors tracking-widest">+ IVA (16%)</span>
+                            <input type="checkbox" className="w-4 h-4 accent-blue-600 dark:accent-blue-500 rounded border-slate-300 dark:border-slate-800 cursor-pointer" checked={formData.aplica_iva} onChange={e => setFormData({...formData, aplica_iva: e.target.checked})} />
+                            <span className="text-[9px] font-black uppercase text-slate-500 dark:text-slate-400 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors tracking-widest">+ IVA (16%)</span>
                           </label>
                           <label className="flex items-center gap-2 cursor-pointer group">
-                            <input type="checkbox" className="w-4 h-4 accent-blue-500 rounded bg-slate-950 border-slate-800 cursor-pointer" checked={formData.aplica_retencion} onChange={e => setFormData({...formData, aplica_retencion: e.target.checked})} />
-                            <span className="text-[9px] font-black uppercase text-slate-400 group-hover:text-blue-400 transition-colors tracking-widest">- Ret. (4%)</span>
+                            <input type="checkbox" className="w-4 h-4 accent-blue-600 dark:accent-blue-500 rounded border-slate-300 dark:border-slate-800 cursor-pointer" checked={formData.aplica_retencion} onChange={e => setFormData({...formData, aplica_retencion: e.target.checked})} />
+                            <span className="text-[9px] font-black uppercase text-slate-500 dark:text-slate-400 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors tracking-widest">- Ret. (4%)</span>
                           </label>
                         </div>
                       </div>

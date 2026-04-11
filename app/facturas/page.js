@@ -17,7 +17,7 @@ import { useToast } from '@/components/toastprovider';
 
 const facturaSchema = z.object({
   cliente: z.string().min(2, "El nombre del cliente es obligatorio."),
-  monto_base: z.number().positive("El monto base debe ser estrictamente mayor a $0."), // Modificado a monto_base
+  monto_base: z.number().positive("El monto base debe ser estrictamente mayor a $0."),
   metodo_pago: z.enum(["PUE", "PPD"], { errorMap: () => ({ message: "Método de pago inválido detectado." }) }),
   forma_pago: z.string().min(2, "La forma de pago es obligatoria."),
   fecha_viaje: z.string().min(10, "La fecha de emisión es obligatoria o tiene un formato incorrecto."),
@@ -50,10 +50,9 @@ function FacturasContenido() {
 
   const esAdmin = rolUsuario === 'administrador' || rolUsuario === 'admin';
 
-  // === ESTADO ACTUALIZADO PARA IMPUESTOS ===
   const [formData, setFormData] = useState({ 
     cliente_id: '', monto_base: '', folio_fiscal: '', 
-    aplica_iva: true, aplica_retencion: true, // <-- NUEVOS
+    aplica_iva: true, aplica_retencion: true, 
     ruta: '', fecha_viaje: new Date().toISOString().split('T')[0],
     fecha_vencimiento: '', forma_pago: '99', metodo_pago: 'PPD',
     referencia: ''
@@ -71,7 +70,7 @@ function FacturasContenido() {
 
   useEffect(() => {
     if (empresaId) obtenerDatos(empresaId);
-  }, [fechaInicio, fechaFin, filtroActivo, viajeIdHighlight]);
+  }, [fechaInicio, fechaFin, filtroActivo, viajeIdHighlight, empresaId]);
 
   useEffect(() => {
     if (formData.cliente_id && formData.fecha_viaje) {
@@ -155,7 +154,6 @@ function FacturasContenido() {
     const clienteData = clientes.find(c => c.nombre === factura.cliente);
     if (!clienteData) return mostrarAlerta("Error: No se encontró la información fiscal del cliente.", "error");
 
-    // === CÁLCULO INVERSO MATEMÁTICAMENTE CORRECTO PARA FACTURAPI ===
     const aplicaIva = factura.aplica_iva !== false; 
     const aplicaRetencion = factura.aplica_retencion !== false; 
 
@@ -177,7 +175,7 @@ function FacturasContenido() {
           description: factura.ruta || "Servicio de flete nacional", 
           product_key: "78101802", 
           price: subtotal, 
-          taxes: impuestosArray // <-- Se inyecta dinámicamente
+          taxes: impuestosArray 
         } 
       }], 
       payment_form: factura.forma_pago || "99", payment_method: factura.metodo_pago || "PPD", use: clienteData.uso_cfdi || "G03" 
@@ -210,7 +208,6 @@ function FacturasContenido() {
 
       if (!validacion.success) { setLoading(false); return mostrarAlerta(validacion.error.issues[0]?.message || "🛑 Revisa los datos ingresados.", "error"); }
 
-      // === CÁLCULO DEL TOTAL NETO ===
       let base = validacion.data.monto_base;
       let montoCalculado = base;
       if (formData.aplica_iva) montoCalculado += (base * 0.16);
@@ -309,69 +306,64 @@ function FacturasContenido() {
     const ws = XLSX.utils.json_to_sheet(datosParaExcel); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Facturas"); XLSX.writeFile(wb, `Reporte_Facturas_FleetForce_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
-  if (!sesion) return <div className="min-h-screen bg-slate-950"></div>;
-  if (rolUsuario === 'operaciones' || rolUsuario === 'miembro') {
-    return (<div className="flex bg-slate-950 min-h-screen text-slate-200 w-full"><Sidebar /><main className="flex-1 p-8 flex flex-col items-center justify-center"><h2 className="text-2xl text-white font-black uppercase tracking-widest">Acceso Restringido</h2><p className="text-slate-500 text-sm mt-2">Tu perfil Operativo no tiene permisos para ver facturación.</p></main></div>);
-  }
-  
+  if (!sesion) return null;
+
   return (
-    <div className="flex bg-slate-950 min-h-screen text-slate-200 w-full">
+    <div className="flex bg-transparent min-h-screen text-slate-900 dark:text-slate-200 w-full transition-colors duration-300">
       <Sidebar />
-      <main className="flex-1 p-8 overflow-y-auto custom-scrollbar">
+      <main className="flex-1 p-4 sm:p-8 overflow-y-auto custom-scrollbar">
         <div className="max-w-[1400px] mx-auto">
           
-          <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-10">
+          <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-10 transition-colors">
             <div>
-              <h1 className="text-3xl font-black tracking-tighter uppercase italic text-white leading-none">Control de <span className="text-emerald-500">Ingresos</span></h1>
-              {viajeIdHighlight ? ( <p className="text-orange-500 text-[10px] font-bold uppercase mt-2 tracking-widest flex items-center gap-1"><Truck size={12}/> Mostrando factura del viaje seleccionado</p> ) : ( <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mt-2">Facturación y Cobranza</p> )}
+              <h1 className="text-3xl font-black tracking-tighter uppercase italic text-slate-900 dark:text-white leading-none transition-colors">Control de <span className="text-emerald-600 dark:text-emerald-500">Ingresos</span></h1>
+              {viajeIdHighlight ? ( <p className="text-orange-600 dark:text-orange-500 text-[10px] font-bold uppercase mt-2 tracking-widest flex items-center gap-1"><Truck size={12}/> Factura de viaje seleccionado</p> ) : ( <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mt-2">Facturación y Cobranza</p> )}
             </div>
 
-            <div className="flex items-center gap-3">
-              <div className="relative shrink-0 z-20">
-                <button onClick={() => { if (viajeIdHighlight) window.location.href = '/facturas'; else setMostrarFiltro(!mostrarFiltro); }} className={`flex items-center gap-3 border px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-sm ${filtroActivo ? 'bg-emerald-600/10 border-emerald-500/30 text-emerald-400' : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white hover:border-slate-700'} ${viajeIdHighlight ? 'border-orange-500/50 text-orange-400 hover:bg-orange-500/10' : ''}`}>
-                  <Calendar size={14} className={filtroActivo ? 'text-emerald-500' : (viajeIdHighlight ? 'text-orange-500' : 'text-slate-500')} /><span>{viajeIdHighlight ? 'Ver Todo el Historial' : (filtroActivo ? 'Filtros Activos' : 'Filtros y Reportes')}</span>{!viajeIdHighlight && <ChevronDown size={14} className={`transition-transform duration-300 ${mostrarFiltro ? 'rotate-180' : ''}`} />}
+            <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+              <div className="relative shrink-0 w-full md:w-auto">
+                <button onClick={() => { if (viajeIdHighlight) window.location.href = '/facturas'; else setMostrarFiltro(!mostrarFiltro); }} className={`w-full md:w-auto flex items-center justify-center gap-3 border px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-sm ${filtroActivo ? 'bg-emerald-50 dark:bg-emerald-600/10 border-emerald-200 dark:border-emerald-500/30 text-emerald-700 dark:text-emerald-400' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-700'} ${viajeIdHighlight ? 'border-orange-200 dark:border-orange-500/50 text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-500/10' : ''}`}>
+                  <Calendar size={14} className={filtroActivo ? 'text-emerald-600 dark:text-emerald-500' : (viajeIdHighlight ? 'text-orange-600 dark:text-orange-500' : 'text-slate-500')} /><span>{viajeIdHighlight ? 'Ver Todo el Historial' : (filtroActivo ? 'Filtros Activos' : 'Filtros y Reportes')}</span>{!viajeIdHighlight && <ChevronDown size={14} className={`transition-transform duration-300 ${mostrarFiltro ? 'rotate-180' : ''}`} />}
                 </button>
 
                 {mostrarFiltro && !viajeIdHighlight && (
-                  <div className="absolute right-0 mt-2 w-80 bg-slate-900 border border-slate-800 rounded-[1.5rem] shadow-2xl overflow-hidden p-6 animate-in fade-in zoom-in-95 duration-200">
-                    <p className="text-[10px] font-black text-white uppercase tracking-[0.2em] mb-5 border-b border-slate-800 pb-3 text-center">Parámetros de Búsqueda</p>
+                  <div className="absolute right-0 md:left-0 md:right-auto mt-2 w-full md:w-80 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[1.5rem] shadow-xl dark:shadow-2xl overflow-hidden p-6 animate-in fade-in zoom-in-95 duration-200 z-[60] transition-colors">
+                    <p className="text-[10px] font-black text-slate-900 dark:text-white uppercase tracking-[0.2em] mb-5 border-b border-slate-100 dark:border-slate-800 pb-3 text-center transition-colors">Parámetros de Búsqueda</p>
                     <div className="grid grid-cols-2 gap-3 mb-6">
-                      <div><label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1">Desde</label><input type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} className="w-full bg-slate-950 border border-slate-800 text-white text-[11px] rounded-xl p-3 outline-none focus:border-emerald-500 transition-colors" /></div>
-                      <div><label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1">Hasta</label><input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} className="w-full bg-slate-950 border border-slate-800 text-white text-[11px] rounded-xl p-3 outline-none focus:border-emerald-500 transition-colors" /></div>
+                      <div><label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1 transition-colors">Desde</label><input type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white text-[11px] rounded-xl p-3 outline-none focus:border-emerald-500 transition-colors cursor-pointer" /></div>
+                      <div><label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1 transition-colors">Hasta</label><input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white text-[11px] rounded-xl p-3 outline-none focus:border-emerald-500 transition-colors cursor-pointer" /></div>
                     </div>
-                    <div className="space-y-2 pt-4 border-t border-slate-800">
+                    <div className="space-y-2 pt-4 border-t border-slate-100 dark:border-slate-800 transition-colors">
                       <button onClick={() => { setFiltroActivo(true); setMostrarFiltro(false); }} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[10px] uppercase tracking-widest py-3.5 rounded-xl transition-all shadow-lg shadow-emerald-900/20">Aplicar Filtros</button>
                       <div className="grid grid-cols-2 gap-2 mt-2">
-                        {filtroActivo && (<button onClick={() => { setFiltroActivo(false); setFechaInicio(''); setFechaFin(''); setMostrarFiltro(false); }} className="bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white font-black text-[9px] uppercase tracking-widest py-2.5 rounded-xl transition-colors">Limpiar</button>)}
-                        {esAdmin && (<button onClick={exportarExcelFacturas} className={`${filtroActivo ? '' : 'col-span-2'} flex items-center justify-center gap-2 bg-emerald-600/10 hover:bg-emerald-600 text-emerald-500 hover:text-white border border-emerald-500/20 font-black text-[9px] uppercase tracking-widest py-2.5 rounded-xl transition-colors`}><FileText size={12} /> Excel</button>)}
+                        {filtroActivo && (<button onClick={() => { setFiltroActivo(false); setFechaInicio(''); setFechaFin(''); setMostrarFiltro(false); }} className="bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-black text-[9px] uppercase tracking-widest py-2.5 rounded-xl transition-colors">Limpiar</button>)}
+                        {esAdmin && (<button onClick={exportarExcelFacturas} className={`${filtroActivo ? '' : 'col-span-2'} flex items-center justify-center gap-2 bg-emerald-50 dark:bg-emerald-600/10 hover:bg-emerald-100 dark:hover:bg-emerald-600 text-emerald-600 dark:text-emerald-500 hover:text-emerald-700 dark:hover:text-white border border-emerald-200 dark:border-emerald-500/20 font-black text-[9px] uppercase tracking-widest py-2.5 rounded-xl transition-colors`}><FileText size={12} /> Excel</button>)}
                       </div>
                     </div>
                   </div>
                 )}
               </div>
 
-              <button onClick={() => setMostrarFormulario(true)} className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-2.5 rounded-xl font-black uppercase text-[10px] flex items-center gap-2 shadow-lg shadow-emerald-900/20 transition-all border border-emerald-500/50">
-                <PlusCircle size={16} /> Registrar Factura 
-              </button>
+              <button onClick={() => setMostrarFormulario(true)} className="w-full md:w-auto bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-2.5 rounded-xl font-black uppercase text-[10px] flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/20 transition-all border border-emerald-500/50"><PlusCircle size={16} /> Registrar Factura</button>
             </div>
           </header>
 
           {esAdmin && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12 animate-in fade-in">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 mb-8 sm:mb-12 animate-in fade-in transition-colors">
               <TarjetaDato titulo="Ingreso Cobrado" valor={`$${metricas.cobrado.toLocaleString('es-MX', {minimumFractionDigits: 2})}`} color="emerald" />
               <TarjetaDato titulo="Por Cobrar" valor={`$${metricas.pendiente.toLocaleString('es-MX', {minimumFractionDigits: 2})}`} color="blue" />
             </div>
           )}
 
-          <div className="bg-slate-900 border border-slate-800 rounded-4xl overflow-hidden shadow-2xl">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-4xl overflow-hidden shadow-sm dark:shadow-2xl transition-colors">
             <div className="overflow-x-auto custom-scrollbar pb-2">
               <table className="w-full text-left border-collapse text-[13px] min-w-[1100px]">
                 <thead>
-                  <tr className="bg-slate-950/50 border-b border-slate-800 text-slate-400 text-[12px] font-semibold uppercase tracking-wider">
-                    <th className="p-4 pl-8 font-normal w-12">Pago</th><th className="p-4 font-normal">Folio y Origen</th><th className="p-4 font-normal min-w-[200px]">Cliente Receptor</th><th className="p-4 font-normal min-w-[180px]">Concepto</th><th className="p-4 font-normal w-32">Vencimiento</th><th className="p-4 font-normal w-32">Fecha Pago</th><th className="p-4 font-normal">Monto Total</th><th className="p-4 pr-8 text-right font-normal">Acciones</th>
+                  <tr className="bg-slate-50 dark:bg-slate-950/50 border-b border-slate-100 dark:border-slate-800 text-slate-500 dark:text-slate-400 text-[12px] font-semibold uppercase tracking-wider transition-colors">
+                    <th className="p-4 pl-8 font-normal w-12 text-center">Pago</th><th className="p-4 font-normal">Folio y Origen</th><th className="p-4 font-normal min-w-[200px]">Cliente Receptor</th><th className="p-4 font-normal min-w-[180px]">Concepto</th><th className="p-4 font-normal w-32">Vencimiento</th><th className="p-4 font-normal w-32">Fecha Pago</th><th className="p-4 font-normal">Monto Total</th><th className="p-4 pr-8 text-right font-normal">Acciones</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-800/50">
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50 transition-colors">
                   {historial.map((item) => {
                     const esCancelada = item.estatus_pago === 'Cancelada';
                     const esVencida = new Date(item.fecha_vencimiento + 'T23:59:59') < new Date() && item.estatus_pago !== 'Pagado' && !esCancelada;
@@ -380,45 +372,45 @@ function FacturasContenido() {
                     const clienteCompleto = clientes.find(c => c.nombre === item.cliente) || {};
 
                     return (
-                      <tr key={item.id} className={`hover:bg-slate-800/30 transition-colors group ${esCancelada ? 'opacity-40 grayscale' : ''}`}>
+                      <tr key={item.id} className={`hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors group ${esCancelada ? 'opacity-40 grayscale' : ''}`}>
                         
-                        <td className="p-4 pl-8 align-middle">
-                          <button onClick={() => alternarEstatus(item.id, item.estatus_pago)} title={esCancelada ? "Factura Anulada" : "Marcar como Pagado/Pendiente"} disabled={esCancelada} className={`p-2 rounded-lg transition-all ${item.estatus_pago === 'Pagado' ? 'bg-emerald-600/20 text-emerald-500' : (esCancelada ? 'bg-slate-800 text-slate-600 cursor-not-allowed' : 'bg-slate-800 text-slate-500 hover:text-emerald-400')}`}>
+                        <td className="p-4 pl-8 align-middle text-center">
+                          <button onClick={() => alternarEstatus(item.id, item.estatus_pago)} title={esCancelada ? "Factura Anulada" : "Marcar como Pagado/Pendiente"} disabled={esCancelada} className={`p-2 rounded-lg transition-all ${item.estatus_pago === 'Pagado' ? 'bg-emerald-50 dark:bg-emerald-600/20 text-emerald-600 dark:text-emerald-500' : (esCancelada ? 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-600 cursor-not-allowed' : 'bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400')}`}>
                             {item.estatus_pago === 'Pagado' ? <CheckCircle size={18} /> : (esCancelada ? <X size={18} /> : <Clock size={18} />)}
                           </button>
                         </td>
 
                         <td className="p-4 align-middle">
                           <div className="flex flex-col items-start gap-1">
-                            <span className="text-[14px] text-white font-mono font-medium">{item.folio_interno ? `F-${String(item.folio_interno).padStart(4, '0')}` : 'F-S/N'}</span>
-                            {vieneDeViaje ? ( <span className="inline-flex px-2 py-0.5 rounded bg-blue-900/30 border border-blue-500/30 text-blue-400 uppercase tracking-widest text-[9px] items-center gap-1 mt-0.5"><Truck size={8}/> VIAJE: {item.folio_viaje ? `V-${String(item.folio_viaje).padStart(4, '0')}` : 'V-S/N'}</span> ) : ( <span className="inline-flex px-2 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-400 uppercase tracking-widest text-[9px] items-center gap-1 mt-0.5">Libre</span> )}
+                            <span className="text-[14px] text-slate-900 dark:text-white font-mono font-medium transition-colors">{item.folio_interno ? `F-${String(item.folio_interno).padStart(4, '0')}` : 'F-S/N'}</span>
+                            {vieneDeViaje ? ( <span className="inline-flex px-2 py-0.5 rounded bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-500/30 text-blue-600 dark:text-blue-400 uppercase tracking-widest text-[9px] items-center gap-1 mt-0.5 transition-colors"><Truck size={8}/> VIAJE: {item.folio_viaje ? `V-${String(item.folio_viaje).padStart(4, '0')}` : 'V-S/N'}</span> ) : ( <span className="inline-flex px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 uppercase tracking-widest text-[9px] items-center gap-1 mt-0.5 transition-colors">Libre</span> )}
                           </div>
                         </td>
 
                         <td className="p-4 align-middle">
                           <div className="flex flex-col gap-0.5">
-                            <span className="text-white truncate max-w-[200px]" title={item.cliente}>{item.cliente}</span>
-                            <span className="text-slate-500 text-[11px] font-mono flex items-center gap-1">
-                              <FileText size={10} className={sinTimbrar ? "text-orange-500" : "text-purple-500"}/>
+                            <span className="text-slate-900 dark:text-white font-bold truncate max-w-[200px] transition-colors" title={item.cliente}>{item.cliente}</span>
+                            <span className="text-slate-500 text-[11px] font-mono flex items-center gap-1 transition-colors">
+                              <FileText size={10} className={sinTimbrar ? "text-orange-500" : "text-purple-600 dark:text-purple-500"}/>
                               {sinTimbrar ? 'Borrador sin SAT' : item.folio_fiscal.slice(0,18) + '...'}
                             </span>
                           </div>
                         </td>
 
                         <td className="p-4 align-middle max-w-[180px]">
-                          <span className="text-slate-300 text-[12px] truncate block" title={item.ruta}>{item.ruta || '---'}</span>
-                          {item.referencia && ( <span className="text-emerald-500/80 text-[10px] uppercase font-bold tracking-widest truncate block mt-1" title={item.referencia}>REF: {item.referencia}</span> )}
+                          <span className="text-slate-600 dark:text-slate-300 text-[12px] truncate block transition-colors" title={item.ruta}>{item.ruta || '---'}</span>
+                          {item.referencia && ( <span className="text-emerald-600 dark:text-emerald-500/80 text-[10px] uppercase font-bold tracking-widest truncate block mt-1 transition-colors" title={item.referencia}>REF: {item.referencia}</span> )}
                         </td>
 
                         <td className="p-4 align-middle">
                            {item.estatus_pago === 'Pagado' ? (
-                             <span className="text-[10px] font-black text-emerald-500/50 uppercase tracking-widest line-through">Saldado</span>
+                             <span className="text-[10px] font-black text-emerald-500/40 uppercase tracking-widest line-through transition-colors">Saldado</span>
                            ) : esCancelada ? (
-                             <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Anulada</span>
+                             <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest transition-colors">Anulada</span>
                            ) : (
                              <div className="flex flex-col gap-0.5">
-                               <span className={`text-[12px] ${esVencida ? 'text-red-400 font-bold' : 'text-slate-300'}`}>{item.fecha_vencimiento?.slice(0, 10) || 'S/V'}</span>
-                               {esVencida && <span className="text-[9px] font-black text-red-500 uppercase">Vencida</span>}
+                               <span className={`text-[12px] ${esVencida ? 'text-red-600 dark:text-red-400 font-bold' : 'text-slate-600 dark:text-slate-300'} transition-colors`}>{item.fecha_vencimiento?.slice(0, 10) || 'S/V'}</span>
+                               {esVencida && <span className="text-[9px] font-black text-red-600 dark:text-red-500 uppercase transition-colors">Vencida</span>}
                              </div>
                            )}
                         </td>
@@ -426,38 +418,35 @@ function FacturasContenido() {
                         <td className="p-4 align-middle">
                           {item.estatus_pago === 'Pagado' ? (
                             <div className="flex flex-col gap-0.5">
-                              <span className="text-[12px] text-emerald-400 font-bold font-mono">{item.fecha_pago?.slice(0, 10) || 'S/D'}</span>
-                              <span className="text-[9px] font-black text-emerald-500/70 uppercase tracking-widest flex items-center gap-1"><CalendarCheck size={10} /> Ingresado</span>
+                              <span className="text-[12px] text-emerald-600 dark:text-emerald-400 font-bold font-mono transition-colors">{item.fecha_pago?.slice(0, 10) || 'S/D'}</span>
+                              <span className="text-[9px] font-black text-emerald-500/60 dark:text-emerald-500/70 uppercase tracking-widest flex items-center gap-1 transition-colors"><CalendarCheck size={10} /> Ingresado</span>
                             </div>
                           ) : (
-                            <span className="text-[12px] text-slate-600 font-mono">---</span>
+                            <span className="text-[12px] text-slate-300 dark:text-slate-600 font-mono transition-colors">---</span>
                           )}
                         </td>
 
                         <td className="p-4 align-middle">
-                          <span className={`text-[14px] font-mono font-medium ${item.estatus_pago === 'Pagado' ? 'text-emerald-400' : 'text-white'} ${esCancelada ? 'line-through opacity-50' : ''}`}>
+                          <span className={`text-[14px] font-mono font-black ${item.estatus_pago === 'Pagado' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-900 dark:text-white'} ${esCancelada ? 'line-through opacity-50' : ''} transition-colors`}>
                             ${Number(item.monto_total).toLocaleString('es-MX', {minimumFractionDigits: 2})}
                           </span>
                         </td>
 
                         <td className="p-4 pr-8 align-middle">
-                          <div className="flex items-center justify-end gap-1.5 opacity-30 group-hover:opacity-100 transition-opacity">
-                            
+                          <div className="flex items-center justify-end gap-1.5 opacity-100 sm:opacity-30 group-hover:opacity-100 transition-opacity">
                             {esCancelada ? (
-                              <button onClick={() => generarFacturaPDF(item, clienteCompleto, perfilEmisor)} title="Descargar PDF Cancelado" className="p-2 bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white rounded-lg transition-colors"><FileText size={16}/></button>
+                              <button onClick={() => generarFacturaPDF(item, clienteCompleto, perfilEmisor)} title="PDF Cancelado" className="p-2 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white rounded-lg transition-colors"><FileText size={16}/></button>
                             ) : sinTimbrar ? (
-                              <button onClick={() => timbrarFactura(item)} title="Timbrar Factura" className="px-3 py-1.5 bg-blue-600/10 text-blue-500 hover:bg-blue-600 hover:text-white border border-blue-500/20 rounded-lg uppercase tracking-widest text-[10px] flex items-center gap-1.5 transition-colors">
+                              <button onClick={() => timbrarFactura(item)} title="Timbrar Factura" className="px-3 py-1.5 bg-blue-50 dark:bg-blue-600/10 text-blue-600 dark:text-blue-500 hover:bg-blue-600 hover:text-white border border-blue-200 dark:border-blue-500/20 rounded-lg uppercase tracking-widest text-[10px] flex items-center gap-1.5 transition-colors">
                                 {loading ? <Loader2 size={14} className="animate-spin"/> : <ShieldCheck size={14}/>} Timbrar
                               </button>
                             ) : (
                               <>
-                                <button onClick={() => generarFacturaPDF(item, clienteCompleto, perfilEmisor)} title="Descargar Factura PDF" className="p-2 bg-emerald-600/10 text-emerald-500 hover:bg-emerald-600 hover:text-white rounded-lg transition-colors"><Receipt size={16}/></button>
-                                {item.facturapi_id && ( <button onClick={() => descargarXML(item.facturapi_id, item.cliente)} title="Descargar XML" className="p-2 bg-purple-600/10 text-purple-400 hover:bg-purple-600 hover:text-white rounded-lg transition-colors"><FileCode size={16}/></button> )}
+                                <button onClick={() => generarFacturaPDF(item, clienteCompleto, perfilEmisor)} title="Descargar PDF" className="p-2 bg-emerald-50 dark:bg-emerald-600/10 text-emerald-600 dark:text-emerald-500 hover:bg-emerald-600 hover:text-white rounded-lg transition-colors transition-colors"><Receipt size={16}/></button>
+                                {item.facturapi_id && ( <button onClick={() => descargarXML(item.facturapi_id, item.cliente)} title="Descargar XML" className="p-2 bg-purple-50 dark:bg-purple-600/10 text-purple-600 dark:text-purple-400 hover:bg-purple-600 hover:text-white rounded-lg transition-colors transition-colors"><FileCode size={16}/></button> )}
                               </>
                             )}
-
-                            {/* El botón de borrar ahora siempre se muestra, la lógica interna define qué hace */}
-                            <button onClick={() => procesarCancelacion(item, vieneDeViaje)} title={vieneDeViaje ? "Borrar desde Viajes" : (esCancelada ? "Eliminar de FleetForce" : (sinTimbrar ? "Eliminar Borrador" : "Cancelar en SAT"))} className={`p-2 transition-colors rounded-lg ${vieneDeViaje ? 'text-slate-700 cursor-not-allowed' : 'text-slate-600 hover:text-red-500 hover:bg-red-500/10'}`}>
+                            <button onClick={() => procesarCancelacion(item, vieneDeViaje)} title="Borrar/Cancelar" className={`p-2 transition-colors rounded-lg ${vieneDeViaje ? 'text-slate-200 dark:text-slate-800 cursor-not-allowed' : 'text-slate-400 dark:text-slate-600 hover:text-red-600 dark:hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10'}`}>
                               <Trash2 size={16} />
                             </button>
                           </div>
@@ -468,9 +457,9 @@ function FacturasContenido() {
                   
                   {historial.length === 0 && (
                     <tr>
-                      <td colSpan="8" className="py-16 text-center">
-                        <DollarSign size={32} className="mx-auto text-slate-700 mb-3" />
-                        <p className="text-slate-500 uppercase tracking-widest text-sm">No hay facturas en este periodo</p>
+                      <td colSpan="8" className="py-20 text-center transition-colors">
+                        <DollarSign size={32} className="mx-auto text-slate-200 dark:text-slate-700 mb-3 transition-colors" />
+                        <p className="text-slate-400 dark:text-slate-500 uppercase tracking-widest text-sm font-black transition-colors">No hay facturas en este periodo</p>
                       </td>
                     </tr>
                   )}
@@ -484,14 +473,14 @@ function FacturasContenido() {
           {/* ========================================================= */}
           {dialogoConfirmacion.visible && (
             <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-              <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-sm" onClick={() => setDialogoConfirmacion({ visible: false, mensaje: '', accion: null })} />
-              <div className="relative bg-slate-900 border border-slate-800 w-full max-w-sm rounded-[2rem] p-8 shadow-2xl flex flex-col items-center text-center animate-in zoom-in-95 duration-200">
-                <div className="w-16 h-16 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mb-6"><AlertTriangle size={32} /></div>
-                <h3 className="text-xl font-black text-white uppercase tracking-widest mb-2">¿Estás Seguro?</h3>
-                <p className="text-slate-400 text-sm mb-8">{dialogoConfirmacion.mensaje}</p>
+              <div className="absolute inset-0 bg-slate-900/50 dark:bg-slate-950/90 backdrop-blur-sm transition-colors" onClick={() => setDialogoConfirmacion({ visible: false, mensaje: '', accion: null })} />
+              <div className="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 w-full max-w-sm rounded-[2rem] p-8 shadow-2xl flex flex-col items-center text-center animate-in zoom-in-95 duration-200 transition-colors">
+                <div className="w-16 h-16 bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-500 rounded-full flex items-center justify-center mb-6 transition-colors transition-colors transition-colors"><AlertTriangle size={32} /></div>
+                <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-widest mb-2 transition-colors">¿Estás Seguro?</h3>
+                <p className="text-slate-500 dark:text-slate-400 text-sm mb-8 transition-colors">{dialogoConfirmacion.mensaje}</p>
                 <div className="flex gap-3 w-full">
-                  <button onClick={() => setDialogoConfirmacion({ visible: false, mensaje: '', accion: null })} disabled={loading} className="flex-1 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest bg-slate-800 text-slate-300 hover:bg-slate-700 transition-colors">Descartar</button>
-                  <button onClick={ejecutarConfirmacion} disabled={loading} className="flex-1 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest bg-red-600 text-white hover:bg-red-500 transition-colors shadow-lg shadow-red-900/20">{loading ? <Loader2 size={14} className="animate-spin mx-auto" /> : "Sí, Proceder"}</button>
+                  <button onClick={() => setDialogoConfirmacion({ visible: false, mensaje: '', accion: null })} disabled={loading} className="flex-1 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors transition-colors">Descartar</button>
+                  <button onClick={ejecutarConfirmacion} disabled={loading} className="flex-1 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest bg-red-600 text-white hover:bg-red-500 transition-colors shadow-lg shadow-red-900/20 transition-colors">{loading ? <Loader2 size={14} className="animate-spin mx-auto" /> : "Sí, Proceder"}</button>
                 </div>
               </div>
             </div>
@@ -502,81 +491,80 @@ function FacturasContenido() {
           {/* ========================================================= */}
           {mostrarFormulario && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-              <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-md" onClick={() => setMostrarFormulario(false)} />
-              <div className="relative bg-slate-900 border border-slate-800 w-full max-w-3xl rounded-[3rem] p-10 shadow-2xl animate-in zoom-in-95 duration-200">
-                <button onClick={() => setMostrarFormulario(false)} className="absolute top-8 right-8 text-slate-500 hover:text-white"><X size={24} /></button>
-                <h2 className="text-2xl font-black text-white italic uppercase mb-8">Registrar <span className="text-emerald-500">Factura</span></h2>
+              <div className="absolute inset-0 bg-slate-900/50 dark:bg-slate-950/80 backdrop-blur-sm transition-colors" onClick={() => setMostrarFormulario(false)} />
+              <div className="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 w-full max-w-3xl rounded-[3rem] p-6 sm:p-10 shadow-2xl animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh] transition-colors">
+                <button onClick={() => setMostrarFormulario(false)} className="absolute top-6 right-6 sm:top-8 sm:right-8 text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-white transition-colors"><X size={24} /></button>
+                <h2 className="text-2xl font-black text-slate-900 dark:text-white italic uppercase mb-8 shrink-0 transition-colors">Registrar <span className="text-emerald-600 dark:text-emerald-500">Factura</span></h2>
                 
-                <form onSubmit={registrarFactura} className="space-y-6">
+                <form onSubmit={registrarFactura} className="space-y-6 overflow-y-auto pr-2 custom-scrollbar">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="md:col-span-2">
-                      <div className="flex justify-between items-center mb-2"><label className="text-[12px] font-black text-slate-500 uppercase tracking-widest ml-1">Cliente Receptor</label></div>
-                      <select required className="w-full bg-slate-950 border border-slate-800 p-4 rounded-2xl text-sm text-white outline-none focus:border-emerald-500" value={formData.cliente_id} onChange={(e) => setFormData({...formData, cliente_id: e.target.value})}>
+                      <div className="flex justify-between items-center mb-2"><label className="text-[12px] font-black text-slate-500 uppercase tracking-widest ml-1 transition-colors">Cliente Receptor</label></div>
+                      <select required className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl text-sm text-slate-900 dark:text-white outline-none focus:border-emerald-500 transition-colors" value={formData.cliente_id} onChange={(e) => setFormData({...formData, cliente_id: e.target.value})}>
                         <option value="">-- Seleccionar de Catálogo SAT --</option>
                         {clientes.map(c => <option key={c.id} value={c.id}>{c.nombre} ({c.dias_credito} días crédito)</option>)}
                       </select>
                     </div>
 
                     <div>
-                      <label className="text-[12px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1">Monto Base (Subtotal $)</label>
-                      <input required type="number" step="0.01" className="w-full bg-slate-950 border border-slate-800 p-4 rounded-2xl text-sm text-white font-mono outline-none focus:border-emerald-500" value={formData.monto_base} onChange={e => setFormData({...formData, monto_base: e.target.value})} placeholder="0.00" />
+                      <label className="text-[12px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1 transition-colors transition-colors">Monto Base (Subtotal $)</label>
+                      <input required type="number" step="0.01" className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl text-sm text-slate-900 dark:text-white font-mono outline-none focus:border-emerald-500 transition-colors transition-colors transition-colors" value={formData.monto_base} onChange={e => setFormData({...formData, monto_base: e.target.value})} placeholder="0.00" />
                       
-                      {/* === CHECKBOXES DINÁMICOS === */}
-                      <div className="flex gap-4 px-2 mt-3">
+                      <div className="flex gap-4 px-2 mt-3 transition-colors">
                         <label className="flex items-center gap-2 cursor-pointer group">
-                          <input type="checkbox" className="w-4 h-4 accent-emerald-500 rounded bg-slate-950 border-slate-800 cursor-pointer" checked={formData.aplica_iva} onChange={e => setFormData({...formData, aplica_iva: e.target.checked})} />
-                          <span className="text-[9px] font-black uppercase text-slate-400 group-hover:text-emerald-400 transition-colors tracking-widest">+ IVA (16%)</span>
+                          <input type="checkbox" className="w-4 h-4 accent-emerald-600 dark:accent-emerald-500 rounded bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 cursor-pointer" checked={formData.aplica_iva} onChange={e => setFormData({...formData, aplica_iva: e.target.checked})} />
+                          <span className="text-[9px] font-black uppercase text-slate-500 dark:text-slate-400 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors tracking-widest">+ IVA (16%)</span>
                         </label>
                         <label className="flex items-center gap-2 cursor-pointer group">
-                          <input type="checkbox" className="w-4 h-4 accent-emerald-500 rounded bg-slate-950 border-slate-800 cursor-pointer" checked={formData.aplica_retencion} onChange={e => setFormData({...formData, aplica_retencion: e.target.checked})} />
-                          <span className="text-[9px] font-black uppercase text-slate-400 group-hover:text-emerald-400 transition-colors tracking-widest">- Ret. (4%)</span>
+                          <input type="checkbox" className="w-4 h-4 accent-emerald-600 dark:accent-emerald-500 rounded bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 cursor-pointer" checked={formData.aplica_retencion} onChange={e => setFormData({...formData, aplica_retencion: e.target.checked})} />
+                          <span className="text-[9px] font-black uppercase text-slate-500 dark:text-slate-400 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors tracking-widest">- Ret. (4%)</span>
                         </label>
                       </div>
                       
                       {formData.monto_base > 0 && (
-                        <p className="text-[10px] font-black tracking-widest uppercase text-emerald-500 mt-2 ml-1">
+                        <p className="text-[10px] font-black tracking-widest uppercase text-emerald-600 dark:text-emerald-500 mt-2 ml-1 transition-colors transition-colors">
                           Neto a Cobrar: ${calcularTotalEnTiempoReal().toLocaleString('es-MX', {minimumFractionDigits: 2})}
                         </p>
                       )}
                     </div>
 
                     <div>
-                      <label className="text-[12px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1">Concepto</label>
-                      <input className="w-full bg-slate-950 border border-slate-800 p-4 rounded-2xl text-sm text-white outline-none focus:border-emerald-500" value={formData.ruta} onChange={e => setFormData({...formData, ruta: e.target.value})} placeholder="Ej. Flete Extra" />
+                      <label className="text-[12px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1 transition-colors">Concepto</label>
+                      <input className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl text-sm text-slate-900 dark:text-white outline-none focus:border-emerald-500 transition-colors" value={formData.ruta} onChange={e => setFormData({...formData, ruta: e.target.value})} placeholder="Ej. Flete Extra" />
                     </div>
                   </div>
 
-                  <div className="md:col-span-2">
-                     <label className="text-[12px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1">Referencia del Cliente (Opcional)</label>
-                     <input className="w-full bg-slate-950 border border-slate-800 p-4 rounded-2xl text-sm text-white outline-none focus:border-emerald-500" value={formData.referencia} onChange={e => setFormData({...formData, referencia: e.target.value})} placeholder="Ej. Orden de Compra 4920-A" />
+                  <div>
+                     <label className="text-[12px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1 transition-colors">Referencia del Cliente (Opcional)</label>
+                     <input className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl text-sm text-slate-900 dark:text-white outline-none focus:border-emerald-500 transition-colors transition-colors" value={formData.referencia} onChange={e => setFormData({...formData, referencia: e.target.value})} placeholder="Ej. Orden de Compra 4920-A" />
                   </div>
 
-                  <div className="p-6 bg-slate-950 border border-slate-800 rounded-2xl">
-                    <p className="text-[12px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2"><Settings size={12}/> Configuración SAT (CFDI 4.0)</p>
-                    <div className="grid grid-cols-2 gap-4">
+                  <div className="p-5 sm:p-6 bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 rounded-2xl transition-colors">
+                    <p className="text-[12px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2 transition-colors"><Settings size={12}/> Configuración SAT (CFDI 4.0)</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
-                        <label className="text-[12px] font-black text-slate-500 uppercase mb-2 block ml-1">Método de Pago</label>
-                        <select className="w-full bg-slate-900 border border-slate-800 p-3 rounded-xl text-xs text-white" value={formData.metodo_pago} onChange={e => setFormData({...formData, metodo_pago: e.target.value})}><option value="PPD">PPD - Pago en Parcialidades o Diferido</option><option value="PUE">PUE - Pago en una Sola Exhibición</option></select>
+                        <label className="text-[12px] font-black text-slate-500 uppercase mb-2 block ml-1 transition-colors">Método de Pago</label>
+                        <select className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-xl text-xs text-slate-900 dark:text-white transition-colors" value={formData.metodo_pago} onChange={e => setFormData({...formData, metodo_pago: e.target.value})}><option value="PPD">PPD - Pago en Parcialidades</option><option value="PUE">PUE - Pago en una Exhibición</option></select>
                       </div>
                       <div>
-                        <label className="text-[12px] font-black text-slate-500 uppercase mb-2 block ml-1">Forma de Pago</label>
-                        <select className="w-full bg-slate-900 border border-slate-800 p-3 rounded-xl text-xs text-white" value={formData.forma_pago} onChange={e => setFormData({...formData, forma_pago: e.target.value})} disabled={formData.metodo_pago === 'PPD'}><option value="99">99 - Por Definir (Obligatorio en PPD)</option><option value="03">03 - Transferencia Electrónica</option><option value="01">01 - Efectivo</option><option value="02">02 - Cheque Nominativo</option></select>
+                        <label className="text-[12px] font-black text-slate-500 uppercase mb-2 block ml-1 transition-colors transition-colors">Forma de Pago</label>
+                        <select className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-xl text-xs text-slate-900 dark:text-white transition-colors transition-colors" value={formData.forma_pago} onChange={e => setFormData({...formData, forma_pago: e.target.value})} disabled={formData.metodo_pago === 'PPD'}><option value="99">99 - Por Definir</option><option value="03">03 - Transferencia</option><option value="01">01 - Efectivo</option><option value="02">02 - Cheque</option></select>
                       </div>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 transition-colors transition-colors">
                     <div>
-                      <label className="text-[12px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1">Fecha de Emisión</label>
-                      <input type="date" required className="w-full bg-slate-950 border border-slate-800 p-4 rounded-2xl text-sm text-white" value={formData.fecha_viaje} onChange={e => setFormData({...formData, fecha_viaje: e.target.value})} />
+                      <label className="text-[12px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1 transition-colors transition-colors">Fecha de Emisión</label>
+                      <input type="date" required className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl text-sm text-slate-900 dark:text-white transition-colors cursor-pointer" value={formData.fecha_viaje} onChange={e => setFormData({...formData, fecha_viaje: e.target.value})} />
                     </div>
                     <div>
-                      <label className="text-[12px] font-black text-orange-500 uppercase tracking-widest mb-2 block ml-1">Vencimiento Cobro</label>
-                      <input type="date" readOnly className="w-full bg-slate-900 border border-slate-800 p-4 rounded-2xl text-sm text-slate-400 outline-none" value={formData.fecha_vencimiento} />
+                      <label className="text-[12px] font-black text-orange-600 dark:text-orange-500 uppercase tracking-widest mb-2 block ml-1 transition-colors transition-colors transition-colors">Vencimiento Cobro</label>
+                      <input type="date" readOnly className="w-full bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl text-sm text-slate-500 dark:text-slate-500 outline-none transition-colors" value={formData.fecha_vencimiento} />
                     </div>
                   </div>
 
-                  <button type="submit" disabled={loading || clientes.length === 0} className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-800 disabled:text-slate-600 text-white p-5 rounded-2xl font-black uppercase text-[11px] tracking-widest shadow-xl transition-all mt-4">
+                  <button type="submit" disabled={loading || clientes.length === 0} className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-100 dark:disabled:bg-slate-800 disabled:text-slate-400 dark:disabled:text-slate-600 text-white p-5 rounded-2xl font-black uppercase text-[11px] tracking-widest shadow-xl transition-all mt-4 shadow-emerald-900/10">
                     {loading ? "Generando..." : "Registrar Factura"}
                   </button>
                 </form>
@@ -591,7 +579,7 @@ function FacturasContenido() {
 
 export default function FacturasPageWrapper() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-slate-950 flex items-center justify-center"><p className="text-emerald-500">Cargando Módulo Financiero...</p></div>}>
+    <Suspense fallback={<div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center transition-colors"><p className="text-emerald-600 dark:text-emerald-500 font-black animate-pulse">Cargando Módulo Financiero...</p></div>}>
       <FacturasContenido />
     </Suspense>
   );

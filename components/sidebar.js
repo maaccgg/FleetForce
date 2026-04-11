@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient'; 
+import { useTheme } from 'next-themes'; // <-- NUEVO HOOK
 import { 
   LayoutDashboard, 
   Wrench, 
@@ -23,14 +24,14 @@ import {
   X,
   Eye,      
   EyeOff,
-  AlertTriangle, // <-- Añadido para el modal
-  Loader2        // <-- Añadido por consistencia
+  AlertTriangle,
+  Loader2,
+  Sun, // <-- NUEVO ICONO
+  Moon // <-- NUEVO ICONO
 } from 'lucide-react';
 
-// === SISTEMA DE ALERTAS ===
 import { useToast } from '@/components/toastprovider';
 
-// === DICCIONARIO DE RUTAS Y PERMISOS ===
 const menuItems = [
   { name: 'Inicio', href: '/', icon: LayoutDashboard, roles: ['administrador', 'operaciones', 'facturacion', 'miembro'] },
   { name: 'Viajes', href: '/viajes', icon: FileCheck, roles: ['administrador', 'operaciones', 'miembro'] },
@@ -44,13 +45,14 @@ export default function Sidebar() {
   const pathname = usePathname();
   const { mostrarAlerta } = useToast();
   
+  // === ESTADO DEL TEMA ===
+  const { theme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+  
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [rolUsuario, setRolUsuario] = useState('miembro'); 
 
-  // === ESTADOS PARA MODAL DE CONFIRMACIÓN ===
   const [dialogoConfirmacion, setDialogoConfirmacion] = useState({ visible: false, mensaje: '', accion: null });
-
-  // === ESTADOS PARA CAMBIO DE CONTRASEÑA ===
   const [mostrarModalPassword, setMostrarModalPassword] = useState(false);
   const [nuevaPassword, setNuevaPassword] = useState('');
   const [confirmarPassword, setConfirmarPassword] = useState('');
@@ -58,6 +60,7 @@ export default function Sidebar() {
   const [verPassword, setVerPassword] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
     const obtenerRol = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
@@ -66,7 +69,6 @@ export default function Sidebar() {
           .select('rol')
           .eq('id', session.user.id)
           .single();
-        
         if (data?.rol) setRolUsuario(data.rol);
       }
     };
@@ -84,7 +86,6 @@ export default function Sidebar() {
     setDialogoConfirmacion({ visible: false, mensaje: '', accion: null }); 
   };
 
-  // 1. PREGUNTA DE SEGURIDAD ANTES DE ABRIR MODAL CON NUEVA LÓGICA
   const confirmarAperturaPassword = () => {
     pedirConfirmacion("¿Estás seguro de que deseas cambiar tu contraseña actual?", () => {
       setMostrarModalPassword(true);
@@ -119,23 +120,30 @@ export default function Sidebar() {
 
   const menuPermitido = menuItems.filter(item => item.roles.includes(rolUsuario));
 
+  // Evitar error de hidratación con el tema
+  if (!mounted) return <div className="w-64 h-screen border-r border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 shrink-0 sticky top-0"></div>;
+
   return (
     <>
-      <nav className="w-64 h-screen p-6 border-r border-slate-800 bg-slate-950 flex flex-col gap-2 sticky top-0 overflow-y-auto shrink-0 z-40">
+      {/* EL CONTENEDOR PRINCIPAL:
+        bg-slate-50 (Claro) vs bg-slate-950 (Oscuro)
+        border-slate-200 (Claro) vs border-slate-800 (Oscuro)
+      */}
+      <nav className="w-64 h-screen p-6 border-r border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 flex flex-col gap-2 sticky top-0 overflow-y-auto shrink-0 z-40 transition-colors duration-300">
         
         <div className="mb-8 px-2 flex flex-col items-start select-none">
           <div className="flex items-center gap-2 mb-1">
             <Truck size={28} className="text-emerald-500" strokeWidth={2} />
-            <h1 className="text-2xl font-black text-white tracking-tight leading-none">
-              Fleet<span className="font-bold text-slate-300">Force</span>
+            <h1 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight leading-none transition-colors">
+              Fleet<span className="font-bold text-slate-400 dark:text-slate-300">Force</span>
             </h1>
           </div>
           
           <div className="flex items-center gap-2 mt-1">
-            <p className="text-[9px] text-slate-600 font-bold uppercase ml-1 tracking-widest">
+            <p className="text-[9px] text-slate-500 dark:text-slate-600 font-bold uppercase ml-1 tracking-widest transition-colors">
               Gestión 2026
             </p>
-            <span className="px-1.5 py-0.5 rounded-sm bg-slate-800 text-slate-400 text-[8px] font-black uppercase tracking-widest border border-slate-700">
+            <span className="px-1.5 py-0.5 rounded-sm bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-[8px] font-black uppercase tracking-widest border border-slate-300 dark:border-slate-700 transition-colors">
               {rolUsuario}
             </span>
           </div>
@@ -150,15 +158,15 @@ export default function Sidebar() {
                 href={item.href} 
                 className={`flex items-center gap-3 p-3 rounded-xl transition-all group ${
                   isActive 
-                  ? 'bg-blue-600/10 text-blue-400 border border-blue-600/20' 
-                  : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
+                  ? 'bg-blue-600/10 text-blue-600 dark:text-blue-400 border border-blue-600/20' 
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-slate-200'
                 }`}
               >
                 <item.icon 
                   size={20} 
-                  className={isActive ? 'text-blue-400' : 'group-hover:text-blue-400 transition-colors'} 
+                  className={isActive ? 'text-blue-600 dark:text-blue-400' : 'group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors'} 
                 />
-                <span className={`font-bold text-sm ${isActive ? 'text-blue-400' : ''}`}>
+                <span className={`font-bold text-sm ${isActive ? 'text-blue-600 dark:text-blue-400' : ''}`}>
                   {item.name}
                 </span>
               </Link>
@@ -166,82 +174,106 @@ export default function Sidebar() {
           })}
         </div>
 
-        <div className="mt-auto pt-6 border-t border-slate-800/50 px-1 space-y-4 pb-2">
-          <p className="text-[8px] text-slate-600 font-black uppercase tracking-widest italic leading-relaxed px-2">
+{/* SECCIÓN INFERIOR: CONFIGURACIÓN FLOTANTE */}
+        <div className="mt-auto pt-6 border-t border-slate-200 dark:border-slate-800/50 px-1 pb-2">
+          <p className="text-[8px] text-slate-400 dark:text-slate-600 font-black uppercase tracking-widest italic leading-relaxed px-2 mb-4">
             "Version BETA 1.0.1"
           </p>
           
-          <div className="flex flex-col gap-2">
-            <button 
-              onClick={() => setIsConfigOpen(!isConfigOpen)} 
-              className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${isConfigOpen ? 'bg-slate-900 border border-slate-700 text-white' : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:border-slate-700'}`}
-            >
-              <div className="flex items-center gap-2">
-                <Settings size={14} className={isConfigOpen ? "text-blue-400" : ""} />
-                Configuración
-              </div>
-              {isConfigOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-            </button>
-
+          {/* Contenedor relativo para anclar el menú flotante */}
+          <div className="relative">
+            
+            {/* EL MENÚ FLOTANTE (POPOVER) */}
             {isConfigOpen && (
-              <div className="flex flex-col gap-1 pl-2 border-l-2 border-slate-800 ml-2 animate-in fade-in slide-in-from-top-2">
+              <div className="absolute bottom-full left-0 mb-3 w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl p-2 flex flex-col gap-1 z-50 animate-in slide-in-from-bottom-2 fade-in duration-200">
                 
                 {rolUsuario === 'administrador' && (
                   <>
-                    <Link href="/historico" className="flex items-center gap-2 text-slate-400 hover:text-blue-400 hover:bg-blue-600/10 px-3 py-2.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-colors">
+                    <Link href="/historico" className="flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-800 px-3 py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-colors">
                       <History size={14} />
                       Revisar Históricos
                     </Link>
-                    <Link href="/equipo" className="flex items-center gap-2 text-slate-400 hover:text-blue-400 hover:bg-blue-600/10 px-3 py-2.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-colors">
+                    <Link href="/equipo" className="flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-800 px-3 py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-colors">
                       <Users size={14} />
                       Gestionar Equipo
                     </Link>
+                    <div className="h-px bg-slate-100 dark:bg-slate-800 my-1"></div>
                   </>
                 )}
                 
-                <button onClick={confirmarAperturaPassword} className="w-full flex items-center gap-2 text-slate-400 hover:text-blue-400 hover:bg-blue-600/10 px-3 py-2.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-colors text-left">
+                {/* BOTÓN PARA CAMBIAR TEMA */}
+                <button 
+                  onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} 
+                  className="w-full flex items-center justify-between text-slate-600 dark:text-slate-400 hover:text-orange-500 dark:hover:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-500/10 px-3 py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-colors text-left group"
+                >
+                  <span className="flex items-center gap-2">
+                    {theme === 'dark' ? <Sun size={14} className="group-hover:rotate-90 transition-transform duration-500" /> : <Moon size={14} className="group-hover:-rotate-12 transition-transform duration-500" />}
+                    {theme === 'dark' ? 'Activar Modo Claro' : 'Activar Modo Oscuro'}
+                  </span>
+                </button>
+
+                <button onClick={confirmarAperturaPassword} className="w-full flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-800 px-3 py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-colors text-left">
                   <KeyRound size={14} />
                   Cambiar Contraseña
                 </button>
 
-                <button onClick={handleSignOut} className="w-full flex items-center gap-2 text-slate-500 hover:text-red-400 hover:bg-red-500/10 px-3 py-2.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-colors text-left">
+                <div className="h-px bg-slate-100 dark:bg-slate-800 my-1"></div>
+
+                <button onClick={handleSignOut} className="w-full flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 px-3 py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-colors text-left">
                   <LogOut size={14} />
                   Cerrar Sesión
                 </button>
               </div>
             )}
+
+            {/* BOTÓN GATILLO */}
+            <button 
+              onClick={() => setIsConfigOpen(!isConfigOpen)} 
+              className={`w-full flex items-center justify-between px-4 py-3.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                isConfigOpen 
+                ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' 
+                : 'bg-transparent border border-slate-200 dark:border-slate-800 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-900 hover:text-slate-800 dark:hover:text-white'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <Settings size={15} className={isConfigOpen ? "animate-[spin_3s_linear_infinite]" : ""} />
+                Configuración
+              </div>
+              {isConfigOpen ? <X size={14} /> : <ChevronUp size={14} />}
+            </button>
+
           </div>
         </div>
       </nav>
 
       {/* ========================================================= */}
-      {/* MODAL DE CONFIRMACIÓN CUSTOM */}
+      {/* MODAL DE CONFIRMACIÓN (REFACTORIZADO PARA MODO CLARO) */}
       {/* ========================================================= */}
       {dialogoConfirmacion.visible && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-sm" onClick={() => setDialogoConfirmacion({ visible: false, mensaje: '', accion: null })} />
-          <div className="relative bg-slate-900 border border-slate-800 w-full max-w-sm rounded-[2rem] p-8 shadow-2xl flex flex-col items-center text-center animate-in zoom-in-95 duration-200">
-            <div className="w-16 h-16 bg-yellow-500/10 text-yellow-500 rounded-full flex items-center justify-center mb-6"><AlertTriangle size={32} /></div>
-            <h3 className="text-xl font-black text-white uppercase tracking-widest mb-2">¿Estás Seguro?</h3>
-            <p className="text-slate-400 text-sm mb-8">{dialogoConfirmacion.mensaje}</p>
+          <div className="absolute inset-0 bg-slate-900/50 dark:bg-slate-950/90 backdrop-blur-sm" onClick={() => setDialogoConfirmacion({ visible: false, mensaje: '', accion: null })} />
+          <div className="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 w-full max-w-sm rounded-[2rem] p-8 shadow-2xl flex flex-col items-center text-center animate-in zoom-in-95 duration-200">
+            <div className="w-16 h-16 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mb-6"><AlertTriangle size={32} /></div>
+            <h3 className="text-xl font-black text-slate-800 dark:text-white uppercase tracking-widest mb-2">¿Estás Seguro?</h3>
+            <p className="text-slate-500 dark:text-slate-400 text-sm mb-8">{dialogoConfirmacion.mensaje}</p>
             <div className="flex gap-3 w-full">
-              <button onClick={() => setDialogoConfirmacion({ visible: false, mensaje: '', accion: null })} className="flex-1 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest bg-slate-800 text-slate-300 hover:bg-slate-700 transition-colors">Descartar</button>
-              <button onClick={ejecutarConfirmacion} className="flex-1 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest bg-yellow-600 text-white hover:bg-yellow-500 transition-colors shadow-lg shadow-yellow-900/20">Sí, Proceder</button>
+              <button onClick={() => setDialogoConfirmacion({ visible: false, mensaje: '', accion: null })} className="flex-1 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">Descartar</button>
+              <button onClick={ejecutarConfirmacion} className="flex-1 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest bg-red-600 text-white hover:bg-red-500 transition-colors shadow-lg shadow-red-900/20">Sí, Proceder</button>
             </div>
           </div>
         </div>
       )}
 
       {/* ========================================================= */}
-      {/* MODAL DE CAMBIO DE CONTRASEÑA */}
+      {/* MODAL DE CAMBIO DE CONTRASEÑA (REFACTORIZADO) */}
       {/* ========================================================= */}
       {mostrarModalPassword && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-sm" onClick={() => setMostrarModalPassword(false)} />
-          <div className="relative bg-slate-900 border border-slate-800 w-full max-w-sm rounded-[2rem] p-8 shadow-2xl animate-in zoom-in-95">
-            <button onClick={() => setMostrarModalPassword(false)} className="absolute top-6 right-6 text-slate-500 hover:text-white"><X size={20} /></button>
+          <div className="absolute inset-0 bg-slate-900/50 dark:bg-slate-950/90 backdrop-blur-sm" onClick={() => setMostrarModalPassword(false)} />
+          <div className="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 w-full max-w-sm rounded-[2rem] p-8 shadow-2xl animate-in zoom-in-95">
+            <button onClick={() => setMostrarModalPassword(false)} className="absolute top-6 right-6 text-slate-400 dark:text-slate-500 hover:text-slate-800 dark:hover:text-white"><X size={20} /></button>
             
-            <h2 className="text-xl font-black text-white italic uppercase mb-6 flex items-center gap-2">
+            <h2 className="text-xl font-black text-slate-800 dark:text-white italic uppercase mb-6 flex items-center gap-2">
               <Lock className="text-emerald-500" size={20}/> 
               Seguridad de <span className="text-emerald-500">Acceso</span>
             </h2>
@@ -252,14 +284,14 @@ export default function Sidebar() {
                 <input 
                   required 
                   type={verPassword ? "text" : "password"}  
-                  className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white focus:border-emerald-500 outline-none transition-all pr-12" 
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-800 dark:text-white focus:border-emerald-500 outline-none transition-all pr-12" 
                   value={nuevaPassword} 
                   onChange={e => setNuevaPassword(e.target.value)} 
                 />
                 <button 
                   type="button" 
                   onClick={() => setVerPassword(!verPassword)}
-                  className="absolute right-4 top-[38px] text-slate-600 hover:text-slate-300 transition-colors"
+                  className="absolute right-4 top-[38px] text-slate-400 dark:text-slate-600 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
                 >
                   {verPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
@@ -270,7 +302,7 @@ export default function Sidebar() {
                 <input 
                   required 
                   type={verPassword ? "text" : "password"} 
-                  className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white focus:border-emerald-500 outline-none transition-all pr-12" 
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-800 dark:text-white focus:border-emerald-500 outline-none transition-all pr-12" 
                   value={confirmarPassword} 
                   onChange={e => setConfirmarPassword(e.target.value)} 
                 />
