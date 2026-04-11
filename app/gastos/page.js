@@ -425,7 +425,7 @@ export default function GastosOperativosPage() {
                 
                 <form onSubmit={registrarGasto} className="space-y-6 overflow-y-auto pr-2 custom-scrollbar">
                   <div className="bg-slate-50 dark:bg-slate-950/50 p-5 sm:p-6 rounded-3xl border border-slate-200 dark:border-slate-800 space-y-4 transition-colors">
-                    <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest border-b border-slate-200 dark:border-slate-800 pb-2 transition-colors">1. Datos Generales (Folio Maestro)</p>
+                    <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest border-b border-slate-200 dark:border-slate-800 pb-2 transition-colors">1. Datos Generales </p>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                       <select className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3.5 rounded-xl text-sm text-slate-900 dark:text-white focus:border-blue-500 outline-none transition-colors" value={formData.unidad_id} onChange={e => setFormData({...formData, unidad_id: e.target.value})}>
                         <option value="">-- Sin Unidad --</option>
@@ -437,7 +437,7 @@ export default function GastosOperativosPage() {
                       </select>
                       <input type="date" className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3.5 rounded-xl text-sm text-slate-900 dark:text-white focus:border-blue-500 outline-none cursor-pointer transition-colors" value={formData.fecha} onChange={e => setFormData({...formData, fecha: e.target.value})} required />
                     </div>
-                    <input required className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3.5 rounded-xl text-sm text-slate-900 dark:text-white focus:border-blue-500 outline-none transition-colors" value={formData.descripcion_general} onChange={e => setFormData({...formData, descripcion_general: e.target.value})} placeholder="Concepto General (Ej. Gastos de Viaje MTY-QRO)" />
+                    <input required className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3.5 rounded-xl text-sm text-slate-900 dark:text-white focus:border-blue-500 outline-none transition-colors" value={formData.descripcion_general} onChange={e => setFormData({...formData, descripcion_general: e.target.value})} placeholder="Ejemplo: Gastos de Viaje" />
                   </div>
 
                   <div className="space-y-3">

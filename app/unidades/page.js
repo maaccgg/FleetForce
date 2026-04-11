@@ -452,11 +452,11 @@ export default function UnidadesPage() {
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                           <div>
                             <label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1">No. Económico</label>
-                            <input required placeholder="Ej. CAJA-01" className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white font-bold transition-colors" value={formData.numero_economico} onChange={e => setFormData({...formData, numero_economico: e.target.value})} />
+                            <input required  className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white font-bold transition-colors" value={formData.numero_economico} onChange={e => setFormData({...formData, numero_economico: e.target.value})} />
                           </div>
                           <div>
                             <label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1">Año Modelo</label>
-                            <input placeholder="Ej. 2021" className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white transition-colors" value={formData.anio_modelo} onChange={e => setFormData({...formData, anio_modelo: e.target.value})} />
+                            <input  className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white transition-colors" value={formData.anio_modelo} onChange={e => setFormData({...formData, anio_modelo: e.target.value})} />
                           </div>
                           <div>
                             <label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1">Configuración SAT</label>
@@ -490,7 +490,7 @@ export default function UnidadesPage() {
                           </div>
                           <div className="md:col-span-2">
                             <label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1">Número de Placas</label>
-                            <input required placeholder="Ej. 123-AB-4" className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white uppercase font-mono tracking-widest transition-colors" value={formData.placas} onChange={e => setFormData({...formData, placas: e.target.value})} />
+                            <input required  className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white uppercase font-mono tracking-widest transition-colors" value={formData.placas} onChange={e => setFormData({...formData, placas: e.target.value})} />
                           </div>
                         </div>
                       </div>
@@ -506,7 +506,7 @@ export default function UnidadesPage() {
                             </div>
                             <div>
                               <label className="text-[9px] font-black text-slate-500 uppercase block mb-1.5 ml-1">No. Póliza</label>
-                              <input placeholder="00000000" className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-3.5 rounded-xl text-sm text-slate-900 dark:text-white font-mono transition-colors" value={formData.poliza_rc} onChange={e => setFormData({...formData, poliza_rc: e.target.value})} />
+                              <input  className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-3.5 rounded-xl text-sm text-slate-900 dark:text-white font-mono transition-colors" value={formData.poliza_rc} onChange={e => setFormData({...formData, poliza_rc: e.target.value})} />
                             </div>
                             <div>
                               <label className="text-[9px] font-black text-slate-500 uppercase block mb-1.5 ml-1">Vencimiento Seguro</label>
@@ -530,7 +530,6 @@ export default function UnidadesPage() {
                             <div>
                               <label className="text-[9px] font-black text-slate-500 uppercase block mb-1.5 ml-1">Número de Permiso</label>
                               <input 
-                                placeholder="S/N" 
                                 className={`w-full p-3.5 rounded-xl text-sm font-mono transition-colors ${formData.tipo_placa === 'Estatal' ? 'bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed' : 'bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white'}`} 
                                 value={formData.num_permiso_sict} 
                                 readOnly={formData.tipo_placa === 'Estatal'}
@@ -594,7 +593,7 @@ export default function UnidadesPage() {
                         <div className="md:col-span-12 mb-2"><h3 className="text-[10px] font-black text-emerald-600 dark:text-emerald-500 uppercase tracking-widest flex items-center gap-2 transition-colors"><Wrench size={14}/> Registrar Servicio</h3></div>
                         <div className="md:col-span-3"><label className="text-[9px] text-slate-500 dark:text-slate-400 uppercase font-bold block mb-1 ml-1 transition-colors">Fecha</label><input type="date" required className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-3.5 rounded-xl text-xs text-slate-900 dark:text-white transition-colors" value={nuevoMantenimiento.fecha} onChange={e => setNuevoMantenimiento({...nuevoMantenimiento, fecha: e.target.value})} /></div>
                         <div className="md:col-span-3"><label className="text-[9px] text-slate-500 dark:text-slate-400 uppercase font-bold block mb-1 ml-1 transition-colors">Tipo de Tarea</label><select className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-3.5 rounded-xl text-xs text-slate-900 dark:text-white transition-colors" value={nuevoMantenimiento.tipo} onChange={e => setNuevoMantenimiento({...nuevoMantenimiento, tipo: e.target.value})}><option value="Preventivo">Preventivo</option><option value="Correctivo">Correctivo</option></select></div>
-                        <div className="md:col-span-4"><label className="text-[9px] text-slate-500 dark:text-slate-400 uppercase font-bold block mb-1 ml-1 transition-colors">Descripción del Taller</label><input required placeholder="Ej. Cambio de balatas" className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-3.5 rounded-xl text-xs text-slate-900 dark:text-white transition-colors" value={nuevoMantenimiento.descripcion} onChange={e => setNuevoMantenimiento({...nuevoMantenimiento, descripcion: e.target.value})} /></div>
+                        <div className="md:col-span-4"><label className="text-[9px] text-slate-500 dark:text-slate-400 uppercase font-bold block mb-1 ml-1 transition-colors">Descripción del Taller</label><input required placeholder="Ejemplo: Cambio de balatas" className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-3.5 rounded-xl text-xs text-slate-900 dark:text-white transition-colors" value={nuevoMantenimiento.descripcion} onChange={e => setNuevoMantenimiento({...nuevoMantenimiento, descripcion: e.target.value})} /></div>
                         <div className="md:col-span-2"><label className="text-[9px] text-slate-500 dark:text-slate-400 uppercase font-bold block mb-1 ml-1 transition-colors">Costo ($)</label><input required type="number" placeholder="0.00" className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-3.5 rounded-xl text-xs text-slate-900 dark:text-white text-center font-mono transition-colors" value={nuevoMantenimiento.costo} onChange={e => setNuevoMantenimiento({...nuevoMantenimiento, costo: e.target.value})} /></div>
                         <div className="md:col-span-12 mt-2"><button type="submit" disabled={loading} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors shadow-lg">Guardar Registro</button></div>
                       </form>
@@ -633,7 +632,7 @@ export default function UnidadesPage() {
                       <form onSubmit={registrarAlerta} className="p-4 sm:p-6 bg-orange-50 dark:bg-orange-500/10 border border-orange-200 dark:border-orange-500/20 rounded-2xl grid grid-cols-1 md:grid-cols-12 gap-4 items-end transition-colors">
                         <div className="md:col-span-12 mb-2"><h3 className="text-[10px] font-black text-orange-600 dark:text-orange-400 uppercase tracking-widest flex items-center gap-2 transition-colors"><Bell size={14}/> Nueva Alerta</h3></div>
                         <div className="md:col-span-4"><label className="text-[9px] text-slate-500 dark:text-slate-400 uppercase font-bold block mb-1 ml-1 transition-colors">Meta (KM)</label><input type="number" required className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white font-mono transition-colors" value={nuevaAlerta.kilometraje_meta} onChange={e => setNuevaAlerta({...nuevaAlerta, kilometraje_meta: e.target.value})} /></div>
-                        <div className="md:col-span-6"><label className="text-[9px] text-slate-500 dark:text-slate-400 uppercase font-bold block mb-1 ml-1 transition-colors">Mensaje</label><input required placeholder="Ej. Cambio Aceite" className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white transition-colors" value={nuevaAlerta.mensaje} onChange={e => setNuevaAlerta({...nuevaAlerta, mensaje: e.target.value})} /></div>
+                        <div className="md:col-span-6"><label className="text-[9px] text-slate-500 dark:text-slate-400 uppercase font-bold block mb-1 ml-1 transition-colors">Mensaje</label><input required placeholder="Ejemplo: Cambio Aceite" className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white transition-colors" value={nuevaAlerta.mensaje} onChange={e => setNuevaAlerta({...nuevaAlerta, mensaje: e.target.value})} /></div>
                         <div className="md:col-span-2"><button type="submit" disabled={loading} className="w-full bg-orange-600 hover:bg-orange-500 text-white py-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors">Añadir</button></div>
                       </form>
                       <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden transition-colors">

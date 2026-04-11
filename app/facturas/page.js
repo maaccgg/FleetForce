@@ -508,7 +508,7 @@ function FacturasContenido() {
 
                     <div>
                       <label className="text-[12px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1 transition-colors transition-colors">Monto Base (Subtotal $)</label>
-                      <input required type="number" step="0.01" className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl text-sm text-slate-900 dark:text-white font-mono outline-none focus:border-emerald-500 transition-colors transition-colors transition-colors" value={formData.monto_base} onChange={e => setFormData({...formData, monto_base: e.target.value})} placeholder="0.00" />
+                      <input required type="number" className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl text-sm text-slate-900 dark:text-white font-mono outline-none focus:border-emerald-500 transition-colors transition-colors transition-colors" value={formData.monto_base} onChange={e => setFormData({...formData, monto_base: e.target.value})}  />
                       
                       <div className="flex gap-4 px-2 mt-3 transition-colors">
                         <label className="flex items-center gap-2 cursor-pointer group">
@@ -530,13 +530,13 @@ function FacturasContenido() {
 
                     <div>
                       <label className="text-[12px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1 transition-colors">Concepto</label>
-                      <input className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl text-sm text-slate-900 dark:text-white outline-none focus:border-emerald-500 transition-colors" value={formData.ruta} onChange={e => setFormData({...formData, ruta: e.target.value})} placeholder="Ej. Flete Extra" />
+                      <input className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl text-sm text-slate-900 dark:text-white outline-none focus:border-emerald-500 transition-colors" value={formData.ruta} onChange={e => setFormData({...formData, ruta: e.target.value})} />
                     </div>
                   </div>
 
                   <div>
                      <label className="text-[12px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1 transition-colors">Referencia del Cliente (Opcional)</label>
-                     <input className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl text-sm text-slate-900 dark:text-white outline-none focus:border-emerald-500 transition-colors transition-colors" value={formData.referencia} onChange={e => setFormData({...formData, referencia: e.target.value})} placeholder="Ej. Orden de Compra 4920-A" />
+                     <input className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl text-sm text-slate-900 dark:text-white outline-none focus:border-emerald-500 transition-colors transition-colors" value={formData.referencia} onChange={e => setFormData({...formData, referencia: e.target.value})} />
                   </div>
 
                   <div className="p-5 sm:p-6 bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 rounded-2xl transition-colors">

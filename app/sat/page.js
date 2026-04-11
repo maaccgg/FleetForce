@@ -629,22 +629,22 @@ export default function SATConfigPage() {
                         <div className="sm:col-span-2">
                           <label className="text-[9px] font-black text-slate-500 uppercase ml-1 mb-2 block transition-colors">Calle y Número</label>
                           <input className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-3 rounded-xl text-sm text-slate-900 dark:text-white transition-colors" 
-                            placeholder="Ej. Av. Universidad 123" value={perfilFiscal.calle_numero} onChange={e => setPerfilFiscal({...perfilFiscal, calle_numero: e.target.value})} />
+                            placeholder="Ejemplo: Av. Universidad 123" value={perfilFiscal.calle_numero} onChange={e => setPerfilFiscal({...perfilFiscal, calle_numero: e.target.value})} />
                         </div>
                         <div className="sm:col-span-2">
                           <label className="text-[9px] font-black text-slate-500 uppercase ml-1 mb-2 block transition-colors">Colonia</label>
                           <input className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-3 rounded-xl text-sm text-slate-900 dark:text-white transition-colors" 
-                            placeholder="Ej. Centro" value={perfilFiscal.colonia} onChange={e => setPerfilFiscal({...perfilFiscal, colonia: e.target.value})} />
+                            placeholder="Ejemplo: Centro" value={perfilFiscal.colonia} onChange={e => setPerfilFiscal({...perfilFiscal, colonia: e.target.value})} />
                         </div>
                         <div>
                           <label className="text-[9px] font-black text-slate-500 uppercase ml-1 mb-2 block transition-colors">Municipio</label>
                           <input className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-3 rounded-xl text-sm text-slate-900 dark:text-white transition-colors" 
-                            placeholder="Ej. Monterrey" value={perfilFiscal.municipio} onChange={e => setPerfilFiscal({...perfilFiscal, municipio: e.target.value})} />
+                            placeholder="Ejemplo: Monterrey" value={perfilFiscal.municipio} onChange={e => setPerfilFiscal({...perfilFiscal, municipio: e.target.value})} />
                         </div>
                         <div>
                           <label className="text-[9px] font-black text-slate-500 uppercase ml-1 mb-2 block transition-colors">Estado</label>
                           <input className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-3 rounded-xl text-sm text-slate-900 dark:text-white transition-colors" 
-                            placeholder="Ej. Nuevo León" value={perfilFiscal.estado} onChange={e => setPerfilFiscal({...perfilFiscal, estado: e.target.value})} />
+                            placeholder="Ejemplo: Nuevo León" value={perfilFiscal.estado} onChange={e => setPerfilFiscal({...perfilFiscal, estado: e.target.value})} />
                         </div>
                       </div>
                     </div>
@@ -781,14 +781,14 @@ export default function SATConfigPage() {
 
                       {activeTab === 'remolques' && (
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          <div className="sm:col-span-2"><label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1 transition-colors">Número Económico (Alias)</label><input required className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white font-bold transition-colors" placeholder="Ej: CAJA-01" value={formDataRe.numero_economico} onChange={e => setFormDataRe({...formDataRe, numero_economico: e.target.value})} /></div>
+                          <div className="sm:col-span-2"><label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1 transition-colors">Número Económico (Alias)</label><input required className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white font-bold transition-colors" placeholder="Ejemplo: Caja-01 " value={formDataRe.numero_economico} onChange={e => setFormDataRe({...formDataRe, numero_economico: e.target.value})} /></div>
                           
                           <div className="sm:col-span-2 flex flex-col sm:flex-row gap-2">
                             <select className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white w-full sm:w-1/3 transition-colors" value={formDataRe.tipo_placa} onChange={e => setFormDataRe({...formDataRe, tipo_placa: e.target.value})}>
                               <option value="Federal">Federal</option>
                               <option value="Estatal">Estatal</option>
                             </select>
-                            <input required className="flex-1 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white uppercase font-mono transition-colors" placeholder="Placas (Ej: 456ABC)" value={formDataRe.placas} onChange={e => setFormDataRe({...formDataRe, placas: e.target.value})} />
+                            <input required className="flex-1 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white uppercase font-mono transition-colors" placeholder="Placas (Ejemplo: 456ABC)" value={formDataRe.placas} onChange={e => setFormDataRe({...formDataRe, placas: e.target.value})} />
                           </div>
 
                           <div className="sm:col-span-2">
@@ -815,7 +815,7 @@ export default function SATConfigPage() {
                             <p className="text-[9px] text-blue-700 dark:text-blue-400/80 mt-1 transition-colors">El <strong>RFC y el Estado (3 letras)</strong> son indispensables. Si no los registras, el SAT no te permitirá timbrar la Carta Porte.</p>
                           </div>
                           
-                          <div className="sm:col-span-2"><label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1 transition-colors">Nombre / Alias del Lugar</label><input required className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white transition-colors" placeholder="Ej: CEDIS Monterrey" value={formDataUb.nombre_lugar} onChange={e => setFormDataUb({...formDataUb, nombre_lugar: e.target.value})} /></div>
+                          <div className="sm:col-span-2"><label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1 transition-colors">Nombre / Alias del Lugar</label><input required className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white transition-colors" placeholder="Ejemplo: CEDIS Monterrey" value={formDataUb.nombre_lugar} onChange={e => setFormDataUb({...formDataUb, nombre_lugar: e.target.value})} /></div>
                           <div><label className="text-[9px] font-black text-blue-600 dark:text-blue-500 uppercase block mb-2 ml-1 transition-colors">Código Postal</label><input required className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white transition-colors" value={formDataUb.codigo_postal} onChange={e => setFormDataUb({...formDataUb, codigo_postal: e.target.value})} /></div>
                           <div><label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1 transition-colors">RFC Ubicación</label><input required className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white uppercase transition-colors" value={formDataUb.rfc_ubicacion} onChange={e => setFormDataUb({...formDataUb, rfc_ubicacion: e.target.value})} /></div>
                           
@@ -823,14 +823,14 @@ export default function SATConfigPage() {
                           <div className="sm:col-span-2"><label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1 transition-colors">Calle y Número</label><input className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-3 rounded-xl text-sm text-slate-900 dark:text-white transition-colors" value={formDataUb.calle_numero} onChange={e => setFormDataUb({...formDataUb, calle_numero: e.target.value})} /></div>
                           <div className="sm:col-span-2"><label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1 transition-colors">Colonia</label><input className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-3 rounded-xl text-sm text-slate-900 dark:text-white transition-colors" value={formDataUb.colonia} onChange={e => setFormDataUb({...formDataUb, colonia: e.target.value})} /></div>
                           <div><label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1 transition-colors">Municipio</label><input className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-3 rounded-xl text-sm text-slate-900 dark:text-white transition-colors" value={formDataUb.municipio} onChange={e => setFormDataUb({...formDataUb, municipio: e.target.value})} /></div>
-                          <div><label className="text-[9px] font-black text-blue-600 dark:text-blue-500 uppercase block mb-2 ml-1 transition-colors">Estado (Clave SAT Ej: NLE)</label><input required className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-3 rounded-xl text-sm text-slate-900 dark:text-white uppercase transition-colors" placeholder="Ej: NLE, JAL, CMX, TAM" value={formDataUb.estado} onChange={e => setFormDataUb({...formDataUb, estado: e.target.value.toUpperCase().slice(0,3)})} /></div>
+                          <div><label className="text-[9px] font-black text-blue-600 dark:text-blue-500 uppercase block mb-2 ml-1 transition-colors">Estado (Clave SAT Ej: NLE)</label><input required className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-3 rounded-xl text-sm text-slate-900 dark:text-white uppercase transition-colors" placeholder="Ejemplo: NLE, JAL, CMX, TAM" value={formDataUb.estado} onChange={e => setFormDataUb({...formDataUb, estado: e.target.value.toUpperCase().slice(0,3)})} /></div>
                         </div>
                       )}
 
                       {activeTab === 'mercancias' && (
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           <div className="sm:col-span-2"><label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1 transition-colors">Descripción del Bien</label><input required className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white transition-colors" value={formDataMe.descripcion} onChange={e => setFormDataMe({...formDataMe, descripcion: e.target.value})} /></div>
-                          <div><label className="text-[9px] font-black text-blue-600 dark:text-blue-500 uppercase block mb-2 ml-1 transition-colors">Clave SAT (Producto)</label><input required className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white transition-colors" placeholder="Ej: 31181701" value={formDataMe.clave_sat} onChange={e => setFormDataMe({...formDataMe, clave_sat: e.target.value})} /></div>
+                          <div><label className="text-[9px] font-black text-blue-600 dark:text-blue-500 uppercase block mb-2 ml-1 transition-colors">Clave SAT (Producto)</label><input required className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white transition-colors" placeholder="Ejemplo: 31181701" value={formDataMe.clave_sat} onChange={e => setFormDataMe({...formDataMe, clave_sat: e.target.value})} /></div>
                           <div><label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1 transition-colors">Peso Estimado (KG)</label><input required type="number" className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white transition-colors" value={formDataMe.peso_unitario_kg} onChange={e => setFormDataMe({...formDataMe, peso_unitario_kg: e.target.value})} /></div>
                           <div className="sm:col-span-2 mt-2 pt-4 border-t border-slate-200 dark:border-slate-800 transition-colors">
                             <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-4 transition-colors">Configuración de Envío</p>

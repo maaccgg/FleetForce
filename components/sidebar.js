@@ -7,7 +7,7 @@ import { useTheme } from 'next-themes';
 import { 
   LayoutDashboard, Wrench, FileCheck, Map, ReceiptText, Scale, Truck, LogOut,
   TrendingUp, Settings, History, ChevronDown, ChevronUp, Users, KeyRound, Lock, X,
-  Eye, EyeOff, AlertTriangle, Loader2, Sun, Moon, Menu // <-- Añadido Menu
+  Eye, EyeOff, AlertTriangle, Loader2, Sun, Moon, Menu
 } from 'lucide-react';
 
 import { useToast } from '@/components/toastprovider';
@@ -29,12 +29,13 @@ export default function Sidebar() {
   
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [rolUsuario, setRolUsuario] = useState('miembro'); 
-  
-  // === NUEVO: ESTADO PARA MÓVIL ===
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
   const [dialogoConfirmacion, setDialogoConfirmacion] = useState({ visible: false, mensaje: '', accion: null });
   const [mostrarModalPassword, setMostrarModalPassword] = useState(false);
+  
+  // === ESTADOS DE PASSWORD AJUSTADOS ===
+  const [passwordActual, setPasswordActual] = useState(''); // <-- NUEVO
   const [nuevaPassword, setNuevaPassword] = useState('');
   const [confirmarPassword, setConfirmarPassword] = useState('');
   const [loadingPassword, setLoadingPassword] = useState(false);
@@ -64,35 +65,57 @@ export default function Sidebar() {
   };
 
   const confirmarAperturaPassword = () => {
-    pedirConfirmacion("¿Estás seguro de que deseas cambiar tu contraseña actual?", () => {
+    pedirConfirmacion("¿Deseas proceder con el cambio de tu clave de acceso?", () => {
       setMostrarModalPassword(true);
     });
   };
 
   const cambiarContrasena = async (e) => {
     e.preventDefault();
+
     if (nuevaPassword !== confirmarPassword) {
-      mostrarAlerta("Las contraseñas no coinciden.", "error");
+      mostrarAlerta("Las nuevas contraseñas no coinciden.", "error");
       return;
     }
-    if (nuevaPassword.length < 6) {
-      mostrarAlerta("La contraseña debe tener al menos 6 caracteres por seguridad.", "error");
+    if (nuevaPassword.length < 8) { // Subimos a 8 por estándar de seguridad
+      mostrarAlerta("La nueva contraseña debe ser de al menos 8 caracteres.", "error");
       return;
     }
     
     setLoadingPassword(true);
-    const { error } = await supabase.auth.updateUser({ password: nuevaPassword });
-    
-    if (error) {
-      mostrarAlerta("Error al actualizar: " + error.message, "error");
-    } else {
-      mostrarAlerta("Contraseña actualizada con éxito.", "exito");
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const email = session?.user?.email;
+
+      // 1. RE-AUTENTICACIÓN: Validamos que el usuario conoce la contraseña actual
+      const { error: authError } = await supabase.auth.signInWithPassword({
+        email: email,
+        password: passwordActual,
+      });
+
+      if (authError) {
+        throw new Error("La contraseña actual es incorrecta. Verifícala e intenta de nuevo.");
+      }
+
+      // 2. ACTUALIZACIÓN: Si la autenticación pasó, cambiamos la clave
+      const { error: updateError } = await supabase.auth.updateUser({ password: nuevaPassword });
+      
+      if (updateError) throw updateError;
+
+      mostrarAlerta("Contraseña actualizada con éxito. Tu cuenta está blindada.", "exito");
       setMostrarModalPassword(false);
+      // Limpiar campos
+      setPasswordActual('');
       setNuevaPassword('');
       setConfirmarPassword('');
       setVerPassword(false); 
+
+    } catch (error) {
+      mostrarAlerta(error.message, "error");
+    } finally {
+      setLoadingPassword(false);
     }
-    setLoadingPassword(false);
   };
 
   const menuPermitido = menuItems.filter(item => item.roles.includes(rolUsuario));
@@ -101,7 +124,6 @@ export default function Sidebar() {
 
   return (
     <>
-      {/* BOTÓN HAMBURGUESA (Solo móvil) */}
       <button 
         onClick={() => setIsMobileOpen(true)}
         className="md:hidden fixed top-4 left-4 z-50 p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-md transition-colors"
@@ -109,7 +131,6 @@ export default function Sidebar() {
         <Menu size={24} className="text-slate-600 dark:text-slate-300" />
       </button>
 
-      {/* FONDO OSCURO AL ABRIR EN MÓVIL */}
       {isMobileOpen && (
         <div 
           className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-40 md:hidden"
@@ -117,7 +138,6 @@ export default function Sidebar() {
         />
       )}
 
-      {/* NAVEGACIÓN (Clases ajustadas para responsividad) */}
       <nav className={`
         fixed md:sticky top-0 left-0 z-40
         w-64 h-screen p-6 
@@ -128,7 +148,6 @@ export default function Sidebar() {
         ${isMobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
       `}>
         
-        {/* BOTÓN CERRAR (Solo móvil) */}
         <button 
           onClick={() => setIsMobileOpen(false)}
           className="md:hidden absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-white"
@@ -161,7 +180,7 @@ export default function Sidebar() {
               <Link 
                 key={item.name} 
                 href={item.href} 
-                onClick={() => setIsMobileOpen(false)} // Cerrar al hacer click en móvil
+                onClick={() => setIsMobileOpen(false)}
                 className={`flex items-center gap-3 p-3 rounded-xl transition-all group ${
                   isActive 
                   ? 'bg-blue-600/10 text-blue-600 dark:text-blue-400 border border-blue-600/20' 
@@ -246,46 +265,84 @@ export default function Sidebar() {
         </div>
       </nav>
 
-      {/* MODALES DE TU CÓDIGO (Sin cambios de diseño) */}
+      {/* DIÁLOGO CONFIRMACIÓN */}
       {dialogoConfirmacion.visible && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/50 dark:bg-slate-950/90 backdrop-blur-sm" onClick={() => setDialogoConfirmacion({ visible: false, mensaje: '', accion: null })} />
-          <div className="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 w-full max-w-sm rounded-[2rem] p-8 shadow-2xl flex flex-col items-center text-center animate-in zoom-in-95 duration-200">
-            <div className="w-16 h-16 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mb-6"><AlertTriangle size={32} /></div>
+          <div className="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 w-full max-w-sm rounded-[2rem] p-8 shadow-2xl flex flex-col items-center text-center animate-in zoom-in-95 duration-200 transition-colors">
+            <div className="w-16 h-16 bg-yellow-500/10 text-yellow-500 rounded-full flex items-center justify-center mb-6"><AlertTriangle size={32} /></div>
             <h3 className="text-xl font-black text-slate-800 dark:text-white uppercase tracking-widest mb-2 transition-colors">¿Estás Seguro?</h3>
             <p className="text-slate-500 dark:text-slate-400 text-sm mb-8 transition-colors">{dialogoConfirmacion.mensaje}</p>
             <div className="flex gap-3 w-full">
               <button onClick={() => setDialogoConfirmacion({ visible: false, mensaje: '', accion: null })} className="flex-1 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">Descartar</button>
-              <button onClick={ejecutarConfirmacion} className="flex-1 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest bg-red-600 text-white hover:bg-red-500 transition-colors shadow-lg shadow-red-900/20">Sí, Proceder</button>
+              <button onClick={ejecutarConfirmacion} className="flex-1 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest bg-yellow-600 text-white hover:bg-yellow-500 transition-colors shadow-lg shadow-yellow-900/20">Sí, Proceder</button>
             </div>
           </div>
         </div>
       )}
 
+      {/* MODAL DE CAMBIO DE CONTRASEÑA BLINDADO */}
       {mostrarModalPassword && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/50 dark:bg-slate-950/90 backdrop-blur-sm" onClick={() => setMostrarModalPassword(false)} />
-          <div className="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 w-full max-w-sm rounded-[2rem] p-8 shadow-2xl animate-in zoom-in-95">
-            <button onClick={() => setMostrarModalPassword(false)} className="absolute top-6 right-6 text-slate-400 dark:text-slate-500 hover:text-slate-800 dark:hover:text-white"><X size={20} /></button>
-            <h2 className="text-xl font-black text-slate-800 dark:text-white italic uppercase mb-6 flex items-center gap-2">
+          <div className="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 w-full max-w-sm rounded-[2rem] p-8 shadow-2xl animate-in zoom-in-95 transition-colors">
+            <button onClick={() => setMostrarModalPassword(false)} className="absolute top-6 right-6 text-slate-400 dark:text-slate-500 hover:text-slate-800 dark:hover:text-white transition-colors"><X size={20} /></button>
+            
+            <h2 className="text-xl font-black text-slate-800 dark:text-white italic uppercase mb-6 flex items-center gap-2 transition-colors">
               <Lock className="text-emerald-500" size={20}/> 
               Seguridad de <span className="text-emerald-500">Acceso</span>
             </h2>
+            
             <form onSubmit={cambiarContrasena} className="space-y-4">
+              {/* CAMPO: CONTRASEÑA ACTUAL (BLINDAJE) */}
+              <div>
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1 transition-colors">Contraseña Actual</label>
+                <input 
+                  required 
+                  type="password" 
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-800 dark:text-white focus:border-emerald-500 outline-none transition-all" 
+                  value={passwordActual} 
+                  onChange={e => setPasswordActual(e.target.value)}
+                  
+                />
+              </div>
+
+              <div className="h-px bg-slate-100 dark:bg-slate-800 my-2"></div>
+
               <div className="relative">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1">Nueva Contraseña</label>
-                <input required type={verPassword ? "text" : "password"} className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-800 dark:text-white focus:border-emerald-500 outline-none transition-all pr-12" value={nuevaPassword} onChange={e => setNuevaPassword(e.target.value)} />
-                <button type="button" onClick={() => setVerPassword(!verPassword)} className="absolute right-4 top-[38px] text-slate-400 dark:text-slate-600 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1 transition-colors">Nueva Contraseña</label>
+                <input 
+                  required 
+                  type={verPassword ? "text" : "password"}  
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-800 dark:text-white focus:border-emerald-500 outline-none transition-all pr-12 transition-colors" 
+                  value={nuevaPassword} 
+                  onChange={e => setNuevaPassword(e.target.value)} 
+                  placeholder="Mínimo 8 caracteres"
+                />
+                <button 
+                  type="button" 
+                  onClick={() => setVerPassword(!verPassword)}
+                  className="absolute right-4 top-[38px] text-slate-400 dark:text-slate-600 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+                >
                   {verPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
+
               <div>
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1">Confirmar Contraseña</label>
-                <input required type={verPassword ? "text" : "password"} className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-800 dark:text-white focus:border-emerald-500 outline-none transition-all pr-12" value={confirmarPassword} onChange={e => setConfirmarPassword(e.target.value)} />
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1 transition-colors">Confirmar Nueva Contraseña</label>
+                <input 
+                  required 
+                  type={verPassword ? "text" : "password"} 
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-800 dark:text-white focus:border-emerald-500 outline-none transition-all pr-12 transition-colors" 
+                  value={confirmarPassword} 
+                  onChange={e => setConfirmarPassword(e.target.value)} 
+                  placeholder="Repite la clave nueva"
+                />
               </div>
+
               <button type="submit" disabled={loadingPassword} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-4 rounded-xl font-black uppercase text-[11px] tracking-widest shadow-xl transition-all mt-6 flex justify-center items-center gap-2">
                 {loadingPassword ? <Loader2 size={16} className="animate-spin" /> : null}
-                {loadingPassword ? "Procesando..." : "Actualizar Credencial"}
+                {loadingPassword ? "Autenticando..." : "Actualizar Credencial"}
               </button>
             </form>
           </div>
