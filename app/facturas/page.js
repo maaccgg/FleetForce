@@ -17,7 +17,7 @@ import { useToast } from '@/components/toastprovider';
 
 const facturaSchema = z.object({
   cliente: z.string().min(2, "El nombre del cliente es obligatorio."),
-  monto_total: z.number().positive("El monto total debe ser estrictamente mayor a $0."),
+  monto_base: z.number().positive("El monto base debe ser estrictamente mayor a $0."), // Modificado a monto_base
   metodo_pago: z.enum(["PUE", "PPD"], { errorMap: () => ({ message: "Método de pago inválido detectado." }) }),
   forma_pago: z.string().min(2, "La forma de pago es obligatoria."),
   fecha_viaje: z.string().min(10, "La fecha de emisión es obligatoria o tiene un formato incorrecto."),
@@ -50,8 +50,10 @@ function FacturasContenido() {
 
   const esAdmin = rolUsuario === 'administrador' || rolUsuario === 'admin';
 
+  // === ESTADO ACTUALIZADO PARA IMPUESTOS ===
   const [formData, setFormData] = useState({ 
-    cliente_id: '', monto_total: '', folio_fiscal: '', 
+    cliente_id: '', monto_base: '', folio_fiscal: '', 
+    aplica_iva: true, aplica_retencion: true, // <-- NUEVOS
     ruta: '', fecha_viaje: new Date().toISOString().split('T')[0],
     fecha_vencimiento: '', forma_pago: '99', metodo_pago: 'PPD',
     referencia: ''
@@ -153,8 +155,33 @@ function FacturasContenido() {
     const clienteData = clientes.find(c => c.nombre === factura.cliente);
     if (!clienteData) return mostrarAlerta("Error: No se encontró la información fiscal del cliente.", "error");
 
-    const subtotal = Number((Number(factura.monto_total) / 1.16).toFixed(2));
-    const invoiceData = { customer: { legal_name: clienteData.nombre, tax_id: clienteData.rfc, tax_system: clienteData.regimen_fiscal || "601", address: { zip: clienteData.codigo_postal } }, items: [{ quantity: 1, product: { description: factura.ruta || "Servicio de flete nacional", product_key: "78101802", price: subtotal, taxes: [{ type: "IVA", rate: 0.16 }, { type: "IVA", rate: 0.04, withholding: true }] } }], payment_form: factura.forma_pago || "99", payment_method: factura.metodo_pago || "PPD", use: clienteData.uso_cfdi || "G03" };
+    // === CÁLCULO INVERSO MATEMÁTICAMENTE CORRECTO PARA FACTURAPI ===
+    const aplicaIva = factura.aplica_iva !== false; 
+    const aplicaRetencion = factura.aplica_retencion !== false; 
+
+    let factorMultiplicador = 1.0;
+    if (aplicaIva) factorMultiplicador += 0.16;
+    if (aplicaRetencion) factorMultiplicador -= 0.04;
+
+    const subtotal = Number((Number(factura.monto_total) / factorMultiplicador).toFixed(2));
+
+    let impuestosArray = [];
+    if (aplicaIva) impuestosArray.push({ type: "IVA", rate: 0.16 });
+    if (aplicaRetencion) impuestosArray.push({ type: "IVA", rate: 0.04, withholding: true });
+
+    const invoiceData = { 
+      customer: { legal_name: clienteData.nombre, tax_id: clienteData.rfc, tax_system: clienteData.regimen_fiscal || "601", address: { zip: clienteData.codigo_postal } }, 
+      items: [{ 
+        quantity: 1, 
+        product: { 
+          description: factura.ruta || "Servicio de flete nacional", 
+          product_key: "78101802", 
+          price: subtotal, 
+          taxes: impuestosArray // <-- Se inyecta dinámicamente
+        } 
+      }], 
+      payment_form: factura.forma_pago || "99", payment_method: factura.metodo_pago || "PPD", use: clienteData.uso_cfdi || "G03" 
+    };
 
     setLoading(true);
     try {
@@ -166,7 +193,7 @@ function FacturasContenido() {
       if (response.ok) {
         const { error: supabaseError } = await supabase.from('facturas').update({ folio_fiscal: res.uuid, sello_emisor: res.stamp?.signature || "SELLO_NO_ENCONTRADO", sello_sat: res.stamp?.sat_signature || "SELLO_SAT_NO_ENCONTRADO", cadena_original: res.stamp?.complement_string || "CADENA_NO_ENCONTRADA", facturapi_id: res.id, no_certificado_sat: res.stamp?.sat_cert_number || null }).eq('id', factura.id);
         if (supabaseError) throw supabaseError;
-        mostrarAlerta(`¡FACTURA TIMBRADA CON ÉXITO!\nUUID: ${res.uuid}`, "exito");
+        mostrarAlerta(`¡FACTURA TIMBRADA CON ÉXITO!🎉🎉`, "exito");
         obtenerDatos(empresaId); 
       } else { mostrarAlerta(`Error del SAT:\n${res.message || "Error desconocido"}`, "error"); }
     } catch (err) { mostrarAlerta("Error de red:\n" + err.message, "error"); } finally { setLoading(false); }
@@ -174,21 +201,50 @@ function FacturasContenido() {
 
   const registrarFactura = async (e) => {
     e.preventDefault();
-    if (!formData.cliente_id || !formData.monto_total) return;
+    if (!formData.cliente_id || !formData.monto_base) return;
     setLoading(true);
     try {
       const clienteSeleccionado = clientes.find(c => c.id === formData.cliente_id);
-      const datosCrudos = { cliente: clienteSeleccionado?.nombre || "", monto_total: parseFloat(formData.monto_total), metodo_pago: formData.metodo_pago, forma_pago: formData.forma_pago, fecha_viaje: formData.fecha_viaje, referencia: formData.referencia };
+      const datosCrudos = { cliente: clienteSeleccionado?.nombre || "", monto_base: parseFloat(formData.monto_base), metodo_pago: formData.metodo_pago, forma_pago: formData.forma_pago, fecha_viaje: formData.fecha_viaje, referencia: formData.referencia };
       const validacion = facturaSchema.safeParse(datosCrudos);
 
       if (!validacion.success) { setLoading(false); return mostrarAlerta(validacion.error.issues[0]?.message || "🛑 Revisa los datos ingresados.", "error"); }
 
-      const { error } = await supabase.from('facturas').insert([{ cliente: validacion.data.cliente, monto_total: validacion.data.monto_total, folio_fiscal: formData.folio_fiscal, ruta: formData.ruta, fecha_viaje: validacion.data.fecha_viaje, fecha_vencimiento: formData.fecha_vencimiento, forma_pago: validacion.data.forma_pago, metodo_pago: validacion.data.metodo_pago, estatus_pago: 'Pendiente', referencia: validacion.data.referencia, empresa_id: empresaId }]);
+      // === CÁLCULO DEL TOTAL NETO ===
+      let base = validacion.data.monto_base;
+      let montoCalculado = base;
+      if (formData.aplica_iva) montoCalculado += (base * 0.16);
+      if (formData.aplica_retencion) montoCalculado -= (base * 0.04);
+      montoCalculado = Number(montoCalculado.toFixed(2));
+
+      const { error } = await supabase.from('facturas').insert([{ 
+        cliente: validacion.data.cliente, 
+        monto_total: montoCalculado, 
+        aplica_iva: formData.aplica_iva,
+        aplica_retencion: formData.aplica_retencion,
+        folio_fiscal: formData.folio_fiscal, 
+        ruta: formData.ruta, 
+        fecha_viaje: validacion.data.fecha_viaje, 
+        fecha_vencimiento: formData.fecha_vencimiento, 
+        forma_pago: validacion.data.forma_pago, 
+        metodo_pago: validacion.data.metodo_pago, 
+        estatus_pago: 'Pendiente', 
+        referencia: validacion.data.referencia, 
+        empresa_id: empresaId 
+      }]);
       if (error) throw error;
       
-      setFormData({ cliente_id: '', monto_total: '', folio_fiscal: '', ruta: 'Ingreso Extraordinario', fecha_viaje: new Date().toISOString().split('T')[0], fecha_vencimiento: '', forma_pago: '99', metodo_pago: 'PPD', referencia:'' });
+      setFormData({ cliente_id: '', monto_base: '', folio_fiscal: '', aplica_iva: true, aplica_retencion: true, ruta: 'Ingreso Extraordinario', fecha_viaje: new Date().toISOString().split('T')[0], fecha_vencimiento: '', forma_pago: '99', metodo_pago: 'PPD', referencia:'' });
       setMostrarFormulario(false); mostrarAlerta("Ingreso registrado exitosamente.", "exito"); obtenerDatos(empresaId);
     } catch (error) { mostrarAlerta("Fallo al guardar: " + error.message, "error"); } finally { setLoading(false); }
+  };
+
+  const calcularTotalEnTiempoReal = () => {
+    const base = parseFloat(formData.monto_base) || 0;
+    let total = base;
+    if (formData.aplica_iva) total += base * 0.16;
+    if (formData.aplica_retencion) total -= base * 0.04;
+    return total;
   };
 
   const alternarEstatus = async (id, estatusActual) => {
@@ -210,7 +266,6 @@ function FacturasContenido() {
        return mostrarAlerta("Acción denegada. Esta factura está asociada a un Viaje Operativo. Debes cancelarla desde la pestaña de Logística.", "error");
     }
 
-    // NUEVO FLUJO: Si ya está cancelada, solo borrar el registro visual de FleetForce.
     if (factura.estatus_pago === 'Cancelada') {
       pedirConfirmacion("¿Eliminar registro histórico? La factura ya está anulada en el SAT, pero esta acción la borrará permanentemente de tu panel de FleetForce.", async () => {
         const { error } = await supabase.from('facturas').delete().eq('id', factura.id);
@@ -461,10 +516,30 @@ function FacturasContenido() {
                         {clientes.map(c => <option key={c.id} value={c.id}>{c.nombre} ({c.dias_credito} días crédito)</option>)}
                       </select>
                     </div>
+
                     <div>
-                      <label className="text-[12px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1">Monto Total con IVA ($)</label>
-                      <input required type="number" step="0.01" className="w-full bg-slate-950 border border-slate-800 p-4 rounded-2xl text-sm text-white font-mono outline-none focus:border-emerald-500" value={formData.monto_total} onChange={e => setFormData({...formData, monto_total: e.target.value})} placeholder="0.00" />
+                      <label className="text-[12px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1">Monto Base (Subtotal $)</label>
+                      <input required type="number" step="0.01" className="w-full bg-slate-950 border border-slate-800 p-4 rounded-2xl text-sm text-white font-mono outline-none focus:border-emerald-500" value={formData.monto_base} onChange={e => setFormData({...formData, monto_base: e.target.value})} placeholder="0.00" />
+                      
+                      {/* === CHECKBOXES DINÁMICOS === */}
+                      <div className="flex gap-4 px-2 mt-3">
+                        <label className="flex items-center gap-2 cursor-pointer group">
+                          <input type="checkbox" className="w-4 h-4 accent-emerald-500 rounded bg-slate-950 border-slate-800 cursor-pointer" checked={formData.aplica_iva} onChange={e => setFormData({...formData, aplica_iva: e.target.checked})} />
+                          <span className="text-[9px] font-black uppercase text-slate-400 group-hover:text-emerald-400 transition-colors tracking-widest">+ IVA (16%)</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer group">
+                          <input type="checkbox" className="w-4 h-4 accent-emerald-500 rounded bg-slate-950 border-slate-800 cursor-pointer" checked={formData.aplica_retencion} onChange={e => setFormData({...formData, aplica_retencion: e.target.checked})} />
+                          <span className="text-[9px] font-black uppercase text-slate-400 group-hover:text-emerald-400 transition-colors tracking-widest">- Ret. (4%)</span>
+                        </label>
+                      </div>
+                      
+                      {formData.monto_base > 0 && (
+                        <p className="text-[10px] font-black tracking-widest uppercase text-emerald-500 mt-2 ml-1">
+                          Neto a Cobrar: ${calcularTotalEnTiempoReal().toLocaleString('es-MX', {minimumFractionDigits: 2})}
+                        </p>
+                      )}
                     </div>
+
                     <div>
                       <label className="text-[12px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1">Concepto</label>
                       <input className="w-full bg-slate-950 border border-slate-800 p-4 rounded-2xl text-sm text-white outline-none focus:border-emerald-500" value={formData.ruta} onChange={e => setFormData({...formData, ruta: e.target.value})} placeholder="Ej. Flete Extra" />

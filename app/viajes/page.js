@@ -48,7 +48,6 @@ export default function ViajesPage() {
   const [mostrarModal, setMostrarModal] = useState(false);
   const [editandoId, setEditandoId] = useState(null); 
   
-  // === NUEVO ESTADO: MOTOR DE CONFIRMACIONES ASÍNCRONAS ===
   const [dialogoConfirmacion, setDialogoConfirmacion] = useState({ visible: false, mensaje: '', accion: null });
 
   const [filtroEstatus, setFiltroEstatus] = useState('Todos'); 
@@ -71,7 +70,10 @@ export default function ViajesPage() {
 
   const formInicial = {
     unidad_id: '', remolque_id: '', operador_id: '', origen_id: '', destino_id: '', 
-    cliente_id: '', monto_flete: '', distancia_km: '', referencia: '', fecha_salida: new Date().toISOString().split('T')[0],
+    cliente_id: '', monto_flete: '', 
+    aplica_iva: true, // <-- NUEVO: Checkbox IVA
+    aplica_retencion: true, // <-- NUEVO: Checkbox Retención
+    distancia_km: '', referencia: '', fecha_salida: new Date().toISOString().split('T')[0],
     mercancias_detalle: [{ mercancia_id: '', cantidad: 1, peso_kg: '', valor: '', moneda: 'MXN' }],
     gasto_monto: '', gasto_descripcion: 'Viáticos de Ruta',
     tag_casetas: '', tarjeta_gasolina: ''
@@ -145,27 +147,20 @@ export default function ViajesPage() {
 
     setFormData({
      unidad_id: viaje.unidad_id || '', remolque_id: viaje.remolque_id || '', operador_id: viaje.operador_id || '', origen_id: viaje.origen_id || '', destino_id: viaje.destino_id || '',
-     cliente_id: viaje.cliente_id || '', monto_flete: viaje.monto_flete || '', distancia_km: viaje.distancia_km || '', referencia: viaje.referencia || '',
+     cliente_id: viaje.cliente_id || '', monto_flete: viaje.monto_flete || '', 
+     aplica_iva: viaje.aplica_iva !== false, // Asume true si es null por retrocompatibilidad
+     aplica_retencion: viaje.aplica_retencion !== false, 
+     distancia_km: viaje.distancia_km || '', referencia: viaje.referencia || '',
      fecha_salida: viaje.fecha_salida || new Date().toISOString().split('T')[0], mercancias_detalle: detalle,
      tag_casetas: viaje.tag_casetas || '', tarjeta_gasolina: viaje.tarjeta_gasolina || ''
       });
     setMostrarModal(true);
   };
 
-  // === SISTEMA DE DELEGACIÓN DE ACCIONES CRUDAS ===
-  const pedirConfirmacion = (mensaje, accion) => {
-    setDialogoConfirmacion({ visible: true, mensaje, accion });
-  };
-
-  const ejecutarConfirmacion = async () => {
-    if (dialogoConfirmacion.accion) {
-      await dialogoConfirmacion.accion();
-    }
-    setDialogoConfirmacion({ visible: false, mensaje: '', accion: null });
-  };
+  const pedirConfirmacion = (mensaje, accion) => { setDialogoConfirmacion({ visible: true, mensaje, accion }); };
+  const ejecutarConfirmacion = async () => { if (dialogoConfirmacion.accion) { await dialogoConfirmacion.accion(); } setDialogoConfirmacion({ visible: false, mensaje: '', accion: null }); };
 
   const eliminarViaje = (id) => {
-    // Sustituimos el alert() bloqueante por nuestra interfaz fluida
     pedirConfirmacion("¿Deseas eliminar este viaje permanentemente? Esta acción no se puede deshacer.", async () => {
       setLoading(true);
       try {
@@ -174,9 +169,7 @@ export default function ViajesPage() {
         await supabase.from('viajes').delete().eq('id', id);
         obtenerViajes(empresaId);
         mostrarAlerta("Viaje eliminado permanentemente.", "exito");
-      } catch (error) { 
-        mostrarAlerta("Error al eliminar: " + error.message, "error"); 
-      } finally { setLoading(false); }
+      } catch (error) { mostrarAlerta("Error al eliminar: " + error.message, "error"); } finally { setLoading(false); }
     });
   };
 
@@ -187,8 +180,7 @@ export default function ViajesPage() {
         const { data: factura } = await supabase.from('facturas').select('facturapi_id').eq('viaje_id', viaje.id).single();
         if (factura && factura.facturapi_id) {
           await fetch('/api/facturapi', { 
-            method: 'POST', 
-            headers: { 'Content-Type': 'application/json' },
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ endpoint: `invoices/${factura.facturapi_id}?motive=02`, method: 'DELETE' })
           });
         }
@@ -196,9 +188,7 @@ export default function ViajesPage() {
         await supabase.from('facturas').update({ estatus_pago: 'Cancelada' }).eq('viaje_id', viaje.id);
         mostrarAlerta("Carta Porte CANCELADA exitosamente en el SAT.", "exito");
         obtenerViajes(empresaId);
-      } catch (error) { 
-        mostrarAlerta("Error al cancelar: " + error.message, "error"); 
-      } finally { setLoading(false); }
+      } catch (error) { mostrarAlerta("Error al cancelar: " + error.message, "error"); } finally { setLoading(false); }
     });
   };
 
@@ -218,41 +208,27 @@ export default function ViajesPage() {
 
   const timbrarCartaPorte = async (viaje) => {
     try {
-      if (!viaje.clientes?.rfc) throw new Error("Falta el RFC del Cliente. Revisa el catálogo de Clientes.");
+      if (!viaje.clientes?.rfc) throw new Error("Falta el RFC del Cliente.");
       if (!viaje.clientes?.codigo_postal) throw new Error("Falta el Código Postal del Cliente.");
       if (!viaje.clientes?.regimen_fiscal) throw new Error("Falta el Régimen Fiscal del Cliente.");
 
       const rfcOrigen = viaje.origen?.rfc_ubicacion || perfilEmisor?.rfc;
       const rfcDestino = viaje.destino?.rfc_ubicacion || viaje.clientes?.rfc;
       
-      if (!rfcOrigen) throw new Error(`Falta el RFC de la ubicación de origen: ${viaje.origen?.nombre_lugar}`);
-      if (!rfcDestino) throw new Error(`Falta el RFC de la ubicación de destino: ${viaje.destino?.nombre_lugar}`);
-      if (!viaje.origen?.codigo_postal) throw new Error(`Falta el C.P. en el origen: ${viaje.origen?.nombre_lugar}`);
-      if (!viaje.destino?.codigo_postal) throw new Error(`Falta el C.P. en el destino: ${viaje.destino?.nombre_lugar}`);
-      if (!viaje.origen?.estado) throw new Error(`Falta el Estado (Ej: NLE) en el origen: ${viaje.origen?.nombre_lugar}`);
-      if (!viaje.destino?.estado) throw new Error(`Falta el Estado (Ej: TAM) en el destino: ${viaje.destino?.nombre_lugar}`);
+      if (!rfcOrigen || !rfcDestino) throw new Error("Faltan RFCs en Origen o Destino.");
+      if (!viaje.origen?.codigo_postal || !viaje.destino?.codigo_postal) throw new Error("Falta C.P. en Origen o Destino.");
+      if (!viaje.origen?.estado || !viaje.destino?.estado) throw new Error("Falta Estado en Origen o Destino.");
 
       const u = viaje.unidades;
-      if (!u?.permiso_sict) throw new Error(`La unidad ${u?.numero_economico} NO tiene Tipo de Permiso SCT.`);
-      if (!u?.num_permiso_sict) throw new Error(`La unidad ${u?.numero_economico} NO tiene Número de Permiso SCT.`);
-      if (!u?.configuracion_vehicular) throw new Error(`La unidad ${u?.numero_economico} NO tiene Configuración Vehicular.`);
-      if (!u?.placas) throw new Error(`La unidad ${u?.numero_economico} NO tiene Placas registradas.`);
+      if (!u?.permiso_sict || !u?.num_permiso_sict || !u?.configuracion_vehicular || !u?.placas) throw new Error("Faltan datos requeridos en la Unidad (Permiso, Configuración o Placas).");
 
       const op = viaje.operadores;
-      if (!op?.rfc) throw new Error(`El operador ${op?.nombre_completo} NO tiene RFC registrado.`);
-      if (!op?.numero_licencia) throw new Error(`El operador ${op?.nombre_completo} NO tiene Número de Licencia.`);
+      if (!op?.rfc || !op?.numero_licencia) throw new Error("Faltan datos requeridos en el Operador (RFC o Licencia).");
 
       const arregloMercanciasFacturapi = (viaje.mercancias_detalle || []).map((item, index) => {
-        if (!item.clave_sat) throw new Error(`Falta la Clave SAT en el producto #${index + 1}`);
-        if (!item.descripcion) throw new Error(`Falta la Descripción en el producto #${index + 1}`);
-        if (!item.embalaje) throw new Error(`Falta el Embalaje (Clave Unidad) en el producto #${index + 1}`);
-        if (!item.peso_kg || parseFloat(item.peso_kg) <= 0) throw new Error(`Falta el Peso (KG) en el producto #${index + 1}`);
-
+        if (!item.clave_sat || !item.descripcion || !item.embalaje || !item.peso_kg) throw new Error(`Faltan datos en el producto #${index + 1}`);
         const claveSatLimpia = String(item.clave_sat).trim().replace(/[^0-9]/g, '');
-
-        if (claveSatLimpia.length !== 8) {
-          throw new Error(`🛑 ERROR SAT: La Clave SAT del producto "${item.descripcion}" ("${item.clave_sat}") está corrupta. Se detectaron ${claveSatLimpia.length} dígitos numéricos válidos en lugar de 8.`);
-        }
+        if (claveSatLimpia.length !== 8) throw new Error(`ERROR SAT: La Clave SAT del producto "${item.descripcion}" está corrupta.`);
 
         let mercancia = { BienesTransp: claveSatLimpia, Descripcion: item.descripcion, Cantidad: parseFloat(item.cantidad), ClaveUnidad: item.embalaje, PesoEnKg: parseFloat(item.peso_kg) };
         if (item.material_peligroso) mercancia.MaterialPeligroso = "Sí";
@@ -283,18 +259,32 @@ export default function ViajesPage() {
       };
 
       if (requiereRemolqueSAT) {
-        if (!viaje.remolques || !viaje.remolques.placas) throw new Error(`🛑 ERROR SAT: El camión ${u.numero_economico} requiere remolque. Edita el viaje y asígnale uno.`);
+        if (!viaje.remolques || !viaje.remolques.placas) throw new Error(`El camión requiere remolque. Edita el viaje y asígnale uno.`);
         autotransporteObj.Remolques = [{ SubTipoRem: (viaje.remolques.subtipo_remolque || "CTR02").trim().toUpperCase(), Placa: viaje.remolques.placas.replace(/[- ]/g, '') }];
       }
 
       setLoading(true);
-      const subtotal = Number((Number(viaje.monto_flete || 0) / 1.16).toFixed(2));
+      
+      // === LOGICA SAT ACTUALIZADA PARA IMPUESTOS DINÁMICOS ===
+      const subtotal = parseFloat(viaje.monto_flete || 0);
+      let impuestosArray = [];
+      if (viaje.aplica_iva !== false) impuestosArray.push({ type: "IVA", rate: 0.16 });
+      if (viaje.aplica_retencion !== false) impuestosArray.push({ type: "IVA", rate: 0.04, withholding: true });
+
       const descripcionServicio = viaje.referencia ? `Servicio de Flete Nacional - Ref: ${viaje.referencia}` : "Servicio de Flete Nacional";
 
       const invoiceData = {
         type: "I", date: fechaHoraCFDI,
         customer: { legal_name: viaje.clientes.nombre, tax_id: viaje.clientes.rfc, tax_system: viaje.clientes.regimen_fiscal, address: { zip: viaje.clientes.codigo_postal } },
-        items: [{ quantity: 1, product: { description: descripcionServicio, product_key: "78101802", price: subtotal, taxes: [{ type: "IVA", rate: 0.16 }, { type: "IVA", rate: 0.04, withholding: true }] } }],
+        items: [{ 
+          quantity: 1, 
+          product: { 
+            description: descripcionServicio, 
+            product_key: "78101802", 
+            price: subtotal, 
+            taxes: impuestosArray // <-- Se inyecta dinámicamente
+          } 
+        }],
         payment_form: "99", payment_method: "PPD", use: viaje.clientes.uso_cfdi || "G03",
         complements: [{
           type: "carta_porte",
@@ -350,15 +340,24 @@ export default function ViajesPage() {
       const payloadComun = {
         distancia_km: parseFloat(formData.distancia_km || 0), unidad_id: formData.unidad_id, remolque_id: remolqueLimpio, operador_id: formData.operador_id, origen_id: formData.origen_id, destino_id: formData.destino_id,
         mercancia_id: formData.mercancias_detalle[0].mercancia_id, mercancias_detalle: mercanciasEnriquecidas, peso_total_kg: calcularPesoTotal(), cliente_id: formData.cliente_id || null, 
-        monto_flete: parseFloat(formData.monto_flete || 0), referencia: formData.referencia || '', fecha_salida: formData.fecha_salida, tag_casetas: formData.tag_casetas, tarjeta_gasolina: formData.tarjeta_gasolina
+        monto_flete: parseFloat(formData.monto_flete || 0), 
+        aplica_iva: formData.aplica_iva, // <-- Guardamos flag
+        aplica_retencion: formData.aplica_retencion, // <-- Guardamos flag
+        referencia: formData.referencia || '', fecha_salida: formData.fecha_salida, tag_casetas: formData.tag_casetas, tarjeta_gasolina: formData.tarjeta_gasolina
       };
 
       const validacion = viajeSchema.safeParse({ distancia_km: payloadComun.distancia_km, monto_flete: payloadComun.monto_flete, fecha_salida: payloadComun.fecha_salida });
-
       if (!validacion.success) {
         setLoading(false);
         return mostrarAlerta(validacion.error.issues[0]?.message || "🛑 Revisa los datos ingresados.", "error");
       }
+
+      // === CÁLCULO FINANCIERO DEL TOTAL NETO ===
+      let fleteBase = payloadComun.monto_flete;
+      let montoCalculado = fleteBase;
+      if (payloadComun.aplica_iva) montoCalculado += (fleteBase * 0.16);
+      if (payloadComun.aplica_retencion) montoCalculado -= (fleteBase * 0.04);
+      montoCalculado = Number(montoCalculado.toFixed(2)); // Redondeo centesimal exacto
 
       if (editandoId) {
         await supabase.from('viajes').update(payloadComun).eq('id', editandoId);
@@ -366,10 +365,10 @@ export default function ViajesPage() {
           const fechaVenc = new Date(formData.fecha_salida); fechaVenc.setDate(fechaVenc.getDate() + (clienteObj?.dias_credito || 0));
           const { data: facExistente } = await supabase.from('facturas').select('id').eq('viaje_id', editandoId).single();
           if (facExistente) {
-            await supabase.from('facturas').update({ cliente: clienteObj.nombre, monto_total: parseFloat(formData.monto_flete), fecha_viaje: formData.fecha_salida, fecha_vencimiento: fechaVenc.toISOString().split('T')[0], ruta: `Flete CCP${formData.referencia ? ' - Ref: '+formData.referencia : ''}` }).eq('id', facExistente.id);
+            await supabase.from('facturas').update({ cliente: clienteObj.nombre, monto_total: montoCalculado, fecha_viaje: formData.fecha_salida, fecha_vencimiento: fechaVenc.toISOString().split('T')[0], ruta: `Flete CCP${formData.referencia ? ' - Ref: '+formData.referencia : ''}` }).eq('id', facExistente.id);
           } else {
             const { data: viajeEditado } = await supabase.from('viajes').select('folio_interno').eq('id', editandoId).single();
-            await supabase.from('facturas').insert([{ viaje_id: editandoId, folio_viaje: viajeEditado?.folio_interno, cliente: clienteObj.nombre, monto_total: parseFloat(formData.monto_flete), fecha_viaje: formData.fecha_salida, fecha_vencimiento: fechaVenc.toISOString().split('T')[0], estatus_pago: 'Pendiente', ruta: `Flete CCP${formData.referencia ? ' - Ref: '+formData.referencia : ''}` }]);
+            await supabase.from('facturas').insert([{ viaje_id: editandoId, folio_viaje: viajeEditado?.folio_interno, cliente: clienteObj.nombre, monto_total: montoCalculado, fecha_viaje: formData.fecha_salida, fecha_vencimiento: fechaVenc.toISOString().split('T')[0], estatus_pago: 'Pendiente', ruta: `Flete CCP${formData.referencia ? ' - Ref: '+formData.referencia : ''}` }]);
           }
         }
         mostrarAlerta("Cambios guardados correctamente.", "exito");
@@ -385,7 +384,7 @@ export default function ViajesPage() {
 
         if (formData.monto_flete > 0 && formData.cliente_id) {
           const fechaVenc = new Date(formData.fecha_salida); fechaVenc.setDate(fechaVenc.getDate() + (clienteObj?.dias_credito || 0));
-          await supabase.from('facturas').insert([{ viaje_id: nuevoViaje.id, folio_viaje: nuevoViaje.folio_interno, cliente: clienteObj.nombre, monto_total: parseFloat(formData.monto_flete), fecha_viaje: formData.fecha_salida, fecha_vencimiento: fechaVenc.toISOString().split('T')[0], estatus_pago: 'Pendiente', ruta: `Flete CCP${formData.referencia ? ' - Ref: '+formData.referencia : ''}` }]);
+          await supabase.from('facturas').insert([{ viaje_id: nuevoViaje.id, folio_viaje: nuevoViaje.folio_interno, cliente: clienteObj.nombre, monto_total: montoCalculado, fecha_viaje: formData.fecha_salida, fecha_vencimiento: fechaVenc.toISOString().split('T')[0], estatus_pago: 'Pendiente', ruta: `Flete CCP${formData.referencia ? ' - Ref: '+formData.referencia : ''}` }]);
         }
 
         if (formData.gasto_monto && parseFloat(formData.gasto_monto) > 0) {
@@ -618,7 +617,25 @@ export default function ViajesPage() {
                   <div className="grid grid-cols-3 gap-4">
                     <select required className="col-span-1 bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white" value={formData.cliente_id} onChange={e => setFormData({...formData, cliente_id: e.target.value})}><option value="">Cliente Factura...</option>{clientes.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}</select>
                     <input type="text" placeholder="Orden de Compra / Referencia" className="col-span-1 bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white" value={formData.referencia} onChange={e => setFormData({...formData, referencia: e.target.value})} />
-                    {puedeVerAdmin && (<input type="number" placeholder="Monto Flete ($)" className="col-span-1 bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white font-mono" value={formData.monto_flete} onChange={e => setFormData({...formData, monto_flete: e.target.value})} />)}
+                    
+                    {puedeVerAdmin && (
+                      <div className="col-span-1 flex flex-col gap-2">
+                        <input type="number" placeholder="Monto Flete Base ($)" className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm text-white font-mono" value={formData.monto_flete} onChange={e => setFormData({...formData, monto_flete: e.target.value})} />
+                        
+                        {/* === NUEVOS CONTROLES DE IMPUESTO === */}
+                        <div className="flex gap-4 px-2">
+                          <label className="flex items-center gap-2 cursor-pointer group">
+                            <input type="checkbox" className="w-4 h-4 accent-blue-500 rounded bg-slate-950 border-slate-800 cursor-pointer" checked={formData.aplica_iva} onChange={e => setFormData({...formData, aplica_iva: e.target.checked})} />
+                            <span className="text-[9px] font-black uppercase text-slate-400 group-hover:text-blue-400 transition-colors tracking-widest">+ IVA (16%)</span>
+                          </label>
+                          <label className="flex items-center gap-2 cursor-pointer group">
+                            <input type="checkbox" className="w-4 h-4 accent-blue-500 rounded bg-slate-950 border-slate-800 cursor-pointer" checked={formData.aplica_retencion} onChange={e => setFormData({...formData, aplica_retencion: e.target.checked})} />
+                            <span className="text-[9px] font-black uppercase text-slate-400 group-hover:text-blue-400 transition-colors tracking-widest">- Ret. (4%)</span>
+                          </label>
+                        </div>
+                      </div>
+                    )}
+
                   </div>
                   <button type="submit" disabled={loading} className={`w-full py-5 rounded-2xl uppercase font-black text-[11px] tracking-widest shadow-xl transition-all ${editandoId ? 'bg-orange-500 hover:bg-orange-400' : 'bg-blue-600 hover:bg-blue-500'} text-white`}>{loading ? "Procesando..." : (editandoId ? "Guardar Cambios" : "Confirmar Viaje")}</button>
                 </form>

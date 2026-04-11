@@ -14,11 +14,20 @@ const formatDireccion = (obj) => {
 export const generarFacturaPDF = async (factura, clienteData, perfilEmisor) => {
   const doc = new jsPDF('p', 'mm', 'a4');
 
-  const total = Number(factura.monto_total || 0);
-  const subtotal = total / 1.16;
-  const iva = subtotal * 0.16;
-  const retencionIva = subtotal * 0.04;
-  const totalFinal = subtotal + iva - retencionIva; 
+  // ==========================================
+  // CÁLCULO FINANCIERO DINÁMICO (CFDI 4.0)
+  // ==========================================
+  const aplicaIva = factura.aplica_iva !== false; // Soporte para viajes antiguos (default true)
+  const aplicaRetencion = factura.aplica_retencion !== false; 
+
+  let factorMultiplicador = 1.0;
+  if (aplicaIva) factorMultiplicador += 0.16;
+  if (aplicaRetencion) factorMultiplicador -= 0.04;
+
+  const totalFinal = Number(factura.monto_total || 0);
+  const subtotal = totalFinal / factorMultiplicador;
+  const iva = aplicaIva ? (subtotal * 0.16) : 0;
+  const retencionIva = aplicaRetencion ? (subtotal * 0.04) : 0; 
   
   const esVencida = new Date(factura.fecha_vencimiento + 'T23:59:59') < new Date() && factura.estatus_pago !== 'Pagado';
   let etiquetaEstatus = factura.estatus_pago === 'Pagado' ? 'PAGADO' : (esVencida ? 'ATRASADO' : 'PENDIENTE');
@@ -88,7 +97,7 @@ export const generarFacturaPDF = async (factura, clienteData, perfilEmisor) => {
   const lineasDirEmisor = doc.splitTextToSize(dirEmisor, 65); 
   doc.text(lineasDirEmisor, 55, 32);
 
-  // CAJA DE ESTATUS Y FOLIOS (DISEÑO MEJORADO)
+  // CAJA DE ESTATUS Y FOLIOS
   doc.setFillColor(colorEstatus[0], colorEstatus[1], colorEstatus[2]); 
   doc.rect(125, 15, 71, 7, 'F');
   doc.setFontSize(9); doc.setFont("helvetica", "bold"); doc.setTextColor(255, 255, 255); 
@@ -101,7 +110,7 @@ export const generarFacturaPDF = async (factura, clienteData, perfilEmisor) => {
       ['Serie y Folio:', `F - ${String(factura.folio_interno || 'S/N').padStart(4, '0')}`],
       ['Folio Fiscal:', factura.folio_fiscal || 'POR ASIGNAR'],
       ['Fecha Emisión:', fechaImpresion],
-      ['Orden / Ref:', ordenCompra], // <--- SECCIÓN ACTUALIZADA
+      ['Orden / Ref:', ordenCompra], 
       ['Uso CFDI:', clienteData?.uso_cfdi || 'G03']
     ],
     theme: 'plain', styles: { fontSize: 7, cellPadding: 0.8 }, 
@@ -168,17 +177,33 @@ export const generarFacturaPDF = async (factura, clienteData, perfilEmisor) => {
   doc.setFontSize(8); doc.setFont("helvetica", "normal");
   doc.text("Moneda: MXN - Peso Mexicano", 14, finalY + 8);
   
+  // ==========================================
+  // MATRIZ DINÁMICA DE TOTALES
+  // ==========================================
+  const bodyTotales = [];
+  bodyTotales.push(['Subtotal:', `$${subtotalFormateado}`]);
+
+  if (aplicaIva) {
+      bodyTotales.push(['IVA Trasladado (16%):', `$${iva.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`]);
+  }
+  if (aplicaRetencion) {
+      bodyTotales.push(['Retención IVA (4%):', `-$${retencionIva.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`]);
+  }
+
+  bodyTotales.push(['Total Neto:', `$${totalFinal.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`]);
+
   autoTable(doc, {
     startY: finalY + 2, margin: { left: 135, right: 14 },
-    body: [
-      ['Subtotal:', `$${subtotal.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`],
-      ['IVA Trasladado (16%):', `$${iva.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`],
-      ['Retención IVA (4%):', `-$${retencionIva.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`],
-      ['Total Neto:', `$${totalFinal.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`],
-    ],
+    body: bodyTotales,
     theme: 'plain', styles: { fontSize: 8, cellPadding: 1.5 },
     columnStyles: { 0: { fontStyle: 'bold', halign: 'right' }, 1: { halign: 'right', cellWidth: 30 } },
-    didParseCell: function(data) { if (data.row.index === 3) { data.cell.styles.fontStyle = 'bold'; data.cell.styles.fontSize = 9; } }
+    didParseCell: function(data) { 
+        // Identificamos dinámicamente la última fila (Total Neto) para ponerla en negritas
+        if (data.row.index === bodyTotales.length - 1) { 
+            data.cell.styles.fontStyle = 'bold'; 
+            data.cell.styles.fontSize = 9; 
+        } 
+    }
   });
 
   // ==========================================
