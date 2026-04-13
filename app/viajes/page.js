@@ -552,7 +552,6 @@ export default function ViajesPage() {
                           {v.estatus === 'Emitido (Timbrado)' && (
                             <>
                               <button onClick={() => cancelarViaje(v)} disabled={loading} title="Cancelar Carta Porte" className="p-2 text-slate-500 hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-500 rounded-lg transition-colors mr-2"><XCircle size={16}/></button>
-                              <button onClick={() => descargarXML(v.id)} title="Descargar XML" className="p-2 bg-purple-50 dark:bg-purple-600/10 text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-600 hover:text-purple-700 dark:hover:text-white rounded-lg transition-colors"><FileCode size={16}/></button>
                               <button onClick={() => router.push(`/facturas?viaje_id=${v.id}`)} title="Ver Factura" className="p-2 bg-emerald-50 dark:bg-emerald-600/10 text-emerald-600 dark:text-emerald-500 hover:bg-emerald-100 dark:hover:bg-emerald-600 hover:text-emerald-700 dark:hover:text-white rounded-lg transition-colors"><Receipt size={16}/></button>
                               <button onClick={() => generarPDFCartaPorte(v, perfilEmisor)} title="Descargar PDF" className="p-2 bg-blue-50 dark:bg-blue-600/10 text-blue-600 dark:text-blue-500 hover:bg-blue-100 dark:hover:bg-blue-600 hover:text-blue-700 dark:hover:text-white rounded-lg transition-colors"><FileText size={16}/></button>
                             </>

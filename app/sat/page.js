@@ -93,7 +93,7 @@ export default function SATConfigPage() {
   });
   const [formDataUb, setFormDataUb] = useState({ nombre_lugar: '', rfc_ubicacion: '', codigo_postal: '', estado: '', municipio: '', calle_numero: '', colonia: '' });
   const [formDataMe, setFormDataMe] = useState({ descripcion: '', clave_sat: '', clave_unidad: 'KGM', peso_unitario_kg: '', clave_embalaje: '4G', material_peligroso: false });
-  const [formDataRe, setFormDataRe] = useState({ numero_economico: '', placas: '', tipo_placa: 'Federal', subtipo_remolque: 'CTR02' });
+  const [formDataRe, setFormDataRe] = useState({ numero_economico: '', placas: '', tipo_placa: 'Federal', subtipo_remolque: 'CTR002' });
   const [formDataCl, setFormDataCl] = useState({ 
     nombre: '', rfc: '', regimen_fiscal: '601', codigo_postal: '', dias_credito: 0, uso_cfdi: 'G03',
     calle_numero: '', colonia: '', municipio: '', estado: ''
@@ -351,7 +351,7 @@ export default function SATConfigPage() {
     });
     setFormDataUb({ nombre_lugar: '', rfc_ubicacion: '', codigo_postal: '', estado: '', municipio: '', calle_numero: '', colonia: '' });
     setFormDataMe({ descripcion: '', clave_sat: '', clave_unidad: 'KGM', peso_unitario_kg: '', clave_embalaje: '4G', material_peligroso: false });
-    setFormDataRe({ numero_economico: '', placas: '', tipo_placa: 'Federal', subtipo_remolque: 'CTR02' });
+    setFormDataRe({ numero_economico: '', placas: '', tipo_placa: 'Federal', subtipo_remolque: 'CTR002' });
     setFormDataCl({ 
       nombre: '', rfc: '', regimen_fiscal: '601', codigo_postal: '', dias_credito: 0, uso_cfdi: 'G03',
       calle_numero: '', colonia: '', municipio: '', estado: ''
@@ -377,7 +377,7 @@ export default function SATConfigPage() {
     setMostrarModal(true); 
   };
   
-  const editarRemolque = (r) => { setEditandoId(r.id); setFormDataRe({ numero_economico: r.numero_economico || '', placas: r.placas || '', tipo_placa: r.tipo_placa || 'Federal', subtipo_remolque: r.subtipo_remolque || 'CTR02' }); setMostrarModal(true); };
+  const editarRemolque = (r) => { setEditandoId(r.id); setFormDataRe({ numero_economico: r.numero_economico || '', placas: r.placas || '', tipo_placa: r.tipo_placa || 'Federal', subtipo_remolque: r.subtipo_remolque || 'CTR002' }); setMostrarModal(true); };
   const editarUbicacion = (ub) => { setEditandoId(ub.id); setFormDataUb({ nombre_lugar: ub.nombre_lugar || '', rfc_ubicacion: ub.rfc_ubicacion || '', codigo_postal: ub.codigo_postal || '', estado: ub.estado || '', municipio: ub.municipio || '', calle_numero: ub.calle_numero || '', colonia: ub.colonia || '' }); setMostrarModal(true); };
   const editarMercancia = (me) => { setEditandoId(me.id); setFormDataMe({ descripcion: me.descripcion || '', clave_sat: me.clave_sat || '', clave_unidad: me.clave_unidad || 'KGM', peso_unitario_kg: me.peso_unitario_kg || '', clave_embalaje: me.clave_embalaje || '4G', material_peligroso: me.material_peligroso || false }); setMostrarModal(true); };
 
@@ -545,7 +545,7 @@ export default function SATConfigPage() {
                 ))} 
 
                 {activeTab === 'remolques' && remolques.map(r => {
-                  const catalogoSAT = { "CTR01": "Caja Seca (Camión)", "CTR02": "Caja Seca (Tráiler)", "CTR03": "Caja Refrigerada", "CTR04": "Plataforma", "CTR05": "Cama Baja", "CTR06": "Portacontenedor", "CTR08": "Tolva", "CTR10": "Tanque", "CTR12": "Góndola" };
+                  const catalogoSAT = { "CTR001": "Caja Seca (Camión)", "CTR002": "Caja Seca (Tráiler)", "CTR003": "Caja Refrigerada", "CTR004": "Plataforma", "CTR005": "Cama Baja", "CTR006": "Portacontenedor", "CTR008": "Tolva", "CTR010": "Tanque", "CTR012": "Góndola" };
                   const nombreTipo = catalogoSAT[r.subtipo_remolque] || r.subtipo_remolque;
                   return (
                     <div key={r.id} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-[2rem] group hover:border-blue-400 dark:hover:border-blue-500/40 transition-all shadow-sm dark:shadow-xl">
@@ -794,15 +794,15 @@ export default function SATConfigPage() {
                           <div className="sm:col-span-2">
                             <label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1 transition-colors">Tipo de Remolque (Catálogo SAT 3.1)</label>
                             <select className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white transition-colors" value={formDataRe.subtipo_remolque} onChange={e => setFormDataRe({...formDataRe, subtipo_remolque: e.target.value})}>
-                              <option value="CTR01">CTR01 - Caja Seca (Camión / Rabón)</option>
-                              <option value="CTR02">CTR02 - Caja Seca (Tráiler / Full)</option>
-                              <option value="CTR03">CTR03 - Caja Refrigerada</option>
-                              <option value="CTR04">CTR04 - Plataforma</option>
-                              <option value="CTR05">CTR05 - Cama Baja</option>
-                              <option value="CTR06">CTR06 - Chasis Portacontenedor</option>
-                              <option value="CTR08">CTR08 - Tolva</option>
-                              <option value="CTR10">CTR10 - Tanque (Pipa)</option>
-                              <option value="CTR12">CTR12 - Góndola / Madrina</option>
+                              <option value="CTR001">CTR001 - Caja Seca (Camión / Rabón)</option>
+                              <option value="CTR002">CTR002 - Caja Seca (Tráiler / Full)</option>
+                              <option value="CTR003">CTR003 - Caja Refrigerada</option>
+                              <option value="CTR004">CTR004 - Plataforma</option>
+                              <option value="CTR005">CTR005 - Cama Baja</option>
+                              <option value="CTR006">CTR006 - Chasis Portacontenedor</option>
+                              <option value="CTR008">CTR008 - Tolva</option>
+                              <option value="CTR010">CTR010 - Tanque (Pipa)</option>
+                              <option value="CTR012">CTR012 - Góndola / Madrina</option>
                             </select>
                           </div>
                         </div>
