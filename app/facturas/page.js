@@ -137,16 +137,28 @@ function FacturasContenido() {
   const pedirConfirmacion = (mensaje, accion) => setDialogoConfirmacion({ visible: true, mensaje, accion });
   const ejecutarConfirmacion = async () => { if (dialogoConfirmacion.accion) await dialogoConfirmacion.accion(); setDialogoConfirmacion({ visible: false, mensaje: '', accion: null }); };
 
-  const descargarXML = async (facturapi_id, cliente_nombre) => {
+const descargarXML = async (facturapi_id, cliente_nombre, folio_interno) => {
     if (!facturapi_id) return mostrarAlerta("Esta factura aún no está timbrada en el SAT.", "error");
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Sesión expirada. Vuelve a iniciar sesión.");
       const response = await fetch('/api/facturapi', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` }, body: JSON.stringify({ endpoint: `invoices/${facturapi_id}/xml`, method: 'GET' }) });
       if (!response.ok) throw new Error("No se pudo obtener el XML del SAT");
-      const blob = await response.blob(); const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a'); link.href = url; link.download = `Factura_XML_${cliente_nombre.replace(/\s+/g, '_')}.xml`;
-      document.body.appendChild(link); link.click(); link.remove(); window.URL.revokeObjectURL(url);
+      
+      const blob = await response.blob(); 
+      const url = window.URL.createObjectURL(blob);
+      
+      // Formateamos el folio para incluirlo en el nombre del archivo
+      const folioStr = folio_interno ? `F-${String(folio_interno).padStart(4, '0')}` : 'F-SN';
+      
+      const link = document.createElement('a'); 
+      link.href = url; 
+      link.download = `Factura_XML_${folioStr}_${cliente_nombre.replace(/\s+/g, '_')}.xml`;
+      
+      document.body.appendChild(link); 
+      link.click(); 
+      link.remove(); 
+      window.URL.revokeObjectURL(url);
     } catch (err) { mostrarAlerta("Error al descargar XML: " + err.message, "error"); }
   };
 
@@ -443,7 +455,7 @@ function FacturasContenido() {
                             ) : (
                               <>
                                 <button onClick={() => generarFacturaPDF(item, clienteCompleto, perfilEmisor)} title="Descargar PDF" className="p-2 bg-emerald-50 dark:bg-emerald-600/10 text-emerald-600 dark:text-emerald-500 hover:bg-emerald-600 hover:text-white rounded-lg transition-colors transition-colors"><Receipt size={16}/></button>
-                                {item.facturapi_id && ( <button onClick={() => descargarXML(item.facturapi_id, item.cliente)} title="Descargar XML" className="p-2 bg-purple-50 dark:bg-purple-600/10 text-purple-600 dark:text-purple-400 hover:bg-purple-600 hover:text-white rounded-lg transition-colors transition-colors"><FileCode size={16}/></button> )}
+                                {item.facturapi_id && ( <button onClick={() => descargarXML(item.facturapi_id, item.cliente, item.folio_interno)} title="Descargar XML" className="p-2 bg-purple-50 dark:bg-purple-600/10 text-purple-600 dark:text-purple-400 hover:bg-purple-600 hover:text-white rounded-lg transition-colors transition-colors"><FileCode size={16}/></button> )}
                               </>
                             )}
                             <button onClick={() => procesarCancelacion(item, vieneDeViaje)} title="Borrar/Cancelar" className={`p-2 transition-colors rounded-lg ${vieneDeViaje ? 'text-slate-200 dark:text-slate-800 cursor-not-allowed' : 'text-slate-400 dark:text-slate-600 hover:text-red-600 dark:hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10'}`}>
