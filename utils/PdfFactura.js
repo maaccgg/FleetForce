@@ -15,19 +15,60 @@ export const generarFacturaPDF = async (factura, clienteData, perfilEmisor) => {
   const doc = new jsPDF('p', 'mm', 'a4');
 
   // ==========================================
-  // CÁLCULO FINANCIERO DINÁMICO (CFDI 4.0)
+  // CÁLCULO FINANCIERO DINÁMICO (CFDI 4.0 Multi-Concepto)
   // ==========================================
-  const aplicaIva = factura.aplica_iva !== false; // Soporte para viajes antiguos (default true)
-  const aplicaRetencion = factura.aplica_retencion !== false; 
+  let conceptosArray = [];
+  let subtotal = 0;
+  let iva = 0;
+  let retencionIva = 0;
 
-  let factorMultiplicador = 1.0;
-  if (aplicaIva) factorMultiplicador += 0.16;
-  if (aplicaRetencion) factorMultiplicador -= 0.04;
+  // Verificamos si la factura tiene el nuevo formato de múltiples conceptos
+  if (factura.conceptos_detalle && factura.conceptos_detalle.length > 0) {
+    conceptosArray = factura.conceptos_detalle.map(c => {
+      const montoBase = parseFloat(c.monto) || 0;
+      subtotal += montoBase;
 
-  const totalFinal = Number(factura.monto_total || 0);
-  const subtotal = totalFinal / factorMultiplicador;
-  const iva = aplicaIva ? (subtotal * 0.16) : 0;
-  const retencionIva = aplicaRetencion ? (subtotal * 0.04) : 0; 
+      // Calculamos impuestos por partida
+      const aplicaIva = c.aplica_iva !== false;
+      const aplicaRet = c.aplica_retencion === true || factura.aplica_retencion === true;
+
+      if (aplicaIva) iva += montoBase * 0.16;
+      if (aplicaRet) retencionIva += montoBase * 0.04;
+
+      const montoFormateado = `$${montoBase.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+
+      return [
+        c.clave_sat || '78101802',
+        '1',
+        'E48',
+        c.descripcion,
+        montoFormateado,
+        montoFormateado
+      ];
+    });
+  } else {
+    // MODO COMPATIBILIDAD: Para facturas antiguas creadas antes de la actualización
+    const aplicaIva = factura.aplica_iva !== false; 
+    const aplicaRetencion = factura.aplica_retencion !== false; 
+
+    let factorMultiplicador = 1.0;
+    if (aplicaIva) factorMultiplicador += 0.16;
+    if (aplicaRetencion) factorMultiplicador -= 0.04;
+
+    subtotal = Number(factura.monto_total || 0) / factorMultiplicador;
+    if (aplicaIva) iva = subtotal * 0.16;
+    if (aplicaRetencion) retencionIva = subtotal * 0.04;
+
+    const subFormateado = `$${subtotal.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    conceptosArray = [
+      ['78101802', '1', 'E48', factura.ruta || 'Servicio de flete nacional', subFormateado, subFormateado]
+    ];
+  }
+
+  // Si tiene conceptos detalle usamos el cálculo matemático exacto, si no, usamos el total guardado.
+  const totalFinal = (factura.conceptos_detalle && factura.conceptos_detalle.length > 0) 
+    ? (subtotal + iva - retencionIva) 
+    : Number(factura.monto_total || 0);
   
   const esVencida = new Date(factura.fecha_vencimiento + 'T23:59:59') < new Date() && factura.estatus_pago !== 'Pagado';
   let etiquetaEstatus = factura.estatus_pago === 'Pagado' ? 'PAGADO' : (esVencida ? 'ATRASADO' : 'PENDIENTE');
@@ -149,16 +190,14 @@ export const generarFacturaPDF = async (factura, clienteData, perfilEmisor) => {
   doc.text(`Método: ${factura.metodo_pago || 'PPD'} | Forma: ${factura.forma_pago || '99'}`, 122, startYReceptor + 14);
 
   // ==========================================
-  // 3. TABLA DE CONCEPTOS
+  // 3. TABLA DE CONCEPTOS DINÁMICA
   // ==========================================
   let startYTabla = startYReceptor + 14 + (lineasDirReceptor.length * 3.5) + 5;
-
-  const subtotalFormateado = subtotal.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
   autoTable(doc, {
     startY: startYTabla,
     head: [['Clave SAT', 'Cant.', 'Unidad', 'Descripción / Concepto', 'Precio Unitario', 'Importe']],
-    body: [['78101802', '1', 'E48', factura.ruta || 'Servicio de flete nacional', `$${subtotalFormateado}`, `$${subtotalFormateado}`]],
+    body: conceptosArray, // <-- Aquí insertamos el arreglo de conceptos generados arriba
     theme: 'grid', 
     headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold' },
     styles: { fontSize: 8, cellPadding: 3 },
@@ -180,13 +219,14 @@ export const generarFacturaPDF = async (factura, clienteData, perfilEmisor) => {
   // ==========================================
   // MATRIZ DINÁMICA DE TOTALES
   // ==========================================
+  const subtotalFormateado = subtotal.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2});
   const bodyTotales = [];
   bodyTotales.push(['Subtotal:', `$${subtotalFormateado}`]);
 
-  if (aplicaIva) {
+  if (iva > 0) {
       bodyTotales.push(['IVA Trasladado (16%):', `$${iva.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`]);
   }
-  if (aplicaRetencion) {
+  if (retencionIva > 0) {
       bodyTotales.push(['Retención IVA (4%):', `-$${retencionIva.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`]);
   }
 

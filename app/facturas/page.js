@@ -11,13 +11,11 @@ import TarjetaDato from '@/components/tarjetaDato';
 import { generarFacturaPDF } from '@/utils/PdfFactura'; 
 import { z } from 'zod';
 import * as XLSX from 'xlsx';
-
-// === SISTEMA DE ALERTAS ===
 import { useToast } from '@/components/toastprovider'; 
 
+// === ESCUDO DE VALIDACIÓN ZOD ===
 const facturaSchema = z.object({
   cliente: z.string().min(2, "El nombre del cliente es obligatorio."),
-  monto_base: z.number().positive("El monto base debe ser estrictamente mayor a $0."),
   metodo_pago: z.enum(["PUE", "PPD"], { errorMap: () => ({ message: "Método de pago inválido detectado." }) }),
   forma_pago: z.string().min(2, "La forma de pago es obligatoria."),
   fecha_viaje: z.string().min(10, "La fecha de emisión es obligatoria o tiene un formato incorrecto."),
@@ -50,13 +48,15 @@ function FacturasContenido() {
 
   const esAdmin = rolUsuario === 'administrador' || rolUsuario === 'admin';
 
-  const [formData, setFormData] = useState({ 
-    cliente_id: '', monto_base: '', folio_fiscal: '', 
-    aplica_iva: true, aplica_retencion: true, 
-    ruta: '', fecha_viaje: new Date().toISOString().split('T')[0],
-    fecha_vencimiento: '', forma_pago: '99', metodo_pago: 'PPD',
-    referencia: ''
-  });
+  // === ESTADO INICIAL MULTI-CONCEPTO CON IMPUESTOS INDIVIDUALES ===
+  const formInicial = { 
+    cliente_id: '', folio_fiscal: '', 
+    fecha_viaje: new Date().toISOString().split('T')[0],
+    fecha_vencimiento: '', forma_pago: '99', metodo_pago: 'PPD', referencia: '', folio_viaje_manual: '',
+    conceptos: [{ descripcion: 'Flete Nacional', monto: '', clave_sat: '78101802', aplica_iva: true, aplica_retencion: true }] 
+  };
+
+  const [formData, setFormData] = useState(formInicial);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -137,7 +137,23 @@ function FacturasContenido() {
   const pedirConfirmacion = (mensaje, accion) => setDialogoConfirmacion({ visible: true, mensaje, accion });
   const ejecutarConfirmacion = async () => { if (dialogoConfirmacion.accion) await dialogoConfirmacion.accion(); setDialogoConfirmacion({ visible: false, mensaje: '', accion: null }); };
 
-const descargarXML = async (facturapi_id, cliente_nombre, folio_interno) => {
+  // === FUNCIONES MULTI-CONCEPTO CON IMPUESTOS ===
+  const agregarConcepto = () => setFormData({ ...formData, conceptos: [...formData.conceptos, { descripcion: '', monto: '', clave_sat: '78101802', aplica_iva: true, aplica_retencion: false }] });
+  const actualizarConcepto = (index, campo, valor) => { const nuevos = [...formData.conceptos]; nuevos[index][campo] = valor; setFormData({ ...formData, conceptos: nuevos }); };
+  const eliminarConcepto = (index) => setFormData({ ...formData, conceptos: formData.conceptos.filter((_, i) => i !== index) });
+
+  const calcularSubtotalBase = () => formData.conceptos.reduce((acc, curr) => acc + (parseFloat(curr.monto) || 0), 0);
+
+  const calcularTotalEnTiempoReal = () => {
+    return formData.conceptos.reduce((acc, c) => {
+      let base = parseFloat(c.monto) || 0;
+      if (c.aplica_iva) base += (parseFloat(c.monto) || 0) * 0.16;
+      if (c.aplica_retencion) base -= (parseFloat(c.monto) || 0) * 0.04;
+      return acc + base;
+    }, 0);
+  };
+
+  const descargarXML = async (facturapi_id, cliente_nombre, folio_interno) => {
     if (!facturapi_id) return mostrarAlerta("Esta factura aún no está timbrada en el SAT.", "error");
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -148,9 +164,7 @@ const descargarXML = async (facturapi_id, cliente_nombre, folio_interno) => {
       const blob = await response.blob(); 
       const url = window.URL.createObjectURL(blob);
       
-      // Formateamos el folio para incluirlo en el nombre del archivo
       const folioStr = folio_interno ? `F-${String(folio_interno).padStart(4, '0')}` : 'F-SN';
-      
       const link = document.createElement('a'); 
       link.href = url; 
       link.download = `Factura_XML_${folioStr}_${cliente_nombre.replace(/\s+/g, '_')}.xml`;
@@ -166,30 +180,37 @@ const descargarXML = async (facturapi_id, cliente_nombre, folio_interno) => {
     const clienteData = clientes.find(c => c.nombre === factura.cliente);
     if (!clienteData) return mostrarAlerta("Error: No se encontró la información fiscal del cliente.", "error");
 
-    const aplicaIva = factura.aplica_iva !== false; 
-    const aplicaRetencion = factura.aplica_retencion !== false; 
-
-    let factorMultiplicador = 1.0;
-    if (aplicaIva) factorMultiplicador += 0.16;
-    if (aplicaRetencion) factorMultiplicador -= 0.04;
-
-    const subtotal = Number((Number(factura.monto_total) / factorMultiplicador).toFixed(2));
-
-    let impuestosArray = [];
-    if (aplicaIva) impuestosArray.push({ type: "IVA", rate: 0.16 });
-    if (aplicaRetencion) impuestosArray.push({ type: "IVA", rate: 0.04, withholding: true });
+    // Armado dinámico de partidas con impuestos individuales
+    const arregloItemsFacturapi = (factura.conceptos_detalle && factura.conceptos_detalle.length > 0) 
+      ? factura.conceptos_detalle.map(c => {
+          let impuestosItem = [];
+          // Aseguramos compatibilidad si no existía el booleano antes (fallback a true)
+          if (c.aplica_iva !== false) impuestosItem.push({ type: "IVA", rate: 0.16 });
+          if (c.aplica_retencion === true || factura.aplica_retencion === true) impuestosItem.push({ type: "IVA", rate: 0.04, withholding: true });
+          
+          return {
+            quantity: 1,
+            product: {
+              description: c.descripcion,
+              product_key: String(c.clave_sat).replace(/[^0-9]/g, '') || "78101802",
+              price: Number(c.monto),
+              taxes: impuestosItem
+            }
+          };
+        })
+      : [{ // Fallback de seguridad para facturas súper antiguas
+          quantity: 1,
+          product: {
+            description: factura.ruta || "Servicio de flete nacional",
+            product_key: "78101802",
+            price: Number(factura.monto_total),
+            taxes: [] // Si es viejo, asume que el monto total ya no se puede desglosar bien sin saber su factor original
+          }
+        }];
 
     const invoiceData = { 
       customer: { legal_name: clienteData.nombre, tax_id: clienteData.rfc, tax_system: clienteData.regimen_fiscal || "601", address: { zip: clienteData.codigo_postal } }, 
-      items: [{ 
-        quantity: 1, 
-        product: { 
-          description: factura.ruta || "Servicio de flete nacional", 
-          product_key: "78101802", 
-          price: subtotal, 
-          taxes: impuestosArray 
-        } 
-      }], 
+      items: arregloItemsFacturapi, 
       payment_form: factura.forma_pago || "99", payment_method: factura.metodo_pago || "PPD", use: clienteData.uso_cfdi || "G03" 
     };
 
@@ -211,28 +232,39 @@ const descargarXML = async (facturapi_id, cliente_nombre, folio_interno) => {
 
   const registrarFactura = async (e) => {
     e.preventDefault();
-    if (!formData.cliente_id || !formData.monto_base) return;
+    if (!formData.cliente_id) return mostrarAlerta("Selecciona un cliente.", "error");
+    
+    const subtotalValidado = calcularSubtotalBase();
+    if (subtotalValidado <= 0) return mostrarAlerta("El total de los conceptos debe ser mayor a $0.", "error");
+
     setLoading(true);
     try {
       const clienteSeleccionado = clientes.find(c => c.id === formData.cliente_id);
-      const datosCrudos = { cliente: clienteSeleccionado?.nombre || "", monto_base: parseFloat(formData.monto_base), metodo_pago: formData.metodo_pago, forma_pago: formData.forma_pago, fecha_viaje: formData.fecha_viaje, referencia: formData.referencia };
+      const datosCrudos = { cliente: clienteSeleccionado?.nombre || "", metodo_pago: formData.metodo_pago, forma_pago: formData.forma_pago, fecha_viaje: formData.fecha_viaje, referencia: formData.referencia };
       const validacion = facturaSchema.safeParse(datosCrudos);
 
       if (!validacion.success) { setLoading(false); return mostrarAlerta(validacion.error.issues[0]?.message || "🛑 Revisa los datos ingresados.", "error"); }
 
-      let base = validacion.data.monto_base;
-      let montoCalculado = base;
-      if (formData.aplica_iva) montoCalculado += (base * 0.16);
-      if (formData.aplica_retencion) montoCalculado -= (base * 0.04);
+      // Total acumulado individual
+      let montoCalculado = formData.conceptos.reduce((acc, c) => {
+        let base = parseFloat(c.monto) || 0;
+        if (c.aplica_iva) base += (parseFloat(c.monto) || 0) * 0.16;
+        if (c.aplica_retencion) base -= (parseFloat(c.monto) || 0) * 0.04;
+        return acc + base;
+      }, 0);
       montoCalculado = Number(montoCalculado.toFixed(2));
+
+      // Resumen para la vista y extracción de folio
+      const resumenRuta = formData.conceptos.map(c => c.descripcion).join(' + ');
+      let folioViajeLimpio = formData.folio_viaje_manual ? parseInt(String(formData.folio_viaje_manual).replace(/[^0-9]/g, ''), 10) : null;
+      if (isNaN(folioViajeLimpio)) folioViajeLimpio = null;
 
       const { error } = await supabase.from('facturas').insert([{ 
         cliente: validacion.data.cliente, 
         monto_total: montoCalculado, 
-        aplica_iva: formData.aplica_iva,
-        aplica_retencion: formData.aplica_retencion,
-        folio_fiscal: formData.folio_fiscal, 
-        ruta: formData.ruta, 
+        ruta: resumenRuta, 
+        conceptos_detalle: formData.conceptos,
+        folio_viaje: folioViajeLimpio,
         fecha_viaje: validacion.data.fecha_viaje, 
         fecha_vencimiento: formData.fecha_vencimiento, 
         forma_pago: validacion.data.forma_pago, 
@@ -243,17 +275,11 @@ const descargarXML = async (facturapi_id, cliente_nombre, folio_interno) => {
       }]);
       if (error) throw error;
       
-      setFormData({ cliente_id: '', monto_base: '', folio_fiscal: '', aplica_iva: true, aplica_retencion: true, ruta: 'Ingreso Extraordinario', fecha_viaje: new Date().toISOString().split('T')[0], fecha_vencimiento: '', forma_pago: '99', metodo_pago: 'PPD', referencia:'' });
-      setMostrarFormulario(false); mostrarAlerta("Ingreso registrado exitosamente.", "exito"); obtenerDatos(empresaId);
+      setFormData(formInicial);
+      setMostrarFormulario(false); 
+      mostrarAlerta("Ingreso registrado exitosamente.", "exito"); 
+      obtenerDatos(empresaId);
     } catch (error) { mostrarAlerta("Fallo al guardar: " + error.message, "error"); } finally { setLoading(false); }
-  };
-
-  const calcularTotalEnTiempoReal = () => {
-    const base = parseFloat(formData.monto_base) || 0;
-    let total = base;
-    if (formData.aplica_iva) total += base * 0.16;
-    if (formData.aplica_retencion) total -= base * 0.04;
-    return total;
   };
 
   const alternarEstatus = async (id, estatusActual) => {
@@ -314,7 +340,7 @@ const descargarXML = async (facturapi_id, cliente_nombre, folio_interno) => {
   };
 
   const exportarExcelFacturas = () => {
-    const datosParaExcel = historial.map(f => ({ Folio_Interno: f.folio_interno ? `F-${String(f.folio_interno).padStart(4, '0')}` : 'F-S/N', Folio_Viaje: f.viaje_id && f.folio_viaje ? `V-${String(f.folio_viaje).padStart(4, '0')}` : 'N/A', Fecha_Emision: f.fecha_viaje, Fecha_Vencimiento: f.fecha_vencimiento || 'S/V', Estatus_Pago: f.estatus_pago, Fecha_Pago_Real: f.fecha_pago || 'Pendiente', Cliente: f.cliente, Concepto: f.ruta || '', Referencia: f.referencia || '', Monto_Total: f.monto_total, Metodo_Pago: f.metodo_pago, Forma_Pago: f.forma_pago, UUID_SAT: f.folio_fiscal || 'Sin Timbrar' }));
+    const datosParaExcel = historial.map(f => ({ Folio_Interno: f.folio_interno ? `F-${String(f.folio_interno).padStart(4, '0')}` : 'F-S/N', Folio_Viaje: f.viaje_id || f.folio_viaje ? `V-${String(f.folio_viaje || 0).padStart(4, '0')}` : 'N/A', Fecha_Emision: f.fecha_viaje, Fecha_Vencimiento: f.fecha_vencimiento || 'S/V', Estatus_Pago: f.estatus_pago, Fecha_Pago_Real: f.fecha_pago || 'Pendiente', Cliente: f.cliente, Concepto: f.ruta || '', Referencia: f.referencia || '', Monto_Total: f.monto_total, Metodo_Pago: f.metodo_pago, Forma_Pago: f.forma_pago, UUID_SAT: f.folio_fiscal || 'Sin Timbrar' }));
     const ws = XLSX.utils.json_to_sheet(datosParaExcel); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Facturas"); XLSX.writeFile(wb, `Reporte_Facturas_FleetForce_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
@@ -379,7 +405,7 @@ const descargarXML = async (facturapi_id, cliente_nombre, folio_interno) => {
                   {historial.map((item) => {
                     const esCancelada = item.estatus_pago === 'Cancelada';
                     const esVencida = new Date(item.fecha_vencimiento + 'T23:59:59') < new Date() && item.estatus_pago !== 'Pagado' && !esCancelada;
-                    const vieneDeViaje = item.viaje_id !== null;
+                    const vieneDeViaje = item.viaje_id !== null || item.folio_viaje !== null;
                     const sinTimbrar = !item.folio_fiscal || item.folio_fiscal === '';
                     const clienteCompleto = clientes.find(c => c.nombre === item.cliente) || {};
 
@@ -458,7 +484,7 @@ const descargarXML = async (facturapi_id, cliente_nombre, folio_interno) => {
                                 {item.facturapi_id && ( <button onClick={() => descargarXML(item.facturapi_id, item.cliente, item.folio_interno)} title="Descargar XML" className="p-2 bg-purple-50 dark:bg-purple-600/10 text-purple-600 dark:text-purple-400 hover:bg-purple-600 hover:text-white rounded-lg transition-colors transition-colors"><FileCode size={16}/></button> )}
                               </>
                             )}
-                            <button onClick={() => procesarCancelacion(item, vieneDeViaje)} title="Borrar/Cancelar" className={`p-2 transition-colors rounded-lg ${vieneDeViaje ? 'text-slate-200 dark:text-slate-800 cursor-not-allowed' : 'text-slate-400 dark:text-slate-600 hover:text-red-600 dark:hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10'}`}>
+                            <button onClick={() => procesarCancelacion(item, item.viaje_id !== null)} title="Borrar/Cancelar" className={`p-2 transition-colors rounded-lg ${item.viaje_id !== null ? 'text-slate-200 dark:text-slate-800 cursor-not-allowed' : 'text-slate-400 dark:text-slate-600 hover:text-red-600 dark:hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10'}`}>
                               <Trash2 size={16} />
                             </button>
                           </div>
@@ -504,13 +530,14 @@ const descargarXML = async (facturapi_id, cliente_nombre, folio_interno) => {
           {mostrarFormulario && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
               <div className="absolute inset-0 bg-slate-900/50 dark:bg-slate-950/80 backdrop-blur-sm transition-colors" onClick={() => setMostrarFormulario(false)} />
-              <div className="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 w-full max-w-3xl rounded-[3rem] p-6 sm:p-10 shadow-2xl animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh] transition-colors">
+              <div className="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 w-full max-w-4xl rounded-[3rem] p-6 sm:p-10 shadow-2xl animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh] transition-colors">
                 <button onClick={() => setMostrarFormulario(false)} className="absolute top-6 right-6 sm:top-8 sm:right-8 text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-white transition-colors"><X size={24} /></button>
                 <h2 className="text-2xl font-black text-slate-900 dark:text-white italic uppercase mb-8 shrink-0 transition-colors">Registrar <span className="text-emerald-600 dark:text-emerald-500">Factura</span></h2>
                 
                 <form onSubmit={registrarFactura} className="space-y-6 overflow-y-auto pr-2 custom-scrollbar">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="md:col-span-2">
+                    
+                    <div className="md:col-span-1">
                       <div className="flex justify-between items-center mb-2"><label className="text-[12px] font-black text-slate-500 uppercase tracking-widest ml-1 transition-colors">Cliente Receptor</label></div>
                       <select required className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl text-sm text-slate-900 dark:text-white outline-none focus:border-emerald-500 transition-colors" value={formData.cliente_id} onChange={(e) => setFormData({...formData, cliente_id: e.target.value})}>
                         <option value="">-- Seleccionar de Catálogo SAT --</option>
@@ -518,37 +545,63 @@ const descargarXML = async (facturapi_id, cliente_nombre, folio_interno) => {
                       </select>
                     </div>
 
-                    <div>
-                      <label className="text-[12px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1 transition-colors transition-colors">Monto Base (Subtotal $)</label>
-                      <input required type="number" className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl text-sm text-slate-900 dark:text-white font-mono outline-none focus:border-emerald-500 transition-colors transition-colors transition-colors" value={formData.monto_base} onChange={e => setFormData({...formData, monto_base: e.target.value})}  />
-                      
-                      <div className="flex gap-4 px-2 mt-3 transition-colors">
-                        <label className="flex items-center gap-2 cursor-pointer group">
-                          <input type="checkbox" className="w-4 h-4 accent-emerald-600 dark:accent-emerald-500 rounded bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 cursor-pointer" checked={formData.aplica_iva} onChange={e => setFormData({...formData, aplica_iva: e.target.checked})} />
-                          <span className="text-[9px] font-black uppercase text-slate-500 dark:text-slate-400 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors tracking-widest">+ IVA (16%)</span>
-                        </label>
-                        <label className="flex items-center gap-2 cursor-pointer group">
-                          <input type="checkbox" className="w-4 h-4 accent-emerald-600 dark:accent-emerald-500 rounded bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 cursor-pointer" checked={formData.aplica_retencion} onChange={e => setFormData({...formData, aplica_retencion: e.target.checked})} />
-                          <span className="text-[9px] font-black uppercase text-slate-500 dark:text-slate-400 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors tracking-widest">- Ret. (4%)</span>
-                        </label>
+                    <div className="md:col-span-1">
+                      <label className="text-[12px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1 transition-colors">Folio de Viaje (Opcional)</label>
+                      <input type="text" placeholder="Ejemplo: V-0015" className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl text-sm text-slate-900 dark:text-white outline-none focus:border-emerald-500 transition-colors" value={formData.folio_viaje_manual} onChange={e => setFormData({...formData, folio_viaje_manual: e.target.value})} />
+                    </div>
+
+                    {/* SECCIÓN DE CONCEPTOS DINÁMICOS */}
+                    <div className="md:col-span-2 p-4 sm:p-5 border border-emerald-200 dark:border-emerald-500/20 bg-emerald-50 dark:bg-emerald-900/10 rounded-2xl transition-colors space-y-4">
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-2">
+                        <label className="text-[12px] font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-widest ml-1 transition-colors">Conceptos a Facturar</label>
+                        <button type="button" onClick={agregarConcepto} className="w-full sm:w-auto text-[9px] font-black tracking-widest bg-emerald-600 text-white px-3 py-2 sm:py-1.5 rounded-lg uppercase hover:bg-emerald-500 transition-colors shadow-sm">+ Añadir Concepto</button>
                       </div>
-                      
-                      {formData.monto_base > 0 && (
-                        <p className="text-[10px] font-black tracking-widest uppercase text-emerald-600 dark:text-emerald-500 mt-2 ml-1 transition-colors transition-colors">
-                          Neto a Cobrar: ${calcularTotalEnTiempoReal().toLocaleString('es-MX', {minimumFractionDigits: 2})}
+
+                      {formData.conceptos.map((item, index) => (
+                        <div key={index} className="flex flex-col gap-3 bg-white dark:bg-slate-950 p-3 rounded-xl border border-slate-200 dark:border-slate-800 transition-colors">
+                          <div className="flex flex-col sm:flex-row gap-3 items-center">
+                            <input required type="text" placeholder="Ej: Flete, Maniobras..." className="flex-1 w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-2.5 rounded-lg text-xs text-slate-900 dark:text-white outline-none focus:border-emerald-500 transition-colors" value={item.descripcion} onChange={e => actualizarConcepto(index, 'descripcion', e.target.value)} />
+                            
+                            <div className="flex gap-2 w-full sm:w-auto">
+                              <select required className="w-32 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-2.5 rounded-lg text-[11px] text-slate-900 dark:text-white outline-none focus:border-emerald-500 transition-colors" value={item.clave_sat} onChange={e => actualizarConcepto(index, 'clave_sat', e.target.value)}>
+                                <option value="78101802">Flete (78101802)</option>
+                                <option value="78121603">Maniobras/Carga (78121603)</option>
+                                <option value="78101800">Transporte Gen. (78101800)</option>
+                              </select>
+                              
+                              <input required type="number" step="0.01" placeholder="Costo $" className="w-24 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-2.5 rounded-lg text-xs text-slate-900 dark:text-white font-mono text-center outline-none focus:border-emerald-500 transition-colors" value={item.monto} onChange={e => actualizarConcepto(index, 'monto', e.target.value)} />
+                              
+                              <button type="button" onClick={() => eliminarConcepto(index)} disabled={formData.conceptos.length === 1} className="text-slate-400 hover:text-red-500 disabled:opacity-30 p-2 transition-colors"><Trash2 size={16}/></button>
+                            </div>
+                          </div>
+                          
+                          {/* Impuestos individuales */}
+                          <div className="flex gap-4 px-1 pt-2 sm:pt-0 sm:justify-end border-t border-slate-100 dark:border-slate-800 sm:border-0 mt-1 sm:mt-0">
+                            <label className="flex items-center gap-2 cursor-pointer group">
+                              <input type="checkbox" className="w-3.5 h-3.5 accent-emerald-600 rounded bg-slate-100 dark:bg-slate-900 border-slate-200 dark:border-slate-700 cursor-pointer" checked={item.aplica_iva} onChange={e => actualizarConcepto(index, 'aplica_iva', e.target.checked)} />
+                              <span className="text-[9px] font-black uppercase text-slate-500 dark:text-slate-400 tracking-widest group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">+ IVA (16%)</span>
+                            </label>
+                            <label className="flex items-center gap-2 cursor-pointer group">
+                              <input type="checkbox" className="w-3.5 h-3.5 accent-emerald-600 rounded bg-slate-100 dark:bg-slate-900 border-slate-200 dark:border-slate-700 cursor-pointer" checked={item.aplica_retencion} onChange={e => actualizarConcepto(index, 'aplica_retencion', e.target.checked)} />
+                              <span className="text-[9px] font-black uppercase text-slate-500 dark:text-slate-400 tracking-widest group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">- Ret. (4%)</span>
+                            </label>
+                          </div>
+                        </div>
+                      ))}
+
+                      {/* Total Acumulado */}
+                      <div className="flex justify-end items-center pt-3 border-t border-emerald-200 dark:border-emerald-800/50 mt-2">
+                        <p className="text-[12px] font-black tracking-widest uppercase text-emerald-700 dark:text-emerald-400 transition-colors bg-white dark:bg-slate-900 px-4 py-2 rounded-lg border border-emerald-100 dark:border-emerald-800 shadow-sm">
+                          Neto Total a Cobrar: <span className="font-mono text-sm ml-1">${calcularTotalEnTiempoReal().toLocaleString('es-MX', {minimumFractionDigits: 2})}</span>
                         </p>
-                      )}
+                      </div>
                     </div>
 
-                    <div>
-                      <label className="text-[12px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1 transition-colors">Concepto</label>
-                      <input className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl text-sm text-slate-900 dark:text-white outline-none focus:border-emerald-500 transition-colors" value={formData.ruta} onChange={e => setFormData({...formData, ruta: e.target.value})} />
+                    <div className="md:col-span-2">
+                       <label className="text-[12px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1 transition-colors">Referencia del Cliente (Opcional)</label>
+                       <input className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl text-sm text-slate-900 dark:text-white outline-none focus:border-emerald-500 transition-colors transition-colors" value={formData.referencia} onChange={e => setFormData({...formData, referencia: e.target.value})} />
                     </div>
-                  </div>
 
-                  <div>
-                     <label className="text-[12px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1 transition-colors">Referencia del Cliente (Opcional)</label>
-                     <input className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl text-sm text-slate-900 dark:text-white outline-none focus:border-emerald-500 transition-colors transition-colors" value={formData.referencia} onChange={e => setFormData({...formData, referencia: e.target.value})} />
                   </div>
 
                   <div className="p-5 sm:p-6 bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 rounded-2xl transition-colors">
@@ -556,11 +609,11 @@ const descargarXML = async (facturapi_id, cliente_nombre, folio_interno) => {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
                         <label className="text-[12px] font-black text-slate-500 uppercase mb-2 block ml-1 transition-colors">Método de Pago</label>
-                        <select className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-xl text-xs text-slate-900 dark:text-white transition-colors" value={formData.metodo_pago} onChange={e => setFormData({...formData, metodo_pago: e.target.value})}><option value="PPD">PPD - Pago en Parcialidades</option><option value="PUE">PUE - Pago en una Exhibición</option></select>
+                        <select className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-xl text-xs text-slate-900 dark:text-white outline-none focus:border-emerald-500 transition-colors" value={formData.metodo_pago} onChange={e => setFormData({...formData, metodo_pago: e.target.value})}><option value="PPD">PPD - Pago en Parcialidades</option><option value="PUE">PUE - Pago en una Exhibición</option></select>
                       </div>
                       <div>
                         <label className="text-[12px] font-black text-slate-500 uppercase mb-2 block ml-1 transition-colors transition-colors">Forma de Pago</label>
-                        <select className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-xl text-xs text-slate-900 dark:text-white transition-colors transition-colors" value={formData.forma_pago} onChange={e => setFormData({...formData, forma_pago: e.target.value})} disabled={formData.metodo_pago === 'PPD'}><option value="99">99 - Por Definir</option><option value="03">03 - Transferencia</option><option value="01">01 - Efectivo</option><option value="02">02 - Cheque</option></select>
+                        <select className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-xl text-xs text-slate-900 dark:text-white outline-none focus:border-emerald-500 transition-colors transition-colors" value={formData.forma_pago} onChange={e => setFormData({...formData, forma_pago: e.target.value})} disabled={formData.metodo_pago === 'PPD'}><option value="99">99 - Por Definir</option><option value="03">03 - Transferencia</option><option value="01">01 - Efectivo</option><option value="02">02 - Cheque</option></select>
                       </div>
                     </div>
                   </div>
@@ -568,16 +621,16 @@ const descargarXML = async (facturapi_id, cliente_nombre, folio_interno) => {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 transition-colors transition-colors">
                     <div>
                       <label className="text-[12px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1 transition-colors transition-colors">Fecha de Emisión</label>
-                      <input type="date" required className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl text-sm text-slate-900 dark:text-white transition-colors cursor-pointer" value={formData.fecha_viaje} onChange={e => setFormData({...formData, fecha_viaje: e.target.value})} />
+                      <input type="date" required className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl text-sm text-slate-900 dark:text-white outline-none focus:border-emerald-500 transition-colors cursor-pointer" value={formData.fecha_viaje} onChange={e => setFormData({...formData, fecha_viaje: e.target.value})} />
                     </div>
                     <div>
                       <label className="text-[12px] font-black text-orange-600 dark:text-orange-500 uppercase tracking-widest mb-2 block ml-1 transition-colors transition-colors transition-colors">Vencimiento Cobro</label>
-                      <input type="date" readOnly className="w-full bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl text-sm text-slate-500 dark:text-slate-500 outline-none transition-colors" value={formData.fecha_vencimiento} />
+                      <input type="date" readOnly className="w-full bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl text-sm text-slate-500 dark:text-slate-500 outline-none transition-colors cursor-not-allowed" value={formData.fecha_vencimiento} />
                     </div>
                   </div>
 
                   <button type="submit" disabled={loading || clientes.length === 0} className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-100 dark:disabled:bg-slate-800 disabled:text-slate-400 dark:disabled:text-slate-600 text-white p-5 rounded-2xl font-black uppercase text-[11px] tracking-widest shadow-xl transition-all mt-4 shadow-emerald-900/10">
-                    {loading ? "Generando..." : "Registrar Factura"}
+                    {loading ? "Procesando..." : "Registrar Factura"}
                   </button>
                 </form>
               </div>
@@ -591,7 +644,7 @@ const descargarXML = async (facturapi_id, cliente_nombre, folio_interno) => {
 
 export default function FacturasPageWrapper() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center transition-colors"><p className="text-emerald-600 dark:text-emerald-500 font-black animate-pulse">Cargando Módulo Financiero...</p></div>}>
+    <Suspense fallback={<div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center transition-colors"><p className="text-emerald-600 dark:text-emerald-500 font-black animate-pulse uppercase tracking-widest">Cargando Módulo Financiero...</p></div>}>
       <FacturasContenido />
     </Suspense>
   );
