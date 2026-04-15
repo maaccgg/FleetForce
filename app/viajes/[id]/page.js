@@ -490,7 +490,7 @@ const getBadgeColor = (estatus) => {
                       {subiendoPod ? <Clock size={20} className="animate-spin text-blue-500" /> : <UploadCloud size={20} />}
                     </div>
                     <p className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                      {subiendoPod ? 'Subiendo archivo...' : 'Cargar Boleta Firmada'}
+                      {subiendoPod ? 'Subiendo archivo...' : 'Cargar Prueba de Entrega (POD)'}
                     </p>
                     <p className="text-[10px] text-slate-500 mt-1">PDF, JPG o PNG (Max. 5MB)</p>
                     
