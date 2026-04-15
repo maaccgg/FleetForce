@@ -46,7 +46,7 @@ export default function ViajesPage() {
   const [loading, setLoading] = useState(false);
   const [viajes, setViajes] = useState([]);
   const [mostrarModal, setMostrarModal] = useState(false);
-  const [editandoId, setEditandoId] = useState(null); 
+
   
   const [dialogoConfirmacion, setDialogoConfirmacion] = useState({ visible: false, mensaje: '', accion: null });
 
@@ -137,25 +137,7 @@ export default function ViajesPage() {
   const eliminarFilaMercancia = (index) => { const nuevasMercancias = formData.mercancias_detalle.filter((_, i) => i !== index); setFormData({ ...formData, mercancias_detalle: nuevasMercancias }); };
   const calcularPesoTotal = () => { return formData.mercancias_detalle.reduce((acc, curr) => acc + (Number(curr.peso_kg) || 0), 0); };
 
-  const cerrarModal = () => { setMostrarModal(false); setEditandoId(null); setFormData(formInicial); };
-
-  const editarViaje = (viaje) => {
-    setEditandoId(viaje.id);
-    let detalle = viaje.mercancias_detalle || [];
-    if (detalle.length === 0 && viaje.mercancia_id) detalle = [{ mercancia_id: viaje.mercancia_id, cantidad: viaje.cantidad_mercancia || 1, peso_kg: viaje.peso_total_kg || '', valor: '', moneda: 'MXN' }];
-    if (detalle.length === 0) detalle = [{ mercancia_id: '', cantidad: 1, peso_kg: '', valor: '', moneda: 'MXN' }];
-
-    setFormData({
-     unidad_id: viaje.unidad_id || '', remolque_id: viaje.remolque_id || '', operador_id: viaje.operador_id || '', origen_id: viaje.origen_id || '', destino_id: viaje.destino_id || '',
-     cliente_id: viaje.cliente_id || '', monto_flete: viaje.monto_flete || '', 
-     aplica_iva: viaje.aplica_iva !== false, 
-     aplica_retencion: viaje.aplica_retencion !== false, 
-     distancia_km: viaje.distancia_km || '', referencia: viaje.referencia || '',
-     fecha_salida: viaje.fecha_salida || new Date().toISOString().split('T')[0], mercancias_detalle: detalle,
-     tag_casetas: viaje.tag_casetas || '', tarjeta_gasolina: viaje.tarjeta_gasolina || ''
-      });
-    setMostrarModal(true);
-  };
+const cerrarModal = () => { setMostrarModal(false); setFormData(formInicial); };
 
   const pedirConfirmacion = (mensaje, accion) => { setDialogoConfirmacion({ visible: true, mensaje, accion }); };
   const ejecutarConfirmacion = async () => { if (dialogoConfirmacion.accion) { await dialogoConfirmacion.accion(); } setDialogoConfirmacion({ visible: false, mensaje: '', accion: null }); };
@@ -319,7 +301,7 @@ export default function ViajesPage() {
     } catch (err) { mostrarAlerta(err.message, "error"); } finally { setLoading(false); }
   }; 
 
-  const registrarViaje = async (e) => {
+const registrarViaje = async (e) => {
     e.preventDefault();
     if (formData.mercancias_detalle.length === 0) {
       mostrarAlerta("Debes agregar al menos una mercancía al viaje.", "error");
@@ -357,47 +339,34 @@ export default function ViajesPage() {
       if (payloadComun.aplica_retencion) montoCalculado -= (fleteBase * 0.04);
       montoCalculado = Number(montoCalculado.toFixed(2)); 
 
-      if (editandoId) {
-        await supabase.from('viajes').update(payloadComun).eq('id', editandoId);
-        if (formData.monto_flete > 0 && formData.cliente_id) {
-          const fechaVenc = new Date(formData.fecha_salida); fechaVenc.setDate(fechaVenc.getDate() + (clienteObj?.dias_credito || 0));
-          const { data: facExistente } = await supabase.from('facturas').select('id').eq('viaje_id', editandoId).single();
-          if (facExistente) {
-            await supabase.from('facturas').update({ cliente: clienteObj.nombre, monto_total: montoCalculado, fecha_viaje: formData.fecha_salida, fecha_vencimiento: fechaVenc.toISOString().split('T')[0], ruta: `Flete CCP${formData.referencia ? ' - Ref: '+formData.referencia : ''}` }).eq('id', facExistente.id);
-          } else {
-            const { data: viajeEditado } = await supabase.from('viajes').select('folio_interno').eq('id', editandoId).single();
-            await supabase.from('facturas').insert([{ viaje_id: editandoId, folio_viaje: viajeEditado?.folio_interno, cliente: clienteObj.nombre, monto_total: montoCalculado, fecha_viaje: formData.fecha_salida, fecha_vencimiento: fechaVenc.toISOString().split('T')[0], estatus_pago: 'Pendiente', ruta: `Flete CCP${formData.referencia ? ' - Ref: '+formData.referencia : ''}` }]);
-          }
-        }
-        mostrarAlerta("Cambios guardados correctamente.", "exito");
-      } else {
-        const nuevoIdCCP = generarIdCCP();
-        const { data: nuevoViaje, error: errorViaje } = await supabase.from('viajes').insert([{ ...payloadComun, id_ccp: nuevoIdCCP, estatus: 'Borrador' }]).select().single();
-        if (errorViaje) throw errorViaje;
+      // Pura creación (eliminamos el if editandoId)
+      const nuevoIdCCP = generarIdCCP();
+      const { data: nuevoViaje, error: errorViaje } = await supabase.from('viajes').insert([{ ...payloadComun, id_ccp: nuevoIdCCP, estatus: 'Borrador', empresa_id: empresaId }]).select().single();
+      if (errorViaje) throw errorViaje;
 
-        if (payloadComun.unidad_id && payloadComun.distancia_km > 0) {
-          const { data: unidadData } = await supabase.from('unidades').select('kilometraje_actual').eq('id', payloadComun.unidad_id).single();
-          await supabase.from('unidades').update({ kilometraje_actual: Number(unidadData?.kilometraje_actual || 0) + Number(payloadComun.distancia_km) }).eq('id', payloadComun.unidad_id);
-        }
-
-        if (formData.monto_flete > 0 && formData.cliente_id) {
-          const fechaVenc = new Date(formData.fecha_salida); fechaVenc.setDate(fechaVenc.getDate() + (clienteObj?.dias_credito || 0));
-          await supabase.from('facturas').insert([{ viaje_id: nuevoViaje.id, folio_viaje: nuevoViaje.folio_interno, cliente: clienteObj.nombre, monto_total: montoCalculado, fecha_viaje: formData.fecha_salida, fecha_vencimiento: fechaVenc.toISOString().split('T')[0], estatus_pago: 'Pendiente', ruta: `Flete CCP${formData.referencia ? ' - Ref: '+formData.referencia : ''}` }]);
-        }
-
-        if (formData.gasto_monto && parseFloat(formData.gasto_monto) > 0) {
-          await supabase.from('mantenimientos').insert([{ unidad_id: formData.unidad_id, viaje_id: nuevoViaje.id, descripcion: formData.gasto_descripcion || `Gastos Operativos - Viaje V-${String(nuevoViaje.folio_interno).padStart(4, '0')}`, costo: parseFloat(formData.gasto_monto), tipo: 'Otros', fecha: formData.fecha_salida }]);
-        }
-        mostrarAlerta("Viaje programado exitosamente.", "exito");
+      if (payloadComun.unidad_id && payloadComun.distancia_km > 0) {
+        const { data: unidadData } = await supabase.from('unidades').select('kilometraje_actual').eq('id', payloadComun.unidad_id).single();
+        await supabase.from('unidades').update({ kilometraje_actual: Number(unidadData?.kilometraje_actual || 0) + Number(payloadComun.distancia_km) }).eq('id', payloadComun.unidad_id);
       }
+
+      if (formData.monto_flete > 0 && formData.cliente_id) {
+        const fechaVenc = new Date(formData.fecha_salida); fechaVenc.setDate(fechaVenc.getDate() + (clienteObj?.dias_credito || 0));
+        await supabase.from('facturas').insert([{ viaje_id: nuevoViaje.id, folio_viaje: nuevoViaje.folio_interno, empresa_id: empresaId, cliente: clienteObj.nombre, monto_total: montoCalculado, fecha_viaje: formData.fecha_salida, fecha_vencimiento: fechaVenc.toISOString().split('T')[0], estatus_pago: 'Pendiente', ruta: `Flete CCP${formData.referencia ? ' - Ref: '+formData.referencia : ''}` }]);
+      }
+
+      if (formData.gasto_monto && parseFloat(formData.gasto_monto) > 0) {
+        await supabase.from('mantenimientos').insert([{ unidad_id: formData.unidad_id, empresa_id: empresaId, viaje_id: nuevoViaje.id, descripcion: formData.gasto_descripcion || `Gastos Operativos - Viaje V-${String(nuevoViaje.folio_interno).padStart(4, '0')}`, costo: parseFloat(formData.gasto_monto), tipo: 'Otros', fecha: formData.fecha_salida }]);
+      }
+      mostrarAlerta("Viaje programado exitosamente.", "exito");
 
       cerrarModal(); obtenerViajes(empresaId);
     } catch (err) { mostrarAlerta("Error: " + err.message, "error"); } finally { setLoading(false); }
   };
 
-  const getBadgeColor = (estatus) => {
+const getBadgeColor = (estatus) => {
     switch(estatus) { 
-      case 'Emitido (Timbrado)': return 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/20'; 
+      case 'Cerrado': return 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/20'; 
+      case 'Emitido (Timbrado)': return 'bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-500/20';
       case 'Cancelado': return 'bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 border-red-200 dark:border-red-500/20'; 
       default: return 'bg-yellow-50 dark:bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-200 dark:border-yellow-500/20'; 
     }
@@ -415,12 +384,15 @@ export default function ViajesPage() {
 
   const viajesDelPeriodo = viajes.filter(v => filtrarPorPeriodo(v.fecha_salida));
 
-  const getFiltrosArray = () => {
-    return [
-      { id: 'Todos', label: 'Todos', count: viajesDelPeriodo.length }, { id: 'Borrador', label: 'Borradores', count: viajesDelPeriodo.filter(v => v.estatus === 'Borrador').length },
-      { id: 'Emitido (Timbrado)', label: 'Timbrados', count: viajesDelPeriodo.filter(v => v.estatus === 'Emitido (Timbrado)').length }, { id: 'Cancelado', label: 'Cancelados', count: viajesDelPeriodo.filter(v => v.estatus === 'Cancelado').length },
-    ];
-  };
+const getFiltrosArray = () => {
+  return [
+    { id: 'Todos', label: 'Todos', count: viajesDelPeriodo.length }, 
+    { id: 'Borrador', label: 'Borradores', count: viajesDelPeriodo.filter(v => v.estatus === 'Borrador').length },
+    { id: 'Emitido (Timbrado)', label: 'Timbrados', count: viajesDelPeriodo.filter(v => v.estatus === 'Emitido (Timbrado)').length }, 
+    { id: 'Cerrado', label: 'Cerrados', count: viajesDelPeriodo.filter(v => v.estatus === 'Cerrado').length },
+    { id: 'Cancelado', label: 'Cancelados', count: viajesDelPeriodo.filter(v => v.estatus === 'Cancelado').length },
+  ];
+};
 
   const viajesFiltrados = viajesDelPeriodo.filter(v => {
     return (filtroEstatus === 'Todos' || v.estatus === filtroEstatus) && (filtroOrigen === '' || v.origen_id === filtroOrigen) && (filtroDestino === '' || v.destino_id === filtroDestino);
@@ -502,26 +474,33 @@ export default function ViajesPage() {
             <div className="overflow-x-auto custom-scrollbar pb-2">
               <table className="w-full text-left border-collapse min-w-[1200px]">
                 <thead>
-                  <tr className="bg-slate-50 dark:bg-slate-950/50 border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 text-[11px] font-black uppercase tracking-widest whitespace-nowrap transition-colors">
-                    <th className="p-5 pl-8 w-32">Folio & Estatus</th><th className="p-5 w-48">Cliente / Referencia</th><th className="p-5 min-w-[220px]">Ruta Operativa</th><th className="p-5 min-w-[200px]">Asignación</th><th className="p-5 w-32">Detalle Carga</th><th className="p-5 pr-8 w-40 text-center">Acciones</th>
-                  </tr>
+                <tr className="bg-slate-50 dark:bg-slate-950/50 border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 text-[11px] font-black uppercase tracking-widest whitespace-nowrap transition-colors">
+                      <th className="p-5 pl-8 w-24">Folio</th>
+                      <th className="p-5 w-48">Cliente / Referencia</th>
+                      <th className="p-5 min-w-[220px]">Ruta Operativa</th>
+                      <th className="p-5 min-w-[200px]">Asignación</th>
+                      <th className="p-5 w-32 text-center">Estatus</th>
+                      <th className="p-5 pr-8 w-40 text-center">Acciones</th>
+                    </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50 transition-colors">
                   {viajesFiltrados.map((v) => (
                     <tr key={v.id} className={`hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors group ${v.estatus === 'Cancelado' ? 'opacity-50 grayscale' : ''}`}>
-                      <td className="p-4 pl-8 whitespace-nowrap align-middle">
-                        <div className="flex flex-col items-start gap-1">
-                          <span className="text-[14px] text-slate-900 dark:text-white font-mono font-medium transition-colors">V-{String(v.folio_interno).padStart(4, '0')}</span>
-                          <span className={`inline-flex px-2 py-0.5 rounded border uppercase tracking-widest text-[9px] items-center gap-1 ${getBadgeColor(v.estatus)}`}>{v.estatus}</span>
-                          <span className="text-[11px] text-slate-500 mt-0.5 font-medium">{v.fecha_salida?.slice(0, 10)}</span>
-                        </div>
-                      </td>
-                      <td className="p-4 whitespace-nowrap align-middle">
-                        <div className="flex flex-col gap-1.5 items-start">
-                          <span className="text-slate-900 dark:text-white text-sm font-semibold truncate max-w-[200px] transition-colors" title={v.clientes?.nombre}>{v.clientes?.nombre || 'Sin Cliente'}</span>
-                          {v.referencia ? (<span className="text-blue-600 dark:text-blue-400 text-[10px] font-mono font-black uppercase tracking-widest px-2 py-0.5 bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 rounded transition-colors">PO: {v.referencia}</span>) : (v.clientes?.rfc && <span className="text-slate-500 text-[10px] font-mono tracking-widest">RFC: {v.clientes.rfc}</span>)}
-                        </div>
-                      </td>
+<td className="p-4 pl-8 whitespace-nowrap align-middle">
+    <div className="flex flex-col items-start gap-1">
+      <span className="text-[14px] text-slate-900 dark:text-white font-mono font-medium transition-colors">V-{String(v.folio_interno).padStart(4, '0')}</span>
+      <span className="text-[11px] text-slate-500 font-medium">{v.fecha_salida?.slice(0, 10)}</span>
+    </div>
+  </td>
+
+ <td className="p-4 whitespace-nowrap align-middle">
+    <div className="flex flex-col gap-1.5 items-start">
+      <span className="text-slate-900 dark:text-white text-sm font-semibold truncate max-w-[200px] transition-colors" title={v.clientes?.nombre}>{v.clientes?.nombre || 'Sin Cliente'}</span>
+      {v.referencia ? (
+        <span className="text-slate-500 dark:text-slate-400 text-[10px] font-mono font-bold uppercase tracking-widest">PO: {v.referencia}</span>
+      ) : (v.clientes?.rfc && <span className="text-slate-400 dark:text-slate-500 text-[10px] font-mono tracking-widest">RFC: {v.clientes.rfc}</span>)}
+    </div>
+  </td>
                       <td className="p-4 whitespace-nowrap align-middle">
                         <div className="flex flex-col gap-2">
                           <div className="flex items-center gap-2 text-slate-700 dark:text-slate-200 text-xs transition-colors">
@@ -532,38 +511,60 @@ export default function ViajesPage() {
                           </div>
                         </div>
                       </td>
+
                       <td className="p-4 whitespace-nowrap align-middle">
                         <div className="flex flex-col gap-1 items-start">
                           <span className="text-slate-900 dark:text-white text-xs font-semibold uppercase truncate max-w-[200px] transition-colors" title={v.operadores?.nombre_completo}>{v.operadores?.nombre_completo || 'Sin Operador'}</span>
                           <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-mono text-[10px] transition-colors"><Truck size={10} className="text-blue-500 dark:text-blue-400"/> {v.unidades?.numero_economico || 'N/A'} {v.remolques ? `+ ${v.remolques.placas}` : ''}</span>
                         </div>
                       </td>
-                      <td className="p-4 whitespace-nowrap align-middle"><div className="flex flex-col items-start gap-1"><span className="text-[13px] text-slate-900 dark:text-white font-mono font-medium transition-colors">{v.peso_total_kg} KG</span></div></td>
+
+<td className="p-4 whitespace-nowrap align-middle text-center">
+    <span className={`inline-flex px-3 py-1.5 rounded-lg uppercase tracking-widest text-[9px] font-black items-center justify-center gap-1 min-w-[110px] shadow-sm ${getBadgeColor(v.estatus)}`}>
+      {v.estatus}
+    </span>
+  </td>
+
                       <td className="p-4 pr-8 whitespace-nowrap text-center align-middle">
-                        <div className="flex items-center justify-end gap-1.5 opacity-30 group-hover:opacity-100 transition-opacity">
-                          {v.estatus === 'Borrador' && (
-                            <>
-                              <button onClick={() => eliminarViaje(v.id)} title="Eliminar Viaje" className="p-2 text-slate-500 hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-500 rounded-lg transition-colors"><Trash2 size={16}/></button>
-                              <button onClick={() => editarViaje(v)} title="Editar Viaje" className="p-2 text-slate-400 hover:bg-orange-50 dark:hover:bg-orange-500/10 hover:text-orange-500 dark:hover:text-orange-400 rounded-lg transition-colors mr-2"><Edit2 size={16}/></button> 
-                             {puedeVerAdmin && (<button onClick={() => generarPDFCartaPorte(v, perfilEmisor)} title="Previsualizar PDF" className="p-2 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white rounded-lg transition-colors mr-2"><FileText size={16}/></button>  )}
-                              {puedeVerAdmin && (<button onClick={() => timbrarCartaPorte(v)} disabled={loading} className="px-3 py-1.5 bg-blue-50 dark:bg-blue-600/10 text-blue-600 dark:text-blue-500 hover:bg-blue-100 dark:hover:bg-blue-600 hover:text-blue-700 dark:hover:text-white border border-blue-200 dark:border-blue-500/20 rounded-lg uppercase tracking-widest text-[10px] flex items-center gap-1.5 transition-colors">{loading ? <Loader2 size={14} className="animate-spin"/> : <ShieldCheck size={14}/>} Timbrar</button>  )}
-                            </>
-                          )}
-                          {v.estatus === 'Emitido (Timbrado)' && (
-                            <>
-                              <button onClick={() => cancelarViaje(v)} disabled={loading} title="Cancelar Carta Porte" className="p-2 text-slate-500 hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-500 rounded-lg transition-colors mr-2"><XCircle size={16}/></button>
-                              <button onClick={() => router.push(`/facturas?viaje_id=${v.id}`)} title="Ver Factura" className="p-2 bg-emerald-50 dark:bg-emerald-600/10 text-emerald-600 dark:text-emerald-500 hover:bg-emerald-100 dark:hover:bg-emerald-600 hover:text-emerald-700 dark:hover:text-white rounded-lg transition-colors"><Receipt size={16}/></button>
-                              <button onClick={() => generarPDFCartaPorte(v, perfilEmisor)} title="Descargar PDF" className="p-2 bg-blue-50 dark:bg-blue-600/10 text-blue-600 dark:text-blue-500 hover:bg-blue-100 dark:hover:bg-blue-600 hover:text-blue-700 dark:hover:text-white rounded-lg transition-colors"><FileText size={16}/></button>
-                            </>
-                          )}
-                          {v.estatus === 'Cancelado' && (
-                            <>
-                              <button onClick={() => eliminarViaje(v.id)} title="Eliminar Definitivamente" className="p-2 text-slate-500 hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-500 rounded-lg transition-colors mr-2"><Trash2 size={16}/></button>
-                              <button onClick={() => generarPDFCartaPorte(v, perfilEmisor)} title="Descargar PDF" className="p-2 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white rounded-lg transition-colors"><FileText size={16}/></button>
-                            </>
-                          )}
-                        </div>
-                      </td>
+    <div className="flex items-center justify-end gap-1.5 opacity-30 group-hover:opacity-100 transition-opacity">
+      
+      {v.estatus === 'Borrador' && (
+        <>
+          <button onClick={() => eliminarViaje(v.id)} title="Eliminar Viaje" className="p-2 text-slate-500 hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-500 rounded-lg transition-colors mr-2"><Trash2 size={16}/></button>
+          <button onClick={() => router.push(`/viajes/${v.id}`)} title="Centro de Control" className="p-2 text-slate-400 hover:bg-blue-50 dark:hover:bg-blue-500/10 hover:text-blue-600 dark:hover:text-blue-400 rounded-lg transition-colors mr-2"><Edit2 size={16}/></button>
+          {puedeVerAdmin && (<button onClick={() => generarPDFCartaPorte(v, perfilEmisor)} title="Previsualizar PDF" className="p-2 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white rounded-lg transition-colors mr-2"><FileText size={16}/></button>)}
+          {puedeVerAdmin && (<button onClick={() => timbrarCartaPorte(v)} disabled={loading} className="px-3 py-1.5 bg-blue-50 dark:bg-blue-600/10 text-blue-600 dark:text-blue-500 hover:bg-blue-100 dark:hover:bg-blue-600 hover:text-blue-700 dark:hover:text-white border border-blue-200 dark:border-blue-500/20 rounded-lg uppercase tracking-widest text-[10px] flex items-center gap-1.5 transition-colors">{loading ? <Loader2 size={14} className="animate-spin"/> : <ShieldCheck size={14}/>} Timbrar</button>)}
+        </>
+      )}
+
+      {v.estatus === 'Emitido (Timbrado)' && (
+        <>
+          <button onClick={() => cancelarViaje(v)} disabled={loading} title="Cancelar Carta Porte" className="p-2 text-slate-500 hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-500 rounded-lg transition-colors mr-2"><XCircle size={16}/></button>
+          <button onClick={() => router.push(`/viajes/${v.id}`)} title="Centro de Control" className="p-2 text-slate-400 hover:bg-blue-50 dark:hover:bg-blue-500/10 hover:text-blue-600 dark:hover:text-blue-400 rounded-lg transition-colors mr-2"><Edit2 size={16}/></button>
+          <button onClick={() => router.push(`/facturas?viaje_id=${v.id}`)} title="Ver Factura" className="p-2 bg-emerald-50 dark:bg-emerald-600/10 text-emerald-600 dark:text-emerald-500 hover:bg-emerald-100 dark:hover:bg-emerald-600 hover:text-emerald-700 dark:hover:text-white rounded-lg transition-colors mr-2"><Receipt size={16}/></button>
+          <button onClick={() => generarPDFCartaPorte(v, perfilEmisor)} title="Descargar PDF" className="p-2 bg-blue-50 dark:bg-blue-600/10 text-blue-600 dark:text-blue-500 hover:bg-blue-100 dark:hover:bg-blue-600 hover:text-blue-700 dark:hover:text-white rounded-lg transition-colors"><FileText size={16}/></button>
+        </>
+      )}
+
+      {v.estatus === 'Cerrado' && (
+        <>
+          <button onClick={() => router.push(`/viajes/${v.id}`)} title="Centro de Control" className="p-2 text-slate-400 hover:bg-blue-50 dark:hover:bg-blue-500/10 hover:text-blue-600 dark:hover:text-blue-400 rounded-lg transition-colors mr-2"><Edit2 size={16}/></button>
+          <button onClick={() => router.push(`/facturas?viaje_id=${v.id}`)} title="Ver Factura" className="p-2 bg-emerald-50 dark:bg-emerald-600/10 text-emerald-600 dark:text-emerald-500 hover:bg-emerald-100 dark:hover:bg-emerald-600 hover:text-emerald-700 dark:hover:text-white rounded-lg transition-colors mr-2"><Receipt size={16}/></button>
+          <button onClick={() => generarPDFCartaPorte(v, perfilEmisor)} title="Descargar PDF" className="p-2 bg-blue-50 dark:bg-blue-600/10 text-blue-600 dark:text-blue-500 hover:bg-blue-100 dark:hover:bg-blue-600 hover:text-blue-700 dark:hover:text-white rounded-lg transition-colors"><FileText size={16}/></button>
+        </>
+      )}
+
+      {v.estatus === 'Cancelado' && (
+        <>
+          <button onClick={() => eliminarViaje(v.id)} title="Eliminar Definitivamente" className="p-2 text-slate-500 hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-500 rounded-lg transition-colors mr-2"><Trash2 size={16}/></button>
+          <button onClick={() => generarPDFCartaPorte(v, perfilEmisor)} title="Descargar PDF" className="p-2 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white rounded-lg transition-colors"><FileText size={16}/></button>
+        </>
+      )}
+
+    </div>
+  </td>
+
+
                     </tr>
                   ))}
                   {viajesFiltrados.length === 0 && (
@@ -606,7 +607,7 @@ export default function ViajesPage() {
               <div className="absolute inset-0 bg-slate-900/50 dark:bg-slate-950/90 backdrop-blur-md" />
               <div className="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 w-full max-w-5xl rounded-[2.5rem] p-6 sm:p-10 shadow-2xl overflow-y-auto max-h-[90vh] custom-scrollbar transition-colors">
                 <button onClick={cerrarModal} className="absolute top-6 right-6 text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors"><X size={24} /></button>
-                <h2 className="text-2xl font-black text-slate-900 dark:text-white italic uppercase mb-8 transition-colors">{editandoId ? 'Editar' : 'Programar'} <span className="text-blue-600 dark:text-blue-500">Operación</span></h2>
+                <h2 className="text-2xl font-black text-slate-900 dark:text-white italic uppercase mb-8 transition-colors">Programar <span className="text-blue-600 dark:text-blue-500">Operación</span></h2>
                 
                 <form onSubmit={registrarViaje} className="space-y-6">
                   <div className={`grid gap-4 ${esCamionArticulado ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3' : 'grid-cols-1 sm:grid-cols-2'}`}>
@@ -680,7 +681,9 @@ export default function ViajesPage() {
                     )}
 
                   </div>
-                  <button type="submit" disabled={loading} className={`w-full py-5 rounded-2xl uppercase font-black text-[11px] tracking-widest shadow-xl transition-all ${editandoId ? 'bg-orange-500 hover:bg-orange-400' : 'bg-blue-600 hover:bg-blue-500'} text-white`}>{loading ? "Procesando..." : (editandoId ? "Guardar Cambios" : "Confirmar Viaje")}</button>
+                  <button type="submit" disabled={loading} className="w-full py-5 rounded-2xl uppercase font-black text-[11px] tracking-widest shadow-xl transition-all bg-blue-600 hover:bg-blue-500 text-white">
+  {loading ? "Procesando..." : "Confirmar Viaje"}
+</button>
                 </form>
               </div>
             </div>
