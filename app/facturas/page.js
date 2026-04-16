@@ -13,7 +13,6 @@ import { z } from 'zod';
 import * as XLSX from 'xlsx';
 import { useToast } from '@/components/toastprovider'; 
 
-// === ESCUDO DE VALIDACIÓN ZOD ===
 const facturaSchema = z.object({
   cliente: z.string().min(2, "El nombre del cliente es obligatorio."),
   metodo_pago: z.enum(["PUE", "PPD"], { errorMap: () => ({ message: "Método de pago inválido detectado." }) }),
@@ -22,12 +21,21 @@ const facturaSchema = z.object({
   referencia: z.string().optional()
 });
 
+// CLAVES SAT POR DEFECTO
+const defaultClavesSAT = [
+  { clave: '78101802', label: 'Flete Nacional' },
+  { clave: '78121603', label: 'Maniobras/Carga' },
+  { clave: '78101800', label: 'Transporte Gen.' },
+  { clave: '78141501', label: 'Servs. Aduanales' }
+];
+
 function FacturasContenido() {
   const searchParams = useSearchParams();
   const viajeIdHighlight = searchParams.get('viaje_id');
 
   const { mostrarAlerta } = useToast(); 
   const [dialogoConfirmacion, setDialogoConfirmacion] = useState({ visible: false, mensaje: '', accion: null });
+  const [modalPago, setModalPago] = useState({ visible: false, id: null, fecha_pago: '' });
 
   const [sesion, setSesion] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -42,18 +50,20 @@ function FacturasContenido() {
   const [historial, setHistorial] = useState([]);
   const [clientes, setClientes] = useState([]);
   const [perfilEmisor, setPerfilEmisor] = useState(null);
+  const [clavesCatalogo, setClavesCatalogo] = useState(defaultClavesSAT);
   
   const [empresaId, setEmpresaId] = useState(null);
   const [rolUsuario, setRolUsuario] = useState('miembro');
 
   const esAdmin = rolUsuario === 'administrador' || rolUsuario === 'admin';
 
-  // === ESTADO INICIAL MULTI-CONCEPTO CON IMPUESTOS INDIVIDUALES ===
+  // ESTADO INICIAL
   const formInicial = { 
     cliente_id: '', folio_fiscal: '', 
     fecha_viaje: new Date().toISOString().split('T')[0],
     fecha_vencimiento: '', forma_pago: '99', metodo_pago: 'PPD', referencia: '', folio_viaje_manual: '',
-    conceptos: [{ descripcion: 'Flete Nacional', monto: '', clave_sat: '78101802', aplica_iva: true, aplica_retencion: true }] 
+    moneda: 'MXN',
+    conceptos: [{ descripcion: 'Flete Nacional', monto: '', clave_sat: '78101802', aplica_iva: true, aplica_retencion: true, modo_manual: false }] 
   };
 
   const [formData, setFormData] = useState(formInicial);
@@ -66,6 +76,18 @@ function FacturasContenido() {
         inicializarDatos(session.user.id);
       }
     });
+
+    // Cargar Catálogo de Claves SAT Guardadas en Memoria
+    try {
+      const guardadas = JSON.parse(localStorage.getItem('fleetforce_claves_sat')) || [];
+      if (guardadas.length > 0) {
+        const merged = [...defaultClavesSAT];
+        guardadas.forEach(g => {
+          if (!merged.find(m => m.clave === g.clave)) merged.push(g);
+        });
+        setClavesCatalogo(merged);
+      }
+    } catch (e) { console.error("Error cargando claves SAT locales", e); }
   }, []);
 
   useEffect(() => {
@@ -116,9 +138,8 @@ function FacturasContenido() {
     setLoading(true);
     let query = supabase.from('facturas').select('*').eq('empresa_id', idMaestro).order('folio_interno', { ascending: false }).order('created_at', { ascending: false });
 
-    if (viajeIdHighlight) {
-       query = query.eq('viaje_id', viajeIdHighlight);
-    } else if (filtroActivo) {
+    if (viajeIdHighlight) query = query.eq('viaje_id', viajeIdHighlight);
+    else if (filtroActivo) {
        if (fechaInicio) query = query.gte('fecha_viaje', fechaInicio);
        if (fechaFin) query = query.lte('fecha_viaje', fechaFin);
     }
@@ -137,8 +158,7 @@ function FacturasContenido() {
   const pedirConfirmacion = (mensaje, accion) => setDialogoConfirmacion({ visible: true, mensaje, accion });
   const ejecutarConfirmacion = async () => { if (dialogoConfirmacion.accion) await dialogoConfirmacion.accion(); setDialogoConfirmacion({ visible: false, mensaje: '', accion: null }); };
 
-  // === FUNCIONES MULTI-CONCEPTO CON IMPUESTOS ===
-  const agregarConcepto = () => setFormData({ ...formData, conceptos: [...formData.conceptos, { descripcion: '', monto: '', clave_sat: '78101802', aplica_iva: true, aplica_retencion: false }] });
+  const agregarConcepto = () => setFormData({ ...formData, conceptos: [...formData.conceptos, { descripcion: '', monto: '', clave_sat: '78101802', aplica_iva: true, aplica_retencion: false, modo_manual: false }] });
   const actualizarConcepto = (index, campo, valor) => { const nuevos = [...formData.conceptos]; nuevos[index][campo] = valor; setFormData({ ...formData, conceptos: nuevos }); };
   const eliminarConcepto = (index) => setFormData({ ...formData, conceptos: formData.conceptos.filter((_, i) => i !== index) });
 
@@ -163,16 +183,10 @@ function FacturasContenido() {
       
       const blob = await response.blob(); 
       const url = window.URL.createObjectURL(blob);
-      
       const folioStr = folio_interno ? `F-${String(folio_interno).padStart(4, '0')}` : 'F-SN';
       const link = document.createElement('a'); 
-      link.href = url; 
-      link.download = `Factura_XML_${folioStr}_${cliente_nombre.replace(/\s+/g, '_')}.xml`;
-      
-      document.body.appendChild(link); 
-      link.click(); 
-      link.remove(); 
-      window.URL.revokeObjectURL(url);
+      link.href = url; link.download = `Factura_XML_${folioStr}_${cliente_nombre.replace(/\s+/g, '_')}.xml`;
+      document.body.appendChild(link); link.click(); link.remove(); window.URL.revokeObjectURL(url);
     } catch (err) { mostrarAlerta("Error al descargar XML: " + err.message, "error"); }
   };
 
@@ -180,11 +194,9 @@ function FacturasContenido() {
     const clienteData = clientes.find(c => c.nombre === factura.cliente);
     if (!clienteData) return mostrarAlerta("Error: No se encontró la información fiscal del cliente.", "error");
 
-    // Armado dinámico de partidas con impuestos individuales
     const arregloItemsFacturapi = (factura.conceptos_detalle && factura.conceptos_detalle.length > 0) 
       ? factura.conceptos_detalle.map(c => {
           let impuestosItem = [];
-          // Aseguramos compatibilidad si no existía el booleano antes (fallback a true)
           if (c.aplica_iva !== false) impuestosItem.push({ type: "IVA", rate: 0.16 });
           if (c.aplica_retencion === true || factura.aplica_retencion === true) impuestosItem.push({ type: "IVA", rate: 0.04, withholding: true });
           
@@ -198,20 +210,16 @@ function FacturasContenido() {
             }
           };
         })
-      : [{ // Fallback de seguridad para facturas súper antiguas
+      : [{
           quantity: 1,
-          product: {
-            description: factura.ruta || "Servicio de flete nacional",
-            product_key: "78101802",
-            price: Number(factura.monto_total),
-            taxes: [] // Si es viejo, asume que el monto total ya no se puede desglosar bien sin saber su factor original
-          }
+          product: { description: factura.ruta || "Servicio de flete nacional", product_key: "78101802", price: Number(factura.monto_total), taxes: [] }
         }];
 
     const invoiceData = { 
       customer: { legal_name: clienteData.nombre, tax_id: clienteData.rfc, tax_system: clienteData.regimen_fiscal || "601", address: { zip: clienteData.codigo_postal } }, 
       items: arregloItemsFacturapi, 
-      payment_form: factura.forma_pago || "99", payment_method: factura.metodo_pago || "PPD", use: clienteData.uso_cfdi || "G03" 
+      payment_form: factura.forma_pago || "99", payment_method: factura.metodo_pago || "PPD", use: clienteData.uso_cfdi || "G03",
+      currency: factura.moneda || "MXN" 
     };
 
     setLoading(true);
@@ -245,7 +253,6 @@ function FacturasContenido() {
 
       if (!validacion.success) { setLoading(false); return mostrarAlerta(validacion.error.issues[0]?.message || "🛑 Revisa los datos ingresados.", "error"); }
 
-      // Total acumulado individual
       let montoCalculado = formData.conceptos.reduce((acc, c) => {
         let base = parseFloat(c.monto) || 0;
         if (c.aplica_iva) base += (parseFloat(c.monto) || 0) * 0.16;
@@ -254,11 +261,26 @@ function FacturasContenido() {
       }, 0);
       montoCalculado = Number(montoCalculado.toFixed(2));
 
-      // Resumen para la vista y extracción de folio
       const resumenRuta = formData.conceptos.map(c => c.descripcion).join(' + ');
       let folioViajeLimpio = formData.folio_viaje_manual ? parseInt(String(formData.folio_viaje_manual).replace(/[^0-9]/g, ''), 10) : null;
       if (isNaN(folioViajeLimpio)) folioViajeLimpio = null;
 
+      // Actualizar Catálogo Local Inteligente
+      const nuevasClaves = [];
+      formData.conceptos.forEach(c => {
+        const claveLimpia = c.clave_sat.trim();
+        if (claveLimpia && !clavesCatalogo.find(cat => cat.clave === claveLimpia)) {
+            nuevasClaves.push({ clave: claveLimpia, label: c.descripcion.substring(0, 15) });
+        }
+      });
+      if (nuevasClaves.length > 0) {
+        const actualizadas = [...clavesCatalogo, ...nuevasClaves];
+        setClavesCatalogo(actualizadas);
+        const soloCustom = actualizadas.filter(a => !defaultClavesSAT.find(d => d.clave === a.clave));
+        localStorage.setItem('fleetforce_claves_sat', JSON.stringify(soloCustom));
+      }
+
+      // Inserción a Base de Datos
       const { error } = await supabase.from('facturas').insert([{ 
         cliente: validacion.data.cliente, 
         monto_total: montoCalculado, 
@@ -268,7 +290,8 @@ function FacturasContenido() {
         fecha_viaje: validacion.data.fecha_viaje, 
         fecha_vencimiento: formData.fecha_vencimiento, 
         forma_pago: validacion.data.forma_pago, 
-        metodo_pago: validacion.data.metodo_pago, 
+        metodo_pago: validacion.data.metodo_pago,
+        moneda: formData.moneda, 
         estatus_pago: 'Pendiente', 
         referencia: validacion.data.referencia, 
         empresa_id: empresaId 
@@ -283,29 +306,35 @@ function FacturasContenido() {
   };
 
   const alternarEstatus = async (id, estatusActual) => {
-    if (estatusActual === 'Cancelada') {
-      return mostrarAlerta("Una factura cancelada ante el SAT no puede cambiar de estatus de cobro.", "error");
+    if (estatusActual === 'Cancelada') return mostrarAlerta("Una factura cancelada ante el SAT no puede cambiar de estatus.", "error");
+    if (estatusActual === 'Pendiente') setModalPago({ visible: true, id, fecha_pago: new Date().toISOString().split('T')[0] });
+    else {
+      const { error } = await supabase.from('facturas').update({ estatus_pago: 'Pendiente', fecha_pago: null }).eq('id', id);
+      if (error) { mostrarAlerta("Error al revertir: " + error.message, "error"); return; }
+      mostrarAlerta(`Pago cancelado. Factura revertida a Pendiente.`, "exito"); obtenerDatos(empresaId);
     }
+  };
 
-    const esPendiente = estatusActual === 'Pendiente';
-    const nuevoEstatus = esPendiente ? 'Pagado' : 'Pendiente';
-    const fechaDePago = esPendiente ? new Date().toISOString().split('T')[0] : null;
-
-    const { error } = await supabase.from('facturas').update({ estatus_pago: nuevoEstatus, fecha_pago: fechaDePago }).eq('id', id);
-    if (error) { mostrarAlerta("Error al actualizar estatus: " + error.message, "error"); return; }
-    mostrarAlerta(`Estatus actualizado a ${nuevoEstatus}.`, "exito"); obtenerDatos(empresaId);
+  const confirmarPagoModal = async () => {
+    if(!modalPago.fecha_pago) return mostrarAlerta("Ingresa una fecha válida", "error");
+    setLoading(true);
+    const { error } = await supabase.from('facturas').update({ estatus_pago: 'Pagado', fecha_pago: modalPago.fecha_pago }).eq('id', modalPago.id);
+    if (error) { mostrarAlerta("Error al registrar pago: " + error.message, "error"); }
+    else {
+      mostrarAlerta("Pago registrado exitosamente en la fecha seleccionada.", "exito");
+      setModalPago({ visible: false, id: null, fecha_pago: '' });
+      obtenerDatos(empresaId);
+    }
+    setLoading(false);
   };
 
   const procesarCancelacion = (factura, tieneViajeAsociado) => {
-    if (tieneViajeAsociado) {
-       return mostrarAlerta("Acción denegada. Esta factura está asociada a un Viaje Operativo. Debes cancelarla desde la pestaña de Logística.", "error");
-    }
+    if (tieneViajeAsociado) return mostrarAlerta("Esta factura está asociada a un Viaje Operativo. Debes cancelarla desde Logística.", "error");
 
     if (factura.estatus_pago === 'Cancelada') {
-      pedirConfirmacion("¿Eliminar registro histórico? La factura ya está anulada en el SAT, pero esta acción la borrará permanentemente de tu panel de FleetForce.", async () => {
+      pedirConfirmacion("¿Eliminar registro histórico? La factura ya está anulada en el SAT.", async () => {
         const { error } = await supabase.from('facturas').delete().eq('id', factura.id);
-        if (error) { mostrarAlerta("Error al eliminar: " + error.message, "error"); } 
-        else { mostrarAlerta("Registro eliminado de FleetForce.", "exito"); obtenerDatos(empresaId); }
+        if (error) { mostrarAlerta("Error al eliminar: " + error.message, "error"); } else { mostrarAlerta("Registro eliminado.", "exito"); obtenerDatos(empresaId); }
       });
       return;
     }
@@ -313,34 +342,27 @@ function FacturasContenido() {
     const estaTimbrada = factura.facturapi_id && factura.folio_fiscal;
 
     if (estaTimbrada) {
-      pedirConfirmacion("¿Deseas CANCELAR esta factura ante el SAT? Esta acción es irreversible y el folio fiscal quedará invalidado.", async () => {
+      pedirConfirmacion("¿Deseas CANCELAR esta factura ante el SAT? Esta acción invalida el folio fiscal.", async () => {
         setLoading(true);
         try {
           const { data: { session } } = await supabase.auth.getSession();
-          if (!session) throw new Error("Sesión expirada. Vuelve a iniciar sesión.");
-
-          const response = await fetch('/api/facturapi', { 
-            method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` }, 
-            body: JSON.stringify({ endpoint: `invoices/${factura.facturapi_id}?motive=02`, method: 'DELETE' }) 
-          });
-
+          if (!session) throw new Error("Sesión expirada.");
+          const response = await fetch('/api/facturapi', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` }, body: JSON.stringify({ endpoint: `invoices/${factura.facturapi_id}?motive=02`, method: 'DELETE' }) });
           if (!response.ok) throw new Error("El SAT rechazó la petición de cancelación.");
-
           await supabase.from('facturas').update({ estatus_pago: 'Cancelada' }).eq('id', factura.id);
-          mostrarAlerta("Factura CANCELADA exitosamente en el SAT.", "exito");
-          obtenerDatos(empresaId);
+          mostrarAlerta("Factura CANCELADA exitosamente en el SAT.", "exito"); obtenerDatos(empresaId);
         } catch (error) { mostrarAlerta("Error al cancelar en SAT: " + error.message, "error"); } finally { setLoading(false); }
       });
     } else {
-      pedirConfirmacion("¿Eliminar registro manual de ingreso? Al no estar timbrada en el SAT, se borrará definitivamente de tu historial.", async () => {
+      pedirConfirmacion("¿Eliminar borrador manual? No está timbrada, se borrará definitivamente.", async () => {
         const { error } = await supabase.from('facturas').delete().eq('id', factura.id);
-        if (error) { mostrarAlerta("Error al eliminar: " + error.message, "error"); } else { mostrarAlerta("Borrador eliminado correctamente.", "exito"); obtenerDatos(empresaId); }
+        if (error) { mostrarAlerta("Error al eliminar: " + error.message, "error"); } else { mostrarAlerta("Borrador eliminado.", "exito"); obtenerDatos(empresaId); }
       });
     }
   };
 
   const exportarExcelFacturas = () => {
-    const datosParaExcel = historial.map(f => ({ Folio_Interno: f.folio_interno ? `F-${String(f.folio_interno).padStart(4, '0')}` : 'F-S/N', Folio_Viaje: f.viaje_id || f.folio_viaje ? `V-${String(f.folio_viaje || 0).padStart(4, '0')}` : 'N/A', Fecha_Emision: f.fecha_viaje, Fecha_Vencimiento: f.fecha_vencimiento || 'S/V', Estatus_Pago: f.estatus_pago, Fecha_Pago_Real: f.fecha_pago || 'Pendiente', Cliente: f.cliente, Concepto: f.ruta || '', Referencia: f.referencia || '', Monto_Total: f.monto_total, Metodo_Pago: f.metodo_pago, Forma_Pago: f.forma_pago, UUID_SAT: f.folio_fiscal || 'Sin Timbrar' }));
+    const datosParaExcel = historial.map(f => ({ Folio_Interno: f.folio_interno ? `F-${String(f.folio_interno).padStart(4, '0')}` : 'F-S/N', Folio_Viaje: f.viaje_id || f.folio_viaje ? `V-${String(f.folio_viaje || 0).padStart(4, '0')}` : 'N/A', Fecha_Emision: f.fecha_viaje, Fecha_Vencimiento: f.fecha_vencimiento || 'S/V', Estatus_Pago: f.estatus_pago, Fecha_Pago_Real: f.fecha_pago || 'Pendiente', Cliente: f.cliente, Concepto: f.ruta || '', Referencia: f.referencia || '', Monto_Total: f.monto_total, Moneda: f.moneda || 'MXN', Metodo_Pago: f.metodo_pago, Forma_Pago: f.forma_pago, UUID_SAT: f.folio_fiscal || 'Sin Timbrar' }));
     const ws = XLSX.utils.json_to_sheet(datosParaExcel); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Facturas"); XLSX.writeFile(wb, `Reporte_Facturas_FleetForce_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
@@ -466,7 +488,7 @@ function FacturasContenido() {
 
                         <td className="p-4 align-middle">
                           <span className={`text-[14px] font-mono font-black ${item.estatus_pago === 'Pagado' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-900 dark:text-white'} ${esCancelada ? 'line-through opacity-50' : ''} transition-colors`}>
-                            ${Number(item.monto_total).toLocaleString('es-MX', {minimumFractionDigits: 2})}
+                            ${Number(item.monto_total).toLocaleString('es-MX', {minimumFractionDigits: 2})} <span className="text-[9px] text-slate-400 font-sans tracking-widest ml-0.5">{item.moneda || 'MXN'}</span>
                           </span>
                         </td>
 
@@ -507,18 +529,37 @@ function FacturasContenido() {
           </div>
 
           {/* ========================================================= */}
+          {/* MODAL FECHA DE PAGO (NUEVO) */}
+          {/* ========================================================= */}
+          {modalPago.visible && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+              <div className="absolute inset-0 bg-slate-900/50 dark:bg-slate-950/90 backdrop-blur-sm transition-colors" onClick={() => setModalPago({ visible: false, id: null, fecha_pago: '' })} />
+              <div className="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 w-full max-w-sm rounded-[2rem] p-8 shadow-2xl flex flex-col items-center text-center animate-in zoom-in-95 duration-200 transition-colors">
+                <div className="w-16 h-16 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-500 rounded-full flex items-center justify-center mb-6 transition-colors"><CalendarCheck size={32} /></div>
+                <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-widest mb-2 transition-colors">Fecha de Pago</h3>
+                <p className="text-slate-500 dark:text-slate-400 text-[11px] mb-6 transition-colors">Selecciona el día exacto en que ingresó el dinero a la cuenta.</p>
+                <input type="date" className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm mb-6 outline-none focus:border-emerald-500 transition-colors cursor-pointer text-slate-900 dark:text-white" value={modalPago.fecha_pago} onChange={(e) => setModalPago({...modalPago, fecha_pago: e.target.value})} />
+                <div className="flex gap-3 w-full">
+                  <button onClick={() => setModalPago({ visible: false, id: null, fecha_pago: '' })} disabled={loading} className="flex-1 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">Cancelar</button>
+                  <button onClick={confirmarPagoModal} disabled={loading} className="flex-1 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest bg-emerald-600 text-white hover:bg-emerald-500 transition-colors shadow-lg shadow-emerald-900/20">{loading ? <Loader2 size={14} className="animate-spin mx-auto" /> : "Confirmar"}</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ========================================================= */}
           {/* MODAL DE CONFIRMACIÓN CUSTOM */}
           {/* ========================================================= */}
           {dialogoConfirmacion.visible && (
             <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
               <div className="absolute inset-0 bg-slate-900/50 dark:bg-slate-950/90 backdrop-blur-sm transition-colors" onClick={() => setDialogoConfirmacion({ visible: false, mensaje: '', accion: null })} />
               <div className="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 w-full max-w-sm rounded-[2rem] p-8 shadow-2xl flex flex-col items-center text-center animate-in zoom-in-95 duration-200 transition-colors">
-                <div className="w-16 h-16 bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-500 rounded-full flex items-center justify-center mb-6 transition-colors transition-colors transition-colors"><AlertTriangle size={32} /></div>
+                <div className="w-16 h-16 bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-500 rounded-full flex items-center justify-center mb-6 transition-colors"><AlertTriangle size={32} /></div>
                 <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-widest mb-2 transition-colors">¿Estás Seguro?</h3>
                 <p className="text-slate-500 dark:text-slate-400 text-sm mb-8 transition-colors">{dialogoConfirmacion.mensaje}</p>
                 <div className="flex gap-3 w-full">
-                  <button onClick={() => setDialogoConfirmacion({ visible: false, mensaje: '', accion: null })} disabled={loading} className="flex-1 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors transition-colors">Descartar</button>
-                  <button onClick={ejecutarConfirmacion} disabled={loading} className="flex-1 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest bg-red-600 text-white hover:bg-red-500 transition-colors shadow-lg shadow-red-900/20 transition-colors">{loading ? <Loader2 size={14} className="animate-spin mx-auto" /> : "Sí, Proceder"}</button>
+                  <button onClick={() => setDialogoConfirmacion({ visible: false, mensaje: '', accion: null })} disabled={loading} className="flex-1 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">Descartar</button>
+                  <button onClick={ejecutarConfirmacion} disabled={loading} className="flex-1 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest bg-red-600 text-white hover:bg-red-500 transition-colors shadow-lg shadow-red-900/20">{loading ? <Loader2 size={14} className="animate-spin mx-auto" /> : "Sí, Proceder"}</button>
                 </div>
               </div>
             </div>
@@ -547,7 +588,7 @@ function FacturasContenido() {
 
                     <div className="md:col-span-1">
                       <label className="text-[12px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1 transition-colors">Folio de Viaje (Opcional)</label>
-                      <input type="text" placeholder="Ejemplo: V-0015" className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl text-sm text-slate-900 dark:text-white outline-none focus:border-emerald-500 transition-colors" value={formData.folio_viaje_manual} onChange={e => setFormData({...formData, folio_viaje_manual: e.target.value})} />
+                      <input type="text" placeholder="Ej: V-0015 o 15" className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl text-sm text-slate-900 dark:text-white outline-none focus:border-emerald-500 transition-colors" value={formData.folio_viaje_manual} onChange={e => setFormData({...formData, folio_viaje_manual: e.target.value})} />
                     </div>
 
                     {/* SECCIÓN DE CONCEPTOS DINÁMICOS */}
@@ -563,11 +604,25 @@ function FacturasContenido() {
                             <input required type="text" placeholder="Ej: Flete, Maniobras..." className="flex-1 w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-2.5 rounded-lg text-xs text-slate-900 dark:text-white outline-none focus:border-emerald-500 transition-colors" value={item.descripcion} onChange={e => actualizarConcepto(index, 'descripcion', e.target.value)} />
                             
                             <div className="flex gap-2 w-full sm:w-auto">
-                              <select required className="w-32 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-2.5 rounded-lg text-[11px] text-slate-900 dark:text-white outline-none focus:border-emerald-500 transition-colors" value={item.clave_sat} onChange={e => actualizarConcepto(index, 'clave_sat', e.target.value)}>
-                                <option value="78101802">Flete (78101802)</option>
-                                <option value="78121603">Maniobras/Carga (78121603)</option>
-                                <option value="78101800">Transporte Gen. (78101800)</option>
-                              </select>
+                              
+                              {/* SELECTOR INTELIGENTE: Alterna entre Dropdown e Input */}
+                              {!item.modo_manual ? (
+                                <select required className="w-32 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-2.5 rounded-lg text-[11px] text-slate-900 dark:text-white outline-none focus:border-emerald-500 transition-colors" value={item.clave_sat} onChange={e => {
+                                    if (e.target.value === 'custom') {
+                                        const nuevos = [...formData.conceptos]; nuevos[index].modo_manual = true; nuevos[index].clave_sat = ''; setFormData({ ...formData, conceptos: nuevos });
+                                    } else { actualizarConcepto(index, 'clave_sat', e.target.value); }
+                                }}>
+                                    {clavesCatalogo.map(cat => (
+                                        <option key={cat.clave} value={cat.clave}>{cat.label} ({cat.clave})</option>
+                                    ))}
+                                    <option value="custom">✍️ Capturar manual...</option>
+                                </select>
+                              ) : (
+                                <div className="flex items-center gap-1 w-32 relative">
+                                    <input autoFocus required type="text" placeholder="Ej: 81101500" className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-2.5 pr-7 rounded-lg text-[11px] text-slate-900 dark:text-white outline-none focus:border-emerald-500 transition-colors" value={item.clave_sat} onChange={e => actualizarConcepto(index, 'clave_sat', e.target.value)} />
+                                    <button type="button" onClick={() => { const nuevos = [...formData.conceptos]; nuevos[index].modo_manual = false; nuevos[index].clave_sat = '78101802'; setFormData({ ...formData, conceptos: nuevos }); }} className="absolute right-1 text-slate-400 hover:text-red-500 bg-slate-50 dark:bg-slate-900 p-1 rounded transition-colors"><X size={14}/></button>
+                                </div>
+                              )}
                               
                               <input required type="number" step="0.01" placeholder="Costo $" className="w-24 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-2.5 rounded-lg text-xs text-slate-900 dark:text-white font-mono text-center outline-none focus:border-emerald-500 transition-colors" value={item.monto} onChange={e => actualizarConcepto(index, 'monto', e.target.value)} />
                               
@@ -590,9 +645,10 @@ function FacturasContenido() {
                       ))}
 
                       {/* Total Acumulado */}
-                      <div className="flex justify-end items-center pt-3 border-t border-emerald-200 dark:border-emerald-800/50 mt-2">
-                        <p className="text-[12px] font-black tracking-widest uppercase text-emerald-700 dark:text-emerald-400 transition-colors bg-white dark:bg-slate-900 px-4 py-2 rounded-lg border border-emerald-100 dark:border-emerald-800 shadow-sm">
-                          Neto Total a Cobrar: <span className="font-mono text-sm ml-1">${calcularTotalEnTiempoReal().toLocaleString('es-MX', {minimumFractionDigits: 2})}</span>
+                      <div className="flex justify-end items-center pt-3 border-t border-emerald-200 dark:border-emerald-800/50 mt-2 gap-3">
+                        <p className="text-[12px] font-black tracking-widest uppercase text-emerald-700 dark:text-emerald-400 transition-colors bg-white dark:bg-slate-900 px-4 py-2 rounded-lg border border-emerald-100 dark:border-emerald-800 shadow-sm flex items-center gap-2">
+                          Neto a Cobrar: <span className="font-mono text-sm">${calcularTotalEnTiempoReal().toLocaleString('es-MX', {minimumFractionDigits: 2})}</span>
+                          <span className="text-[10px] text-emerald-500 bg-emerald-50 dark:bg-emerald-900/30 px-1.5 py-0.5 rounded">{formData.moneda}</span>
                         </p>
                       </div>
                     </div>
@@ -606,10 +662,14 @@ function FacturasContenido() {
 
                   <div className="p-5 sm:p-6 bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 rounded-2xl transition-colors">
                     <p className="text-[12px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2 transition-colors"><Settings size={12}/> Configuración SAT (CFDI 4.0)</p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <div>
+                        <label className="text-[12px] font-black text-slate-500 uppercase mb-2 block ml-1 transition-colors">Divisa</label>
+                        <select className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-xl text-xs text-slate-900 dark:text-white outline-none focus:border-emerald-500 transition-colors font-bold text-emerald-600 dark:text-emerald-400" value={formData.moneda} onChange={e => setFormData({...formData, moneda: e.target.value})}><option value="MXN">Pesos (MXN)</option><option value="USD">Dólares (USD)</option></select>
+                      </div>
                       <div>
                         <label className="text-[12px] font-black text-slate-500 uppercase mb-2 block ml-1 transition-colors">Método de Pago</label>
-                        <select className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-xl text-xs text-slate-900 dark:text-white outline-none focus:border-emerald-500 transition-colors" value={formData.metodo_pago} onChange={e => setFormData({...formData, metodo_pago: e.target.value})}><option value="PPD">PPD - Pago en Parcialidades</option><option value="PUE">PUE - Pago en una Exhibición</option></select>
+                        <select className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-xl text-xs text-slate-900 dark:text-white outline-none focus:border-emerald-500 transition-colors" value={formData.metodo_pago} onChange={e => setFormData({...formData, metodo_pago: e.target.value})}><option value="PPD">PPD - Parcialidades</option><option value="PUE">PUE - Una Exhibición</option></select>
                       </div>
                       <div>
                         <label className="text-[12px] font-black text-slate-500 uppercase mb-2 block ml-1 transition-colors transition-colors">Forma de Pago</label>
@@ -629,7 +689,7 @@ function FacturasContenido() {
                     </div>
                   </div>
 
-                  <button type="submit" disabled={loading || clientes.length === 0} className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-100 dark:disabled:bg-slate-800 disabled:text-slate-400 dark:disabled:text-slate-600 text-white p-5 rounded-2xl font-black uppercase text-[11px] tracking-widest shadow-xl transition-all mt-4 shadow-emerald-900/10">
+                  <button type="submit" disabled={loading || clientes.length === 0} className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-100 dark:bg-slate-800 disabled:text-slate-400 dark:disabled:text-slate-600 text-white p-5 rounded-2xl font-black uppercase text-[11px] tracking-widest shadow-xl transition-all mt-4 shadow-emerald-900/10">
                     {loading ? "Procesando..." : "Registrar Factura"}
                   </button>
                 </form>

@@ -21,14 +21,15 @@ export const generarFacturaPDF = async (factura, clienteData, perfilEmisor) => {
   let subtotal = 0;
   let iva = 0;
   let retencionIva = 0;
+  
+  // INYECCIÓN DE DIVISA DINÁMICA
+  const monedaStr = factura.moneda || 'MXN';
 
-  // Verificamos si la factura tiene el nuevo formato de múltiples conceptos
   if (factura.conceptos_detalle && factura.conceptos_detalle.length > 0) {
     conceptosArray = factura.conceptos_detalle.map(c => {
       const montoBase = parseFloat(c.monto) || 0;
       subtotal += montoBase;
 
-      // Calculamos impuestos por partida
       const aplicaIva = c.aplica_iva !== false;
       const aplicaRet = c.aplica_retencion === true || factura.aplica_retencion === true;
 
@@ -47,7 +48,7 @@ export const generarFacturaPDF = async (factura, clienteData, perfilEmisor) => {
       ];
     });
   } else {
-    // MODO COMPATIBILIDAD: Para facturas antiguas creadas antes de la actualización
+    // MODO COMPATIBILIDAD (Facturas Viejas)
     const aplicaIva = factura.aplica_iva !== false; 
     const aplicaRetencion = factura.aplica_retencion !== false; 
 
@@ -65,7 +66,6 @@ export const generarFacturaPDF = async (factura, clienteData, perfilEmisor) => {
     ];
   }
 
-  // Si tiene conceptos detalle usamos el cálculo matemático exacto, si no, usamos el total guardado.
   const totalFinal = (factura.conceptos_detalle && factura.conceptos_detalle.length > 0) 
     ? (subtotal + iva - retencionIva) 
     : Number(factura.monto_total || 0);
@@ -77,7 +77,7 @@ export const generarFacturaPDF = async (factura, clienteData, perfilEmisor) => {
   let fechaImpresion = `${factura.fecha_viaje || 'Borrador'}`;
 
   // ==========================================
-  // CORRECCIÓN DE ZONA HORARIA (Sincronía con PAC)
+  // CORRECCIÓN DE ZONA HORARIA
   // ==========================================
   if (factura.cadena_original && factura.cadena_original.includes('T')) {
     const partesCadena = factura.cadena_original.split('|');
@@ -89,7 +89,7 @@ export const generarFacturaPDF = async (factura, clienteData, perfilEmisor) => {
       const [horas, minutos, segundos] = horaPart.split(':');
       
       const dateObj = new Date(year, month - 1, day, horas, minutos, segundos || 0);
-      dateObj.setHours(dateObj.getHours() - 1); // OVERRIDE HORA EXACTA
+      dateObj.setHours(dateObj.getHours() - 1); 
       
       const finalDia = String(dateObj.getDate()).padStart(2, '0');
       const finalMes = String(dateObj.getMonth() + 1).padStart(2, '0');
@@ -106,11 +106,7 @@ export const generarFacturaPDF = async (factura, clienteData, perfilEmisor) => {
      fechaImpresion = `${formatFechaMty.format(ahora)} a las ${formatHoraMty.format(ahora)} hrs (Borrador)`;
   }
 
-  // ==========================================
-  // EXTRACCIÓN DINÁMICA DE LA ORDEN DE COMPRA / REFERENCIA
-  // ==========================================
   let ordenCompra = factura.referencia || 'No especificada';
-  
   if (ordenCompra === 'No especificada' && factura.ruta && factura.ruta.includes('Ref:')) {
       ordenCompra = factura.ruta.split('Ref:')[1].trim();
   }
@@ -138,7 +134,6 @@ export const generarFacturaPDF = async (factura, clienteData, perfilEmisor) => {
   const lineasDirEmisor = doc.splitTextToSize(dirEmisor, 65); 
   doc.text(lineasDirEmisor, 55, 32);
 
-  // CAJA DE ESTATUS Y FOLIOS
   doc.setFillColor(colorEstatus[0], colorEstatus[1], colorEstatus[2]); 
   doc.rect(125, 15, 71, 7, 'F');
   doc.setFontSize(9); doc.setFont("helvetica", "bold"); doc.setTextColor(255, 255, 255); 
@@ -167,10 +162,8 @@ export const generarFacturaPDF = async (factura, clienteData, perfilEmisor) => {
 
   doc.setFontSize(9); doc.setFont("helvetica", "bold"); 
   doc.text("RECEPTOR (CLIENTE):", 14, startYReceptor);
-  
   doc.setFontSize(9); doc.setFont("helvetica", "normal");
   doc.text(String(factura.cliente || 'CLIENTE NO REGISTRADO'), 14, startYReceptor + 5);
-  
   doc.setFontSize(8);
   doc.text(`RFC: ${clienteData?.rfc || 'XAXX010101000'} | Régimen: ${clienteData?.regimen_fiscal || '601'}`, 14, startYReceptor + 10);
   
@@ -197,24 +190,22 @@ export const generarFacturaPDF = async (factura, clienteData, perfilEmisor) => {
   autoTable(doc, {
     startY: startYTabla,
     head: [['Clave SAT', 'Cant.', 'Unidad', 'Descripción / Concepto', 'Precio Unitario', 'Importe']],
-    body: conceptosArray, // <-- Aquí insertamos el arreglo de conceptos generados arriba
+    body: conceptosArray, 
     theme: 'grid', 
     headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold' },
     styles: { fontSize: 8, cellPadding: 3 },
     columnStyles: { 
-      0: { halign: 'center', cellWidth: 20 }, 
-      1: { halign: 'center', cellWidth: 12 }, 
-      2: { halign: 'center', cellWidth: 15 }, 
-      3: { halign: 'left' },                  
-      4: { halign: 'right', cellWidth: 25 },  
-      5: { halign: 'right', cellWidth: 25 }   
+      0: { halign: 'center', cellWidth: 20 }, 1: { halign: 'center', cellWidth: 12 }, 
+      2: { halign: 'center', cellWidth: 15 }, 3: { halign: 'left' },                  
+      4: { halign: 'right', cellWidth: 25 },  5: { halign: 'right', cellWidth: 25 }   
     }
   });
 
   const finalY = doc.lastAutoTable.finalY;
 
   doc.setFontSize(8); doc.setFont("helvetica", "normal");
-  doc.text("Moneda: MXN - Peso Mexicano", 14, finalY + 8);
+  // INYECCIÓN DE TEXTO DIVISA
+  doc.text(`Moneda: ${monedaStr} - ${monedaStr === 'USD' ? 'Dólar Estadounidense' : 'Peso Mexicano'}`, 14, finalY + 8);
   
   // ==========================================
   // MATRIZ DINÁMICA DE TOTALES
@@ -223,12 +214,8 @@ export const generarFacturaPDF = async (factura, clienteData, perfilEmisor) => {
   const bodyTotales = [];
   bodyTotales.push(['Subtotal:', `$${subtotalFormateado}`]);
 
-  if (iva > 0) {
-      bodyTotales.push(['IVA Trasladado (16%):', `$${iva.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`]);
-  }
-  if (retencionIva > 0) {
-      bodyTotales.push(['Retención IVA (4%):', `-$${retencionIva.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`]);
-  }
+  if (iva > 0) bodyTotales.push(['IVA Trasladado (16%):', `$${iva.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`]);
+  if (retencionIva > 0) bodyTotales.push(['Retención IVA (4%):', `-$${retencionIva.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`]);
 
   bodyTotales.push(['Total Neto:', `$${totalFinal.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`]);
 
@@ -238,10 +225,8 @@ export const generarFacturaPDF = async (factura, clienteData, perfilEmisor) => {
     theme: 'plain', styles: { fontSize: 8, cellPadding: 1.5 },
     columnStyles: { 0: { fontStyle: 'bold', halign: 'right' }, 1: { halign: 'right', cellWidth: 30 } },
     didParseCell: function(data) { 
-        // Identificamos dinámicamente la última fila (Total Neto) para ponerla en negritas
         if (data.row.index === bodyTotales.length - 1) { 
-            data.cell.styles.fontStyle = 'bold'; 
-            data.cell.styles.fontSize = 9; 
+            data.cell.styles.fontStyle = 'bold'; data.cell.styles.fontSize = 9; 
         } 
     }
   });
@@ -281,51 +266,33 @@ export const generarFacturaPDF = async (factura, clienteData, perfilEmisor) => {
       doc.text("QR SAT", 31.5, footerY + 17, { align: 'center' });
   }
   
- let textoY = footerY + 3;
+  let textoY = footerY + 3;
   doc.setFontSize(6); 
   
-  // Imprimir UUID
-  doc.setFont("helvetica", "bold");
-  doc.text("Folio Fiscal (UUID):", 52, textoY);
-  doc.setFont("helvetica", "normal");
-  doc.text(String(uuid), 80, textoY);
+  doc.setFont("helvetica", "bold"); doc.text("Folio Fiscal (UUID):", 52, textoY);
+  doc.setFont("helvetica", "normal"); doc.text(String(uuid), 80, textoY);
   textoY += 4;
 
-  // Imprimir Certificados en la misma línea
-  doc.setFont("helvetica", "bold");
-  doc.text("No. Certificado Emisor:", 52, textoY);
-  doc.setFont("helvetica", "normal");
-  doc.text(String(noCertificadoEmisor), 85, textoY);
+  doc.setFont("helvetica", "bold"); doc.text("No. Certificado Emisor:", 52, textoY);
+  doc.setFont("helvetica", "normal"); doc.text(String(noCertificadoEmisor), 85, textoY);
   
-  doc.setFont("helvetica", "bold");
-  doc.text("No. Certificado SAT:", 135, textoY);
-  doc.setFont("helvetica", "normal");
-  doc.text(String(noCertificadoSAT), 162, textoY);
+  doc.setFont("helvetica", "bold"); doc.text("No. Certificado SAT:", 135, textoY);
+  doc.setFont("helvetica", "normal"); doc.text(String(noCertificadoSAT), 162, textoY);
   textoY += 5; 
 
-  // Sellos
-  doc.setFont("helvetica", "bold");
-  doc.text("Sello Digital del Emisor:", 52, textoY);
-  textoY += 3;
+  doc.setFont("helvetica", "bold"); doc.text("Sello Digital del Emisor:", 52, textoY); textoY += 3;
   doc.setFont("helvetica", "normal");
-  const lineasSelloEmisor = doc.splitTextToSize(selloEmisor, 140); 
-  doc.text(lineasSelloEmisor, 52, textoY);
+  const lineasSelloEmisor = doc.splitTextToSize(selloEmisor, 140); doc.text(lineasSelloEmisor, 52, textoY);
   textoY += (lineasSelloEmisor.length * 2.5) + 2; 
 
-  doc.setFont("helvetica", "bold");
-  doc.text("Sello Digital del SAT:", 52, textoY);
-  textoY += 3;
+  doc.setFont("helvetica", "bold"); doc.text("Sello Digital del SAT:", 52, textoY); textoY += 3;
   doc.setFont("helvetica", "normal");
-  const lineasSelloSat = doc.splitTextToSize(selloSat, 140);
-  doc.text(lineasSelloSat, 52, textoY);
+  const lineasSelloSat = doc.splitTextToSize(selloSat, 140); doc.text(lineasSelloSat, 52, textoY);
   textoY += (lineasSelloSat.length * 2.5) + 2;
 
-  doc.setFont("helvetica", "bold");
-  doc.text("Cadena Original del Complemento de Certificación:", 52, textoY);
-  textoY += 3;
+  doc.setFont("helvetica", "bold"); doc.text("Cadena Original del Complemento de Certificación:", 52, textoY); textoY += 3;
   doc.setFont("helvetica", "normal");
-  const lineasCadena = doc.splitTextToSize(cadenaOriginal, 140);
-  doc.text(lineasCadena, 52, textoY);
+  const lineasCadena = doc.splitTextToSize(cadenaOriginal, 140); doc.text(lineasCadena, 52, textoY);
 
   doc.setFontSize(7); doc.setTextColor(100);
   doc.text("Este documento es una representación impresa de un CFDI 4.0 de Ingreso.", 105, 288, { align: 'center' });
