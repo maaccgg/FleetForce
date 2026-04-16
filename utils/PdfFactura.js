@@ -49,6 +49,17 @@ export const generarFacturaPDF = async (factura, clienteData, perfilEmisor) => {
   let fechaImpresion = factura.fecha_viaje || 'Borrador';
 
   // ==========================================
+  // EXTRACCIÓN INTELIGENTE DE REFERENCIA/VIAJE
+  // ==========================================
+  let arrRef = [];
+  if (factura.referencia) arrRef.push(factura.referencia);
+  if (factura.folio_viaje) arrRef.push(`Viaje ${factura.folio_viaje}`);
+  
+  let textoReferencia = arrRef.length > 0 ? arrRef.join(' | ') : 'S/N';
+  // Límite de seguridad para no romper la simetría de la caja superior
+  if (textoReferencia.length > 38) textoReferencia = textoReferencia.substring(0, 35) + '...';
+
+  // ==========================================
   // 1. CABECERA (LOGOTIPO Y DATOS EMISOR)
   // ==========================================
   if (perfilEmisor?.logo_base64) {
@@ -82,7 +93,7 @@ export const generarFacturaPDF = async (factura, clienteData, perfilEmisor) => {
       ['Serie y Folio:', `F - ${String(factura.folio_interno || 'S/N').padStart(4, '0')}`],
       ['Folio Fiscal:', factura.folio_fiscal || 'POR ASIGNAR'],
       ['Fecha Emisión:', fechaImpresion],
-      ['Orden / Ref:', factura.referencia || 'S/N'], 
+      ['Orden / Ref:', textoReferencia], // <--- CAMBIO APLICADO AQUÍ
       ['Uso CFDI:', clienteData?.uso_cfdi || 'G03']
     ],
     theme: 'plain', styles: { fontSize: 7, cellPadding: 0.8 }, 
@@ -92,7 +103,6 @@ export const generarFacturaPDF = async (factura, clienteData, perfilEmisor) => {
   // ==========================================
   // 2. RECEPTOR Y CONDICIONES (BLOQUE ASIMÉTRICO EQUILIBRADO)
   // ==========================================
-  // AQUÍ ESTÁ LA MAGIA DINÁMICA: Calcula dónde terminó la tabla de arriba y le suma 8mm de aire.
   let startYReceptor = doc.lastAutoTable.finalY + 8; 
 
   doc.setDrawColor(15, 23, 42); doc.setLineWidth(0.4);
@@ -127,7 +137,7 @@ export const generarFacturaPDF = async (factura, clienteData, perfilEmisor) => {
       0: { halign: 'center', cellWidth: 20 }, 
       1: { halign: 'center', cellWidth: 12 }, 
       2: { halign: 'center', cellWidth: 12 }, 
-      3: { halign: 'left' }, // Descripción crece automáticamente                  
+      3: { halign: 'left' },                  
       4: { halign: 'right', cellWidth: 30 },  
       5: { halign: 'right', cellWidth: 30 }   
     }
