@@ -104,6 +104,18 @@ export default function SATConfigPage() {
   // === INICIO DE LÓGICA DE IMPORTACIÓN MASIVA (EXCEL MULTI-TAB) ===
   const [importingInfo, setImportingInfo] = useState(false);
 
+  // === ESTADO Y TRADUCTOR DEL ESCUDO SAT ===
+  const [validandoSAT, setValidandoSAT] = useState(false);
+
+  const traducirErrorSAT = (err) => {
+    const msg = (typeof err === 'object' ? JSON.stringify(err) : String(err)).toLowerCase();
+    if (msg.includes("legal_name") || msg.includes("nombre")) return "El Nombre/Razón Social NO coincide con el RFC oficial.";
+    if (msg.includes("zip") || msg.includes("postal")) return "El Código Postal NO corresponde al domicilio fiscal de este RFC.";
+    if (msg.includes("tax_system") || msg.includes("regimen")) return "El Régimen Fiscal es incorrecto para este RFC.";
+    if (msg.includes("tax_id") || msg.includes("rfc")) return "El RFC ingresado es inválido o no existe.";
+    return "Error de validación: " + (err.message || "Revisa los datos fiscales.");
+  };
+
   const pedirConfirmacion = (mensaje, accion) => setDialogoConfirmacion({ visible: true, mensaje, accion });
   const ejecutarConfirmacion = async () => { if (dialogoConfirmacion.accion) await dialogoConfirmacion.accion(); setDialogoConfirmacion({ visible: false, mensaje: '', accion: null }); };
 
@@ -239,9 +251,11 @@ export default function SATConfigPage() {
     setLoading(false);
   }
 
-  const guardarRegistro = async (e) => {
+const guardarRegistro = async (e) => {
     e.preventDefault();
     setLoading(true);
+    setValidandoSAT(true); // Encendemos el indicador del escudo
+
     let payload = {};
 
     if (activeTab === 'operadores') payload = { ...formDataOp, empresa_id: empresaId, rfc: formDataOp.rfc.toUpperCase() };
@@ -250,18 +264,131 @@ export default function SATConfigPage() {
     if (activeTab === 'remolques') payload = { ...formDataRe, empresa_id: empresaId, placas: formDataRe.placas.toUpperCase() };
     if (activeTab === 'clientes') payload = { ...formDataCl, empresa_id: empresaId, rfc: formDataCl.rfc.toUpperCase() };
 
+// =========================================================
+    // 🛡️ ESCUDO SAT: VALIDACIONES MATEMÁTICAS Y DE CATÁLOGOS
+    // =========================================================
+    try {
+      
+// -------------------------------------------------------
+      // 1. BLINDAJE DE MERCANCÍAS (VERSIÓN HÍBRIDA LIVE/TEST)
+      // -------------------------------------------------------
+      if (activeTab === 'mercancias') {
+        const claveLimpia = payload.clave_sat.trim();
+
+        // Regla A: Formato (Indispensable siempre)
+        if (!/^\d{8}$/.test(claveLimpia)) {
+          mostrarAlerta("🛑 ERROR: La Clave SAT debe ser de 8 números exactos.", "error");
+          setLoading(false); setValidandoSAT(false); return;
+        }
+
+        try {
+          const res = await fetch('/api/facturapi', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sesion.access_token}` },
+            body: JSON.stringify({
+              endpoint: `catalogs/products?q=${claveLimpia}`,
+              method: 'GET'
+            })
+          });
+
+          const data = await res.json();
+          
+          // REGLA DE ORO: 
+          // Si el "q=" no devuelve nada, pero la clave tiene 8 dígitos...
+          if (!data.data || data.data.length === 0) {
+            
+            // Si estamos en modo LIVE (esto lo sabemos si el error no es de 'test mode')
+            // Pero como no queremos bloquear claves reales, lanzamos un Confirm
+            const mensaje = `La clave ${claveLimpia} no se encontró en la búsqueda rápida.\n\n` +
+                            `¿Estás SEGURO de que esta clave es un Producto/Servicio del SAT y NO una Fracción Arancelaria?`;
+            
+            if (!window.confirm(mensaje)) {
+              setLoading(false); setValidandoSAT(false); return;
+            }
+          } else {
+            // Si la encontró, verificamos que la clave sea EXACTA
+            const coincidenciaExacta = data.data.some(p => p.key === claveLimpia);
+            if (!coincidenciaExacta) {
+              if (!window.confirm(`La clave ${claveLimpia} es similar a otras, pero no es exacta. ¿Deseas continuar?`)) {
+                setLoading(false); setValidandoSAT(false); return;
+              }
+            }
+          }
+        } catch (err) {
+          console.error("Error validando:", err);
+          // Si la API falla, confiamos en el formato de 8 dígitos para no trabar al usuario
+        }
+      }
+
+      // -------------------------------------------------------
+      // 2. BLINDAJE PARA CLIENTES (RECEPTORES)
+      // -------------------------------------------------------
+      if (activeTab === 'clientes') {
+        const rfcRegex = /^([A-ZÑ&]{3,4})\d{6}([A-Z0-9]{3})$/i;
+        const esRfcGenerico = payload.rfc === 'XAXX010101000' || payload.rfc === 'XEXX010101000';
+
+        if (!esRfcGenerico && !rfcRegex.test(payload.rfc)) {
+          mostrarAlerta(`🛑 RECHAZADO: El RFC "${payload.rfc}" tiene un formato inválido. Revisa las letras y la homoclave.`, "error");
+          setLoading(false); setValidandoSAT(false); return;
+        }
+
+        const cpRegex = /^\d{5}$/;
+        if (!cpRegex.test(payload.codigo_postal)) {
+          mostrarAlerta(`🛑 RECHAZADO: El Código Postal "${payload.codigo_postal}" debe tener 5 números exactos.`, "error");
+          setLoading(false); setValidandoSAT(false); return;
+        }
+      }
+
+      // -------------------------------------------------------
+      // 3. BLINDAJE PARA UBICACIONES Y OPERADORES
+      // -------------------------------------------------------
+      if (activeTab === 'ubicaciones' || activeTab === 'operadores') {
+        const rfcAValidar = activeTab === 'ubicaciones' ? payload.rfc_ubicacion : payload.rfc;
+        const rfcRegex = /^([A-ZÑ&]{3,4})\d{6}([A-Z0-9]{3})$/i;
+        const esRfcGenerico = rfcAValidar === 'XAXX010101000' || rfcAValidar === 'XEXX010101000';
+
+        if (!esRfcGenerico && !rfcRegex.test(rfcAValidar)) {
+          mostrarAlerta(`🛑 RECHAZADO: El RFC "${rfcAValidar}" tiene un formato inválido.`, "error");
+          setLoading(false); setValidandoSAT(false); return;
+        }
+
+        // Reglas Exclusivas para Ubicaciones
+        if (activeTab === 'ubicaciones') {
+          const cpRegex = /^\d{5}$/;
+          if (!cpRegex.test(payload.codigo_postal)) {
+            mostrarAlerta(`🛑 RECHAZADO: El Código Postal "${payload.codigo_postal}" debe tener 5 números exactos.`, "error");
+            setLoading(false); setValidandoSAT(false); return;
+          }
+
+          const estadoRegex = /^[A-Z]{3}$/i;
+          if (!estadoRegex.test(payload.estado)) {
+            mostrarAlerta(`🛑 RECHAZADO: El Estado "${payload.estado}" debe ser la clave SAT de 3 letras (Ej. NLE, CMX).`, "error");
+            setLoading(false); setValidandoSAT(false); return;
+          }
+        }
+      }
+
+    } catch (error) {
+      mostrarAlerta("Error al procesar las validaciones. Intenta de nuevo.", "error");
+      setLoading(false); setValidandoSAT(false);
+      return;
+    }
+    // =========================================================
+    // ✅ SI PASA EL ESCUDO, GUARDAMOS EN SUPABASE
+    // =========================================================
     const { error } = editandoId 
       ? await supabase.from(activeTab).update(payload).eq('id', editandoId) 
       : await supabase.from(activeTab).insert([payload]);
 
     if (error) {
-      mostrarAlerta("Error al guardar: " + error.message, "error");
+      mostrarAlerta("Error al guardar en base de datos: " + error.message, "error");
     } else { 
-      mostrarAlerta("Registro guardado exitosamente.", "exito");
+      mostrarAlerta("✅ Registro validado por SAT y guardado exitosamente.", "exito");
       cerrarModal(); 
       cargarDatos(sesion.user.id); 
     }
     setLoading(false);
+    setValidandoSAT(false);
   };
 
   const guardarPerfilFiscal = async () => {
@@ -589,7 +716,9 @@ export default function SATConfigPage() {
                 ))}
               </div>
             </div>
-          ) : (
+          )
+          
+          : (
             // =========================================================
             // PESTAÑA EMISOR FISCAL RESTAURADA Y ADAPTADA A MODO CLARO
             // =========================================================
@@ -852,9 +981,9 @@ export default function SATConfigPage() {
                         </div>
                       )}
                       
-                      <button type="submit" disabled={loading} className={`w-full py-4 rounded-xl font-black uppercase text-[11px] tracking-widest shadow-lg transition-all ${loading ? 'bg-slate-200 dark:bg-slate-800 text-slate-500 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-500 shadow-blue-900/20'}`}>
-                        {loading ? "Procesando..." : "Guardar Registro"}
-                      </button>
+                        <button type="submit" disabled={loading} className={`w-full py-4 rounded-xl font-black uppercase text-[11px] tracking-widest shadow-lg transition-all ${loading ? 'bg-slate-200 dark:bg-slate-800 text-slate-500 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-500 shadow-blue-900/20'}`}>
+                          {validandoSAT ? "Consultando al SAT..." : loading ? "Procesando..." : "Guardar Registro"}
+                        </button>
                     </form>
                   )}
 

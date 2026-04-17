@@ -71,6 +71,7 @@ export default function ViajesPage() {
   const formInicial = {
     unidad_id: '', remolque_id: '', operador_id: '', origen_id: '', destino_id: '', 
     cliente_id: '', monto_flete: '', 
+    moneda: 'MXN', // <-- AGREGADO POR DEFECTO
     aplica_iva: true, 
     aplica_retencion: true, 
     distancia_km: '', referencia: '', fecha_salida: new Date().toISOString().split('T')[0],
@@ -256,6 +257,7 @@ const cerrarModal = () => { setMostrarModal(false); setFormData(formInicial); };
 
       const invoiceData = {
         type: "I", date: fechaHoraCFDI,
+        currency: viaje.moneda || "MXN", // <-- INYECCIÓN DE DIVISA PARA EL SAT
         customer: { legal_name: viaje.clientes.nombre, tax_id: viaje.clientes.rfc, tax_system: viaje.clientes.regimen_fiscal, address: { zip: viaje.clientes.codigo_postal } },
         items: [{ 
           quantity: 1, 
@@ -322,6 +324,7 @@ const registrarViaje = async (e) => {
         distancia_km: parseFloat(formData.distancia_km || 0), unidad_id: formData.unidad_id, remolque_id: remolqueLimpio, operador_id: formData.operador_id, origen_id: formData.origen_id, destino_id: formData.destino_id,
         mercancia_id: formData.mercancias_detalle[0].mercancia_id, mercancias_detalle: mercanciasEnriquecidas, peso_total_kg: calcularPesoTotal(), cliente_id: formData.cliente_id || null, 
         monto_flete: parseFloat(formData.monto_flete || 0), 
+        moneda: formData.moneda, // <-- SE ENVÍA LA DIVISA A VIAJES
         aplica_iva: formData.aplica_iva, 
         aplica_retencion: formData.aplica_retencion, 
         referencia: formData.referencia || '', fecha_salida: formData.fecha_salida, tag_casetas: formData.tag_casetas, tarjeta_gasolina: formData.tarjeta_gasolina
@@ -339,7 +342,6 @@ const registrarViaje = async (e) => {
       if (payloadComun.aplica_retencion) montoCalculado -= (fleteBase * 0.04);
       montoCalculado = Number(montoCalculado.toFixed(2)); 
 
-      // Pura creación (eliminamos el if editandoId)
       const nuevoIdCCP = generarIdCCP();
       const { data: nuevoViaje, error: errorViaje } = await supabase.from('viajes').insert([{ ...payloadComun, id_ccp: nuevoIdCCP, estatus: 'Borrador', empresa_id: empresaId }]).select().single();
       if (errorViaje) throw errorViaje;
@@ -351,7 +353,18 @@ const registrarViaje = async (e) => {
 
       if (formData.monto_flete > 0 && formData.cliente_id) {
         const fechaVenc = new Date(formData.fecha_salida); fechaVenc.setDate(fechaVenc.getDate() + (clienteObj?.dias_credito || 0));
-        await supabase.from('facturas').insert([{ viaje_id: nuevoViaje.id, folio_viaje: nuevoViaje.folio_interno, empresa_id: empresaId, cliente: clienteObj.nombre, monto_total: montoCalculado, fecha_viaje: formData.fecha_salida, fecha_vencimiento: fechaVenc.toISOString().split('T')[0], estatus_pago: 'Pendiente', ruta: `Flete CCP${formData.referencia ? ' - Ref: '+formData.referencia : ''}` }]);
+        await supabase.from('facturas').insert([{ 
+            viaje_id: nuevoViaje.id, 
+            folio_viaje: nuevoViaje.folio_interno, 
+            empresa_id: empresaId, 
+            cliente: clienteObj.nombre, 
+            monto_total: montoCalculado, 
+            moneda: formData.moneda, // <-- SE ENVÍA LA DIVISA A FACTURAS
+            fecha_viaje: formData.fecha_salida, 
+            fecha_vencimiento: fechaVenc.toISOString().split('T')[0], 
+            estatus_pago: 'Pendiente', 
+            ruta: `Flete CCP${formData.referencia ? ' - Ref: '+formData.referencia : ''}` 
+        }]);
       }
 
       if (formData.gasto_monto && parseFloat(formData.gasto_monto) > 0) {
@@ -407,7 +420,7 @@ const getFiltrosArray = () => {
   }
   
   const exportarExcelViajes = () => {
-    const datosParaExcel = viajesFiltrados.map(v => ({ Folio: `V-${String(v.folio_interno).padStart(4, '0')}`, Fecha: v.fecha_salida, Estatus: v.estatus, Cliente: v.clientes?.nombre || 'N/A', Referencia: v.referencia || '', Origen: v.origen?.nombre_lugar || '', Destino: v.destino?.nombre_lugar || '', Unidad: v.unidades?.numero_economico || '', Operador: v.operadores?.nombre_completo || '', Peso_KG: v.peso_total_kg, Monto_Flete: v.monto_flete || 0, ID_CartaPorte: v.id_ccp || '' }));
+    const datosParaExcel = viajesFiltrados.map(v => ({ Folio: `V-${String(v.folio_interno).padStart(4, '0')}`, Fecha: v.fecha_salida, Estatus: v.estatus, Cliente: v.clientes?.nombre || 'N/A', Referencia: v.referencia || '', Origen: v.origen?.nombre_lugar || '', Destino: v.destino?.nombre_lugar || '', Unidad: v.unidades?.numero_economico || '', Operador: v.operadores?.nombre_completo || '', Peso_KG: v.peso_total_kg, Monto_Flete: v.monto_flete || 0, Moneda: v.moneda || 'MXN', ID_CartaPorte: v.id_ccp || '' }));
     const ws = XLSX.utils.json_to_sheet(datosParaExcel); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Viajes"); XLSX.writeFile(wb, `Reporte_Viajes_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
@@ -664,7 +677,13 @@ const getFiltrosArray = () => {
                     
                     {puedeVerAdmin && (
                       <div className="col-span-1 flex flex-col gap-2">
-                        <input type="number" placeholder="Monto Flete Base ($)" className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white font-mono transition-colors" value={formData.monto_flete} onChange={e => setFormData({...formData, monto_flete: e.target.value})} />
+                        <div className="flex gap-2">
+                          <input type="number" placeholder="Monto Flete Base ($)" className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white font-mono transition-colors" value={formData.monto_flete} onChange={e => setFormData({...formData, monto_flete: e.target.value})} />
+                          <select className="w-24 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white font-bold transition-colors" value={formData.moneda} onChange={e => setFormData({...formData, moneda: e.target.value})}>
+                            <option value="MXN">MXN</option>
+                            <option value="USD">USD</option>
+                          </select>
+                        </div>
                         
                         {/* === CONTROLES DE IMPUESTO === */}
                         <div className="flex gap-4 px-2 mt-1">
@@ -682,8 +701,8 @@ const getFiltrosArray = () => {
 
                   </div>
                   <button type="submit" disabled={loading} className="w-full py-5 rounded-2xl uppercase font-black text-[11px] tracking-widest shadow-xl transition-all bg-blue-600 hover:bg-blue-500 text-white">
-  {loading ? "Procesando..." : "Confirmar Viaje"}
-</button>
+                    {loading ? "Procesando..." : "Confirmar Viaje"}
+                  </button>
                 </form>
               </div>
             </div>

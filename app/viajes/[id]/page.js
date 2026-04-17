@@ -4,7 +4,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import { 
   ArrowLeft, Calendar, Truck, MapPin, Package, ShieldCheck, 
-  Clock, FileText, UploadCloud, Edit2, CheckCircle, X, Save, Trash2 
+  Clock, FileText, UploadCloud, Edit2, CheckCircle, X, Save, Trash2, DollarSign 
 } from 'lucide-react';
 import Sidebar from '@/components/sidebar';
 import { useToast } from '@/components/toastprovider'; 
@@ -89,7 +89,9 @@ export default function DetalleViajePage() {
 
     setFormData({
       unidad_id: viaje.unidad_id || '', remolque_id: viaje.remolque_id || '', operador_id: viaje.operador_id || '', origen_id: viaje.origen_id || '', destino_id: viaje.destino_id || '',
-      cliente_id: viaje.cliente_id || '', monto_flete: viaje.monto_flete || '', 
+      cliente_id: viaje.cliente_id || '', 
+      monto_flete: viaje.monto_flete || '', 
+      moneda: viaje.moneda || 'MXN', // <-- INICIALIZACIÓN DE DIVISA
       aplica_iva: viaje.aplica_iva !== false, aplica_retencion: viaje.aplica_retencion !== false, 
       distancia_km: viaje.distancia_km || '', referencia: viaje.referencia || '',
       mercancias_detalle: detalle, tag_casetas: viaje.tag_casetas || '', tarjeta_gasolina: viaje.tarjeta_gasolina || ''
@@ -123,7 +125,9 @@ export default function DetalleViajePage() {
       const payload = {
         distancia_km: parseFloat(formData.distancia_km || 0), unidad_id: formData.unidad_id, remolque_id: remolqueLimpio, operador_id: formData.operador_id, origen_id: formData.origen_id, destino_id: formData.destino_id,
         mercancia_id: formData.mercancias_detalle[0].mercancia_id, mercancias_detalle: mercanciasEnriquecidas, peso_total_kg: calcularPesoTotal(), cliente_id: formData.cliente_id || null, 
-        monto_flete: parseFloat(formData.monto_flete || 0), aplica_iva: formData.aplica_iva, aplica_retencion: formData.aplica_retencion, 
+        monto_flete: parseFloat(formData.monto_flete || 0), 
+        moneda: formData.moneda, // <-- SE GUARDA LA DIVISA EN VIAJES
+        aplica_iva: formData.aplica_iva, aplica_retencion: formData.aplica_retencion, 
         referencia: formData.referencia || '', tag_casetas: formData.tag_casetas, tarjeta_gasolina: formData.tarjeta_gasolina
       };
 
@@ -141,9 +145,26 @@ export default function DetalleViajePage() {
         
         const { data: facExistente } = await supabase.from('facturas').select('id').eq('viaje_id', id).single();
         if (facExistente) {
-          await supabase.from('facturas').update({ cliente: clienteObj.nombre, monto_total: montoCalculado, fecha_vencimiento: fechaVenc.toISOString().split('T')[0], ruta: `Flete CCP${formData.referencia ? ' - Ref: '+formData.referencia : ''}` }).eq('id', facExistente.id);
+          await supabase.from('facturas').update({ 
+            cliente: clienteObj.nombre, 
+            monto_total: montoCalculado, 
+            moneda: formData.moneda, // <-- SE ACTUALIZA DIVISA EN FACTURA EXISTENTE
+            fecha_vencimiento: fechaVenc.toISOString().split('T')[0], 
+            ruta: `Flete CCP${formData.referencia ? ' - Ref: '+formData.referencia : ''}` 
+          }).eq('id', facExistente.id);
         } else {
-          await supabase.from('facturas').insert([{ viaje_id: id, folio_viaje: viaje.folio_interno, empresa_id: empresaId, cliente: clienteObj.nombre, monto_total: montoCalculado, fecha_viaje: viaje.fecha_salida, fecha_vencimiento: fechaVenc.toISOString().split('T')[0], estatus_pago: 'Pendiente', ruta: `Flete CCP${formData.referencia ? ' - Ref: '+formData.referencia : ''}` }]);
+          await supabase.from('facturas').insert([{ 
+            viaje_id: id, 
+            folio_viaje: viaje.folio_interno, 
+            empresa_id: empresaId, 
+            cliente: clienteObj.nombre, 
+            monto_total: montoCalculado, 
+            moneda: formData.moneda, // <-- SE GUARDA DIVISA EN FACTURA NUEVA
+            fecha_viaje: viaje.fecha_salida, 
+            fecha_vencimiento: fechaVenc.toISOString().split('T')[0], 
+            estatus_pago: 'Pendiente', 
+            ruta: `Flete CCP${formData.referencia ? ' - Ref: '+formData.referencia : ''}` 
+          }]);
         }
       }
 
@@ -204,7 +225,7 @@ const subirPOD = async (event) => {
       const { error: dbError } = await supabase.from('viajes')
         .update({ 
             url_pod: publicUrl,
-            estatus: 'Cerrado' // <-- INSTRUCCIÓN FALTANTE EN LA BD
+            estatus: 'Cerrado' 
         })
         .eq('id', viaje.id);
 
@@ -214,7 +235,7 @@ const subirPOD = async (event) => {
       setViaje(prev => ({ 
           ...prev, 
           url_pod: publicUrl,
-          estatus: 'Cerrado' // <-- INSTRUCCIÓN FALTANTE EN LA UI
+          estatus: 'Cerrado' 
       }));
       mostrarAlerta("Evidencia cargada exitosamente.", "exito");
       
@@ -248,7 +269,7 @@ const eliminarPOD = async () => {
       const { error: dbError } = await supabase.from('viajes')
         .update({ 
           url_pod: null,
-          estatus: 'Emitido (Timbrado)' // <-- Regresamos el estatus
+          estatus: 'Emitido (Timbrado)' 
         })
         .eq('id', viaje.id);
 
@@ -350,8 +371,16 @@ const getBadgeColor = (estatus) => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <select className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-3 rounded-xl text-sm" value={formData.cliente_id} onChange={e => setFormData({...formData, cliente_id: e.target.value})}><option value="">Cliente Factura (Opcional)...</option>{catalogos.clientes.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}</select>
                     <input type="text" placeholder="Orden de Compra / Referencia" className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-3 rounded-xl text-sm" value={formData.referencia} onChange={e => setFormData({...formData, referencia: e.target.value})} />
-                    <input type="number" placeholder="Monto Flete Base ($)" className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-3 rounded-xl text-sm font-mono" value={formData.monto_flete} onChange={e => setFormData({...formData, monto_flete: e.target.value})} />
-                    <div className="flex gap-4 items-center">
+                    
+                    <div className="flex gap-2">
+                      <input type="number" placeholder="Monto Flete Base ($)" className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-3 rounded-xl text-sm font-mono" value={formData.monto_flete} onChange={e => setFormData({...formData, monto_flete: e.target.value})} />
+                      <select className="w-24 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-3 rounded-xl text-sm font-bold" value={formData.moneda} onChange={e => setFormData({...formData, moneda: e.target.value})}>
+                        <option value="MXN">MXN</option>
+                        <option value="USD">USD</option>
+                      </select>
+                    </div>
+
+                    <div className="flex gap-4 items-center pl-2">
                       <label className="flex items-center gap-2 text-[10px] font-black uppercase text-slate-500"><input type="checkbox" className="accent-blue-600 w-4 h-4" checked={formData.aplica_iva} onChange={e => setFormData({...formData, aplica_iva: e.target.checked})} /> + IVA</label>
                       <label className="flex items-center gap-2 text-[10px] font-black uppercase text-slate-500"><input type="checkbox" className="accent-blue-600 w-4 h-4" checked={formData.aplica_retencion} onChange={e => setFormData({...formData, aplica_retencion: e.target.checked})} /> - RET</label>
                     </div>
@@ -378,15 +407,19 @@ const getBadgeColor = (estatus) => {
                         <p className="text-[11px] text-slate-500 mt-1">{viaje.destino?.estado}</p>
                       </div>
                     </div>
-                    <div className="bg-slate-50 dark:bg-slate-950 rounded-2xl p-4 flex justify-between items-center border border-slate-100 dark:border-slate-800">
+                    <div className="bg-slate-50 dark:bg-slate-950 rounded-2xl p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border border-slate-100 dark:border-slate-800">
                       <div>
                         <p className="text-[10px] uppercase text-slate-400 font-bold tracking-widest mb-1">Cliente Receptor</p>
                         <p className="text-sm font-bold text-slate-900 dark:text-white">{viaje.clientes?.nombre || 'Sin facturación asociada'}</p>
+                        {viaje.referencia && <p className="text-xs font-mono font-black text-blue-600 dark:text-blue-400 mt-1">PO: {viaje.referencia}</p>}
                       </div>
-                      {viaje.referencia && (
-                        <div className="text-right">
-                          <p className="text-[10px] uppercase text-slate-400 font-bold tracking-widest mb-1">Referencia / PO</p>
-                          <p className="text-xs font-mono font-black text-blue-600 dark:text-blue-400">{viaje.referencia}</p>
+                      
+                      {viaje.monto_flete > 0 && (
+                        <div className="text-left sm:text-right bg-white dark:bg-slate-900 px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-800 w-full sm:w-auto">
+                          <p className="text-[9px] uppercase text-slate-400 font-bold tracking-widest mb-0.5">Flete Acordado</p>
+                          <p className="text-sm font-mono font-black text-emerald-600 dark:text-emerald-500">
+                            ${Number(viaje.monto_flete).toLocaleString('es-MX', {minimumFractionDigits: 2})} <span className="text-[10px] text-slate-500 tracking-widest ml-1">{viaje.moneda || 'MXN'}</span>
+                          </p>
                         </div>
                       )}
                     </div>
