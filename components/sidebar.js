@@ -201,7 +201,7 @@ export default function Sidebar() {
 
         <div className="mt-auto pt-6 border-t border-slate-200 dark:border-slate-800/50 px-1 pb-2">
           <p className="text-[8px] text-slate-400 dark:text-slate-600 font-black uppercase tracking-widest italic leading-relaxed px-2 mb-4">
-            "Version BETA 1.0.1"
+            "Version 1.0.3"
           </p>
           
           <div className="relative">

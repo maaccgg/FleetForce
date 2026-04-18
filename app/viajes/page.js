@@ -189,8 +189,13 @@ const cerrarModal = () => { setMostrarModal(false); setFormData(formInicial); };
     } catch (err) { mostrarAlerta(err.message, "error"); } finally { setLoading(false); }
   };
 
-  const timbrarCartaPorte = async (viaje) => {
+ const timbrarCartaPorte = async (viaje) => {
     try {
+      // 1. OBTENCIÓN DE SESIÓN (Arregla el error "session is not defined")
+      const { data: { session: currentSession } } = await supabase.auth.getSession();
+      if (!currentSession) throw new Error("Sesión expirada o inválida. Por favor, vuelve a iniciar sesión.");
+
+      // 2. VALIDACIONES DE DATOS MAESTROS
       if (!viaje.clientes?.rfc) throw new Error("Falta el RFC del Cliente.");
       if (!viaje.clientes?.codigo_postal) throw new Error("Falta el Código Postal del Cliente.");
       if (!viaje.clientes?.regimen_fiscal) throw new Error("Falta el Régimen Fiscal del Cliente.");
@@ -203,22 +208,59 @@ const cerrarModal = () => { setMostrarModal(false); setFormData(formInicial); };
       if (!viaje.origen?.estado || !viaje.destino?.estado) throw new Error("Falta Estado en Origen o Destino.");
 
       const u = viaje.unidades;
-      if (!u?.permiso_sict || !u?.num_permiso_sict || !u?.configuracion_vehicular || !u?.placas) throw new Error("Faltan datos requeridos en la Unidad (Permiso, Configuración o Placas).");
+      if (!u?.permiso_sict || !u?.num_permiso_sict || !u?.configuracion_vehicular || !u?.placas) {
+        throw new Error("Faltan datos requeridos en la Unidad (Permiso, Configuración o Placas).");
+      }
 
       const op = viaje.operadores;
       if (!op?.rfc || !op?.numero_licencia) throw new Error("Faltan datos requeridos en el Operador (RFC o Licencia).");
 
-      const arregloMercanciasFacturapi = (viaje.mercancias_detalle || []).map((item, index) => {
-        if (!item.clave_sat || !item.descripcion || !item.embalaje || !item.peso_kg) throw new Error(`Faltan datos en el producto #${index + 1}`);
-        const claveSatLimpia = String(item.clave_sat).trim().replace(/[^0-9]/g, '');
-        if (claveSatLimpia.length !== 8) throw new Error(`ERROR SAT: La Clave SAT del producto "${item.descripcion}" está corrupta.`);
 
-        let mercancia = { BienesTransp: claveSatLimpia, Descripcion: item.descripcion, Cantidad: parseFloat(item.cantidad), ClaveUnidad: item.embalaje, PesoEnKg: parseFloat(item.peso_kg) };
-        if (item.material_peligroso) mercancia.MaterialPeligroso = "Sí";
-        if (item.valor && parseFloat(item.valor) > 0) { mercancia.ValorMercancia = parseFloat(item.valor); mercancia.Moneda = item.moneda || "MXN"; }
+// 3. 🛡️ FORMACIÓN DE MERCANCÍAS (BLINDAJE SAT 3.1 DEFINITIVO)
+      const arregloMercanciasFacturapi = (viaje.mercancias_detalle || []).map((item, index) => {
+        if (!item.clave_sat || !item.descripcion || !item.peso_kg) {
+          throw new Error(`Faltan datos en el producto #${index + 1}: "${item.descripcion || 'Sin nombre'}"`);
+        }
+
+        const claveSatLimpia = String(item.clave_sat).trim().replace(/[^0-9]/g, '');
+        if (claveSatLimpia.length !== 8) throw new Error(`ERROR SAT: La Clave SAT del producto #${index + 1} debe tener 8 dígitos.`);
+
+        // 🛡️ Filtro de Unidad: Si tu BD tiene basura como "Pieza" o está vacío, fuerza "H87" (Clave SAT Oficial)
+        let unidadValida = "H87";
+        if (item.clave_unidad && String(item.clave_unidad).length <= 3) {
+          unidadValida = String(item.clave_unidad).trim().toUpperCase();
+        }
+
+        // Objeto base de la mercancía
+        let mercancia = { 
+          BienesTransp: claveSatLimpia, 
+          Descripcion: item.descripcion, 
+          Cantidad: parseFloat(item.cantidad || 1), 
+          ClaveUnidad: unidadValida,
+          PesoEnKg: parseFloat(item.peso_kg) 
+        };
+
+        // 🛡️ REGLA CRÍTICA SAT 3.1: Solo enviar MaterialPeligroso y Embalaje si REALMENTE lo es.
+        const esPeligroso = item.material_peligroso === true || item.material_peligroso === "Sí" || item.material_peligroso === "1";
+
+        if (esPeligroso) {
+          mercancia.MaterialPeligroso = "Sí";
+          if (item.clave_embalaje || item.embalaje) {
+            mercancia.Embalaje = item.clave_embalaje || item.embalaje;
+          }
+        } 
+        // ❌ AQUÍ ESTABA EL ERROR: No pongas el "else". Si no es peligroso, el SAT exige 
+        // que el atributo "MaterialPeligroso" no viaje en la petición. Desaparecido.
+
+        if (item.valor && parseFloat(item.valor) > 0) { 
+          mercancia.ValorMercancia = parseFloat(item.valor); 
+          mercancia.Moneda = item.moneda || "MXN"; 
+        }
+
         return mercancia;
       });
 
+      // 4. CÁLCULO DE PESO Y FECHAS
       const pesoTotalTimbre = (viaje.mercancias_detalle || []).reduce((acc, item) => acc + (Number(item.peso_kg) || 0), 0) || viaje.peso_total_kg || 1;
       
       const ahora = new Date(); ahora.setHours(ahora.getHours() - 1);
@@ -232,22 +274,31 @@ const cerrarModal = () => { setMostrarModal(false); setFormData(formInicial); };
       const llegadaHoras = String(llegadaDate.getHours()).padStart(2, '0'); const llegadaMinutos = String(llegadaDate.getMinutes()).padStart(2, '0'); const llegadaSegundos = String(llegadaDate.getSeconds()).padStart(2, '0');
       const fechaHoraLlegadaCFDI = `${llegadaAño}-${llegadaMes}-${llegadaDia}T${llegadaHoras}:${llegadaMinutos}:${llegadaSegundos}`;
 
+      // 5. CONFIGURACIÓN DE AUTOTRANSPORTE Y REMOLQUES
       const configSAT = u.configuracion_vehicular.trim().toUpperCase();
       const requiereRemolqueSAT = configSAT.includes('T') || configSAT.includes('R');
 
       const autotransporteObj = {
-        PermSCT: u.permiso_sict, NumPermisoSCT: u.num_permiso_sict,
-        IdentificacionVehicular: { ConfigVehicular: configSAT, PlacaVM: u.placas.replace(/[- ]/g, ''), AnioModeloVM: u.anio_modelo.toString(), PesoBrutoVehicular: parseFloat(u.peso_bruto_maximo || 30.00) },
+        PermSCT: u.permiso_sict, 
+        NumPermisoSCT: u.num_permiso_sict,
+        IdentificacionVehicular: { 
+          ConfigVehicular: configSAT, 
+          PlacaVM: u.placas.replace(/[- ]/g, ''), 
+          AnioModeloVM: u.anio_modelo.toString(), 
+          PesoBrutoVehicular: parseFloat(u.peso_bruto_maximo || 30.00) 
+        },
         Seguros: { AseguraRespCivil: u.aseguradora_rc, PolizaRespCivil: u.poliza_rc }
       };
 
       if (requiereRemolqueSAT) {
         if (!viaje.remolques || !viaje.remolques.placas) throw new Error(`El camión requiere remolque. Edita el viaje y asígnale uno.`);
-        autotransporteObj.Remolques = [{ SubTipoRem: (viaje.remolques.subtipo_remolque || "CTR02").trim().toUpperCase(), Placa: viaje.remolques.placas.replace(/[- ]/g, '') }];
+        autotransporteObj.Remolques = [{ 
+          SubTipoRem: (viaje.remolques.subtipo_remolque || "CTR02").trim().toUpperCase(), 
+          Placa: viaje.remolques.placas.replace(/[- ]/g, '') 
+        }];
       }
 
-      setLoading(true);
-      
+      // 6. ESTRUCTURA FINAL DEL INVOICE (FACTURAPI)
       const subtotal = parseFloat(viaje.monto_flete || 0);
       let impuestosArray = [];
       if (viaje.aplica_iva !== false) impuestosArray.push({ type: "IVA", rate: 0.16 });
@@ -256,9 +307,15 @@ const cerrarModal = () => { setMostrarModal(false); setFormData(formInicial); };
       const descripcionServicio = viaje.referencia ? `Servicio de Flete Nacional - Ref: ${viaje.referencia}` : "Servicio de Flete Nacional";
 
       const invoiceData = {
-        type: "I", date: fechaHoraCFDI,
-        currency: viaje.moneda || "MXN", // <-- INYECCIÓN DE DIVISA PARA EL SAT
-        customer: { legal_name: viaje.clientes.nombre, tax_id: viaje.clientes.rfc, tax_system: viaje.clientes.regimen_fiscal, address: { zip: viaje.clientes.codigo_postal } },
+        type: "I", 
+        date: fechaHoraCFDI,
+        currency: viaje.moneda || "MXN",
+        customer: { 
+          legal_name: viaje.clientes.nombre, 
+          tax_id: viaje.clientes.rfc, 
+          tax_system: viaje.clientes.regimen_fiscal, 
+          address: { zip: viaje.clientes.codigo_postal } 
+        },
         items: [{ 
           quantity: 1, 
           product: { 
@@ -268,39 +325,76 @@ const cerrarModal = () => { setMostrarModal(false); setFormData(formInicial); };
             taxes: impuestosArray 
           } 
         }],
-        payment_form: "99", payment_method: "PPD", use: viaje.clientes.uso_cfdi || "G03",
+        payment_form: "99", 
+        payment_method: "PPD", 
+        use: viaje.clientes.uso_cfdi || "G03",
         complements: [{
           type: "carta_porte",
           data: {
-            IdCCP: viaje.id_ccp?.startsWith('CCC') ? viaje.id_ccp : `CCC${(viaje.id_ccp || crypto.randomUUID().toUpperCase()).substring(3)}`, TranspInternac: "No", TotalDistRec: parseFloat(viaje.distancia_km || 150),
+            IdCCP: viaje.id_ccp?.startsWith('CCC') ? viaje.id_ccp : `CCC${(viaje.id_ccp || crypto.randomUUID().toUpperCase()).substring(3)}`, 
+            TranspInternac: "No", 
+            TotalDistRec: parseFloat(viaje.distancia_km || 150),
             Ubicaciones: [
               { TipoUbicacion: "Origen", RFCRemitenteDestinatario: rfcOrigen, FechaHoraSalidaLlegada: fechaHoraCFDI, Domicilio: { Calle: viaje.origen.nombre_lugar, Estado: viaje.origen.estado, Pais: "MEX", CodigoPostal: viaje.origen.codigo_postal } },
               { TipoUbicacion: "Destino", DistanciaRecorrida: parseFloat(viaje.distancia_km || 150), RFCRemitenteDestinatario: rfcDestino, FechaHoraSalidaLlegada: fechaHoraLlegadaCFDI, Domicilio: { Calle: viaje.destino.nombre_lugar, Estado: viaje.destino.estado, Pais: "MEX", CodigoPostal: viaje.destino.codigo_postal } }            
             ],
-            Mercancias: { PesoBrutoTotal: pesoTotalTimbre, UnidadPeso: "KGM", NumTotalMercancias: arregloMercanciasFacturapi.length, Mercancia: arregloMercanciasFacturapi, Autotransporte: autotransporteObj },
+            Mercancias: { 
+              PesoBrutoTotal: pesoTotalTimbre, 
+              UnidadPeso: "KGM", 
+              NumTotalMercancias: arregloMercanciasFacturapi.length, 
+              Mercancia: arregloMercanciasFacturapi, 
+              Autotransporte: autotransporteObj 
+            },
             FiguraTransporte: [{ TipoFigura: "01", RFCFigura: op.rfc, NumLicencia: op.numero_licencia, NombreFigura: op.nombre_completo }]
           }
         }]
       };
 
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error("Sesión expirada o inválida. Vuelve a iniciar sesión.");
-
+      // 7. ENVÍO A API Y ACTUALIZACIÓN
+      setLoading(true);
       const response = await fetch('/api/facturapi', { 
-        method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` }, 
+        method: 'POST', 
+        headers: { 
+          'Content-Type': 'application/json', 
+          'Authorization': `Bearer ${currentSession.access_token}` 
+        }, 
         body: JSON.stringify({ endpoint: 'invoices', method: 'POST', payload: invoiceData }) 
       });
+
       const res = await response.json();
       
       if (response.ok) {
-        await supabase.from('viajes').update({ estatus: 'Emitido (Timbrado)', folio_fiscal: res.uuid, id_ccp: res.complements?.[0]?.data?.IdCCP || "Generado", sello_emisor: res.stamp?.signature, sello_sat: res.stamp?.sat_signature, cadena_original: res.stamp?.complement_string }).eq('id', viaje.id);
-        await supabase.from('facturas').update({ estatus_pago: 'Pendiente', facturapi_id: res.id, folio_fiscal: res.uuid, sello_emisor: res.stamp?.signature, sello_sat: res.stamp?.sat_signature, cadena_original: res.stamp?.complement_string, no_certificado_sat: res.stamp?.sat_cert_number }).eq('viaje_id', viaje.id);
+        // ACTUALIZACIÓN EXITOSA EN SUPABASE
+        await supabase.from('viajes').update({ 
+          estatus: 'Emitido (Timbrado)', 
+          folio_fiscal: res.uuid, 
+          id_ccp: res.complements?.[0]?.data?.IdCCP || "Generado", 
+          sello_emisor: res.stamp?.signature, 
+          sello_sat: res.stamp?.sat_signature, 
+          cadena_original: res.stamp?.complement_string 
+        }).eq('id', viaje.id);
+
+        await supabase.from('facturas').update({ 
+          estatus_pago: 'Pendiente', 
+          facturapi_id: res.id, 
+          folio_fiscal: res.uuid, 
+          sello_emisor: res.stamp?.signature, 
+          sello_sat: res.stamp?.sat_signature, 
+          cadena_original: res.stamp?.complement_string, 
+          no_certificado_sat: res.stamp?.sat_cert_number 
+        }).eq('viaje_id', viaje.id);
+
         mostrarAlerta(`¡CARTA PORTE TIMBRADA! 🎉🎉\n`, "exito");
         obtenerViajes(empresaId);
       } else {
+        // Error controlado desde Facturapi
         mostrarAlerta(traducirErrorFacturapi(res), "error");
       }
-    } catch (err) { mostrarAlerta(err.message, "error"); } finally { setLoading(false); }
+    } catch (err) { 
+      mostrarAlerta(err.message, "error"); 
+    } finally { 
+      setLoading(false); 
+    }
   }; 
 
 const registrarViaje = async (e) => {

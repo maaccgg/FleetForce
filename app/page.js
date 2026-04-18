@@ -77,35 +77,33 @@ export default function Page() {
     }
   }, [sesion, fechaInicio, fechaFin, filtroActivo]);
 
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setErrorLogin(null);
+ const handleLogin = async (e) => {
+  e.preventDefault();
+  setLoading(true);
+  setErrorLogin(null);
 
+  try {
     const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
       email: email.trim().toLowerCase(),
       password,
     });
 
     if (authError) {
-      setErrorLogin("Credenciales incorrectas o acceso denegado.");
+      setErrorLogin("Credenciales incorrectas o problema de conexión.");
       setLoading(false);
       return;
     }
 
-    const { data: perfil } = await supabase
-      .from('perfiles')
-      .select('activo')
-      .eq('id', authData.user.id)
-      .single();
-
-    if (perfil && perfil.activo === false) {
-      await supabase.auth.signOut();
-      setErrorLogin("🛑 ACCESO DENEGADO: Cuenta inactiva.");
-      setLoading(false);
-      return;
+    if (authData?.user) {
+      window.location.href = '/dashboard'; // O la ruta a la que vayas
     }
-  };
+  } catch (err) {
+    console.error("Error crítico:", err);
+    setErrorLogin("⚠️ Error de red: Supabase no responde. Intenta usar otra conexión (Hotspot).");
+  } finally {
+    setLoading(false);
+  }
+};
 
   const recuperarPassword = async () => {
     if (!email) {
