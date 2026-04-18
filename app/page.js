@@ -95,7 +95,7 @@ export default function Page() {
     }
 
     if (authData?.user) {
-      window.location.href = '/dashboard'; // O la ruta a la que vayas
+      window.location.href = ''; // O la ruta a la que vayas
     }
   } catch (err) {
     console.error("Error crítico:", err);

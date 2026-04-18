@@ -18,7 +18,8 @@ const facturaSchema = z.object({
   metodo_pago: z.enum(["PUE", "PPD"], { errorMap: () => ({ message: "Método de pago inválido detectado." }) }),
   forma_pago: z.string().min(2, "La forma de pago es obligatoria."),
   fecha_viaje: z.string().min(10, "La fecha de emisión es obligatoria o tiene un formato incorrecto."),
-  referencia: z.string().optional()
+  referencia: z.string().optional(),
+  comentarios: z.string().optional() // <-- NUEVO
 });
 
 // CLAVES SAT POR DEFECTO
@@ -62,7 +63,7 @@ function FacturasContenido() {
     cliente_id: '', folio_fiscal: '', 
     fecha_viaje: new Date().toISOString().split('T')[0],
     fecha_vencimiento: '', forma_pago: '99', metodo_pago: 'PPD', referencia: '', folio_viaje_manual: '',
-    moneda: 'MXN',
+    moneda: 'MXN', comentarios: '', // <-- NUEVO
     conceptos: [{ descripcion: 'Flete Nacional', monto: '', clave_sat: '78101802', aplica_iva: true, aplica_retencion: true, modo_manual: false }] 
   };
 
@@ -77,7 +78,6 @@ function FacturasContenido() {
       }
     });
 
-    // Cargar Catálogo de Claves SAT Guardadas en Memoria
     try {
       const guardadas = JSON.parse(localStorage.getItem('fleetforce_claves_sat')) || [];
       if (guardadas.length > 0) {
@@ -248,7 +248,15 @@ function FacturasContenido() {
     setLoading(true);
     try {
       const clienteSeleccionado = clientes.find(c => c.id === formData.cliente_id);
-      const datosCrudos = { cliente: clienteSeleccionado?.nombre || "", metodo_pago: formData.metodo_pago, forma_pago: formData.forma_pago, fecha_viaje: formData.fecha_viaje, referencia: formData.referencia };
+      const datosCrudos = { 
+        cliente: clienteSeleccionado?.nombre || "", 
+        metodo_pago: formData.metodo_pago, 
+        forma_pago: formData.forma_pago, 
+        fecha_viaje: formData.fecha_viaje, 
+        referencia: formData.referencia,
+        comentarios: formData.comentarios // <-- NUEVO
+      };
+      
       const validacion = facturaSchema.safeParse(datosCrudos);
 
       if (!validacion.success) { setLoading(false); return mostrarAlerta(validacion.error.issues[0]?.message || "🛑 Revisa los datos ingresados.", "error"); }
@@ -265,7 +273,6 @@ function FacturasContenido() {
       let folioViajeLimpio = formData.folio_viaje_manual ? parseInt(String(formData.folio_viaje_manual).replace(/[^0-9]/g, ''), 10) : null;
       if (isNaN(folioViajeLimpio)) folioViajeLimpio = null;
 
-      // Actualizar Catálogo Local Inteligente
       const nuevasClaves = [];
       formData.conceptos.forEach(c => {
         const claveLimpia = c.clave_sat.trim();
@@ -280,7 +287,6 @@ function FacturasContenido() {
         localStorage.setItem('fleetforce_claves_sat', JSON.stringify(soloCustom));
       }
 
-      // Inserción a Base de Datos
       const { error } = await supabase.from('facturas').insert([{ 
         cliente: validacion.data.cliente, 
         monto_total: montoCalculado, 
@@ -294,6 +300,7 @@ function FacturasContenido() {
         moneda: formData.moneda, 
         estatus_pago: 'Pendiente', 
         referencia: validacion.data.referencia, 
+        comentarios: validacion.data.comentarios, // <-- NUEVO
         empresa_id: empresaId 
       }]);
       if (error) throw error;
@@ -497,9 +504,12 @@ function FacturasContenido() {
                             {esCancelada ? (
                               <button onClick={() => generarFacturaPDF(item, clienteCompleto, perfilEmisor)} title="PDF Cancelado" className="p-2 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white rounded-lg transition-colors"><FileText size={16}/></button>
                             ) : sinTimbrar ? (
-                              <button onClick={() => timbrarFactura(item)} title="Timbrar Factura" className="px-3 py-1.5 bg-blue-50 dark:bg-blue-600/10 text-blue-600 dark:text-blue-500 hover:bg-blue-600 hover:text-white border border-blue-200 dark:border-blue-500/20 rounded-lg uppercase tracking-widest text-[10px] flex items-center gap-1.5 transition-colors">
-                                {loading ? <Loader2 size={14} className="animate-spin"/> : <ShieldCheck size={14}/>} Timbrar
-                              </button>
+                              <>
+                                <button onClick={() => generarFacturaPDF(item, clienteCompleto, perfilEmisor)} title="Previsualizar Borrador" className="p-2 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white rounded-lg transition-colors"><FileText size={16}/></button>
+                                <button onClick={() => timbrarFactura(item)} title="Timbrar Factura" className="px-3 py-1.5 bg-blue-50 dark:bg-blue-600/10 text-blue-600 dark:text-blue-500 hover:bg-blue-600 hover:text-white border border-blue-200 dark:border-blue-500/20 rounded-lg uppercase tracking-widest text-[10px] flex items-center gap-1.5 transition-colors">
+                                  {loading ? <Loader2 size={14} className="animate-spin"/> : <ShieldCheck size={14}/>} Timbrar
+                                </button>
+                              </>
                             ) : (
                               <>
                                 <button onClick={() => generarFacturaPDF(item, clienteCompleto, perfilEmisor)} title="Descargar PDF" className="p-2 bg-emerald-50 dark:bg-emerald-600/10 text-emerald-600 dark:text-emerald-500 hover:bg-emerald-600 hover:text-white rounded-lg transition-colors transition-colors"><Receipt size={16}/></button>
@@ -656,6 +666,12 @@ function FacturasContenido() {
                     <div className="md:col-span-2">
                        <label className="text-[12px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1 transition-colors">Referencia del Cliente (Opcional)</label>
                        <input className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl text-sm text-slate-900 dark:text-white outline-none focus:border-emerald-500 transition-colors transition-colors" value={formData.referencia} onChange={e => setFormData({...formData, referencia: e.target.value})} />
+                    </div>
+
+                    {/* NUEVA CAJITA DE COMENTARIOS */}
+                    <div className="md:col-span-2">
+                       <label className="text-[12px] font-black text-slate-500 uppercase tracking-widest mb-2 block ml-1 transition-colors">Comentarios u Observaciones (Se imprimen en el PDF)</label>
+                       <textarea className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl text-sm text-slate-900 dark:text-white outline-none focus:border-emerald-500 transition-colors" rows="2" placeholder="Ej. Pago de la semana 4 correspondiente a viajes de Monterrey a Laredo..." value={formData.comentarios} onChange={e => setFormData({...formData, comentarios: e.target.value})} />
                     </div>
 
                   </div>

@@ -14,6 +14,23 @@ const formatDireccion = (obj) => {
 export const generarFacturaPDF = async (factura, clienteData, perfilEmisor) => {
   const doc = new jsPDF('p', 'mm', 'a4');
 
+  // === DETECTOR DE MODO (Borrador vs Timbrado) ===
+  const isBorrador = !factura.folio_fiscal || factura.folio_fiscal.trim() === '';
+
+  const imprimirMarcaDeAgua = () => {
+    if (isBorrador) {
+      doc.setTextColor(225, 225, 225);
+      doc.setFontSize(70);
+      doc.setFont("helvetica", "bold");
+      doc.text("BORRADOR", 105, 140, { align: 'center', angle: 45 });
+      doc.setFontSize(25);
+      doc.text("SIN VALIDEZ FISCAL", 105, 160, { align: 'center', angle: 45 });
+      doc.setTextColor(0);
+    }
+  };
+
+  imprimirMarcaDeAgua();
+
   // ==========================================
   // CONFIGURACIÓN DE DATOS Y DIVISA
   // ==========================================
@@ -34,7 +51,6 @@ export const generarFacturaPDF = async (factura, clienteData, perfilEmisor) => {
       return [c.clave_sat || '78101802', '1', 'E48', c.descripcion, montoFormateado, montoFormateado];
     });
   } else {
-    // Modo Compatibilidad
     const aplicaIva = factura.aplica_iva !== false; 
     const aplicaRetencion = factura.aplica_retencion !== false; 
     let factor = 1.0 + (aplicaIva ? 0.16 : 0) - (aplicaRetencion ? 0.04 : 0);
@@ -56,7 +72,6 @@ export const generarFacturaPDF = async (factura, clienteData, perfilEmisor) => {
   if (factura.folio_viaje) arrRef.push(`Viaje ${factura.folio_viaje}`);
   
   let textoReferencia = arrRef.length > 0 ? arrRef.join(' | ') : 'S/N';
-  // Límite de seguridad para no romper la simetría de la caja superior
   if (textoReferencia.length > 38) textoReferencia = textoReferencia.substring(0, 35) + '...';
 
   // ==========================================
@@ -80,20 +95,19 @@ export const generarFacturaPDF = async (factura, clienteData, perfilEmisor) => {
   const lineasDirEmisor = doc.splitTextToSize(dirEmisor, 65); 
   doc.text(lineasDirEmisor, 55, 28);
 
-  // CAJA SUPERIOR DERECHA (AZUL OSCURO - SIMÉTRICA)
-  doc.setFillColor(15, 23, 42); // Azul Oscuro / Slate-900
+  doc.setFillColor(15, 23, 42); 
   doc.rect(125, 15, 71, 7, 'F');
   doc.setFontSize(9); doc.setFont("helvetica", "bold"); doc.setTextColor(255); 
-  doc.text("FACTURA CFDI 4.0", 160.5, 20, { align: 'center' });
+  doc.text(isBorrador ? "PREVISUALIZACIÓN DE FACTURA" : "FACTURA CFDI 4.0", 160.5, 20, { align: 'center' });
 
   doc.setTextColor(0); doc.setFontSize(7.5);
   autoTable(doc, {
     startY: 23, margin: { left: 125, right: 14 }, 
     body: [
       ['Serie y Folio:', `F - ${String(factura.folio_interno || 'S/N').padStart(4, '0')}`],
-      ['Folio Fiscal:', factura.folio_fiscal || 'POR ASIGNAR'],
+      ['Folio Fiscal:', isBorrador ? 'DOCUMENTO NO TIMBRADO' : factura.folio_fiscal],
       ['Fecha Emisión:', fechaImpresion],
-      ['Orden / Ref:', textoReferencia], // <--- CAMBIO APLICADO AQUÍ
+      ['Orden / Ref:', textoReferencia],
       ['Uso CFDI:', clienteData?.uso_cfdi || 'G03']
     ],
     theme: 'plain', styles: { fontSize: 7, cellPadding: 0.8 }, 
@@ -101,7 +115,7 @@ export const generarFacturaPDF = async (factura, clienteData, perfilEmisor) => {
   });
 
   // ==========================================
-  // 2. RECEPTOR Y CONDICIONES (BLOQUE ASIMÉTRICO EQUILIBRADO)
+  // 2. RECEPTOR Y CONDICIONES 
   // ==========================================
   let startYReceptor = doc.lastAutoTable.finalY + 8; 
 
@@ -115,7 +129,6 @@ export const generarFacturaPDF = async (factura, clienteData, perfilEmisor) => {
   const dirReceptor = 'Domicilio: ' + formatDireccion(clienteData) + ', C.P. ' + (clienteData?.codigo_postal || '00000');
   doc.text(doc.splitTextToSize(dirReceptor, 100), 14, startYReceptor + 14);
 
-  // Cuadro de Pago (Derecha)
   doc.setDrawColor(230); doc.rect(125, startYReceptor - 1, 71, 18);
   doc.setFont("helvetica", "bold"); doc.text("DATOS DE PAGO:", 127, startYReceptor + 4);
   doc.setFont("helvetica", "normal");
@@ -123,7 +136,7 @@ export const generarFacturaPDF = async (factura, clienteData, perfilEmisor) => {
   doc.text(`Método: ${factura.metodo_pago || 'PPD'} | Forma: ${factura.forma_pago || '99'}`, 127, startYReceptor + 14);
 
   // ==========================================
-  // 3. TABLA DE CONCEPTOS (AJUSTE DE COLUMNAS Y SIMETRÍA)
+  // 3. TABLA DE CONCEPTOS 
   // ==========================================
   autoTable(doc, {
     startY: startYReceptor + 25,
@@ -134,19 +147,16 @@ export const generarFacturaPDF = async (factura, clienteData, perfilEmisor) => {
     headStyles: { fillColor: [15, 23, 42], textColor: 255, fontStyle: 'bold', halign: 'center' },
     styles: { fontSize: 7.5, cellPadding: 2.5, valign: 'middle' },
     columnStyles: { 
-      0: { halign: 'center', cellWidth: 20 }, 
-      1: { halign: 'center', cellWidth: 12 }, 
-      2: { halign: 'center', cellWidth: 12 }, 
-      3: { halign: 'left' },                  
-      4: { halign: 'right', cellWidth: 30 },  
-      5: { halign: 'right', cellWidth: 30 }   
+      0: { halign: 'center', cellWidth: 20 }, 1: { halign: 'center', cellWidth: 12 }, 
+      2: { halign: 'center', cellWidth: 12 }, 3: { halign: 'left' },                  
+      4: { halign: 'right', cellWidth: 30 },  5: { halign: 'right', cellWidth: 30 }   
     }
   });
 
   const finalY = doc.lastAutoTable.finalY;
 
   // ==========================================
-  // 4. TOTALES (ALINEADOS A LA DERECHA)
+  // 4. TOTALES 
   // ==========================================
   const subtotalForm = subtotal.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2});
   const bodyTotales = [['Subtotal:', `$${subtotalForm}`]];
@@ -165,9 +175,36 @@ export const generarFacturaPDF = async (factura, clienteData, perfilEmisor) => {
   });
 
   // ==========================================
-  // 5. PIE FISCAL (CÓDIGOS Y SELLOS)
+  // 5. SECCIÓN DE COMENTARIOS 
   // ==========================================
-  const footerY = 225;
+  const footerY = 225; // Base donde comienza la zona del SAT
+  let heightComentarios = 0;
+  let lineasComentarios = [];
+  
+  if (factura.comentarios && factura.comentarios.trim() !== '') {
+    lineasComentarios = doc.splitTextToSize(factura.comentarios, 180);
+    heightComentarios = (lineasComentarios.length * 4) + 6; 
+  }
+
+  // Si los comentarios y los totales chocan con la zona del SAT, creamos nueva hoja
+  if (doc.lastAutoTable.finalY + heightComentarios > 215) {
+    doc.addPage();
+    imprimirMarcaDeAgua();
+  }
+
+  // Imprimimos los comentarios justo arriba de la línea divisoria
+  if (heightComentarios > 0) {
+    const startComentariosY = footerY - heightComentarios - 2;
+    doc.setFontSize(8); doc.setFont("helvetica", "bold");
+    doc.text("Observaciones / Notas:", 14, startComentariosY);
+    doc.setFont("helvetica", "normal"); doc.setTextColor(80);
+    doc.text(lineasComentarios, 14, startComentariosY + 4);
+    doc.setTextColor(0); 
+  }
+
+  // ==========================================
+  // 6. PIE FISCAL (CÓDIGOS Y SELLOS)
+  // ==========================================
   doc.setDrawColor(15, 23, 42); doc.setLineWidth(0.4); doc.line(14, footerY - 3, 196, footerY - 3);
 
   const uuid = factura.folio_fiscal || 'POR DEFINIR';
@@ -175,11 +212,29 @@ export const generarFacturaPDF = async (factura, clienteData, perfilEmisor) => {
   const selloSat = factura.sello_sat || 'Pendiente de timbrado.';
   const cadena = factura.cadena_original || '||Pendiente de timbrado.||';
 
-  // QR Provisional o Real
-  doc.setDrawColor(230); doc.rect(14, footerY, 35, 35);
-  doc.setFontSize(6); doc.text("QR SAT", 31.5, footerY + 18, { align: 'center' });
+  // Lógica del Código QR (Provisional si es Borrador, Real si está Timbrado)
+  if (isBorrador) {
+    doc.setDrawColor(200); doc.rect(14, footerY, 30, 30);
+    doc.setFontSize(6); doc.setTextColor(150);
+    doc.text("BORRADOR\nSIN QR", 29, footerY + 15, { align: 'center' });
+    doc.setTextColor(0);
+  } else {
+    // Generación del QR real usando la API pública gratuita
+    const qrData = `https://verificacfdi.facturaelectronica.sat.gob.mx/default.aspx?id=${uuid}`;
+    const qrApi = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(qrData)}`;
+    
+    try {
+      const resp = await fetch(qrApi);
+      const blob = await resp.blob();
+      const base64 = await new Promise(r => { const reader = new FileReader(); reader.onloadend = () => r(reader.result); reader.readAsDataURL(blob); });
+      doc.addImage(base64, 'PNG', 14, footerY, 30, 30);
+    } catch (e) {
+      doc.setDrawColor(200); doc.rect(14, footerY, 30, 30); 
+      doc.text("QR SAT", 29, footerY + 15, { align: 'center' });
+    }
+  }
 
-  let textX = 52; let textY = footerY + 3;
+  let textX = 50; let textY = footerY + 3;
   doc.setFontSize(6); doc.setFont("helvetica", "bold"); doc.text("Folio Fiscal (UUID):", textX, textY);
   doc.setFont("helvetica", "normal"); doc.text(String(uuid), textX + 25, textY);
   
@@ -195,5 +250,7 @@ export const generarFacturaPDF = async (factura, clienteData, perfilEmisor) => {
   doc.setFontSize(7); doc.setTextColor(150);
   doc.text("Este documento es una representación impresa de un CFDI 4.0", 105, 288, { align: 'center' });
 
-  doc.save(`Factura_F${String(factura.folio_interno || '0000').padStart(4, '0')}.pdf`);
+  // Nombre del archivo dinámico
+  const nombreArchivo = isBorrador ? `PREVISUALIZACION_Borrador_F${String(factura.folio_interno || '0000').padStart(4, '0')}.pdf` : `Factura_F${String(factura.folio_interno || '0000').padStart(4, '0')}.pdf`;
+  doc.save(nombreArchivo);
 };

@@ -48,7 +48,6 @@ const extraerSerieCER = async (archivoCer) => {
   });
 };
 
-// Formateador de Fechas
 const formatearFecha = (fechaISO) => {
   if (!fechaISO) return '---';
   return new Date(fechaISO).toLocaleDateString('es-MX', {
@@ -65,7 +64,6 @@ export default function SATConfigPage() {
   const [mostrarModal, setMostrarModal] = useState(false);
   const [tabOperador, setTabOperador] = useState('ficha');
 
-  // ESTADOS DE TABLAS Y FILTROS
   const [busqueda, setBusqueda] = useState('');
   const [orden, setOrden] = useState({ columna: 'created_at', direccion: 'desc' });
 
@@ -89,14 +87,12 @@ export default function SATConfigPage() {
     doc_acta_nacimiento: '', doc_curp: '', doc_rfc: '', doc_nss: ''
   });
   const [formDataUb, setFormDataUb] = useState({ nombre_lugar: '', rfc_ubicacion: '', codigo_postal: '', estado: '', municipio: '', calle_numero: '', colonia: '' });
-const [formDataMe, setFormDataMe] = useState({ 
-    descripcion: '', 
-    clave_sat: '', 
-    clave_unidad: 'H87', // H87 = Pieza
-    peso_unitario_kg: '', 
-    clave_embalaje: 'Z01', // Z01 = No aplica (A granel / Sin embalaje)
-    material_peligroso: false 
+  
+  // SEPARACIÓN EXPLÍCITA DE UNIDAD Y EMBALAJE
+  const [formDataMe, setFormDataMe] = useState({ 
+    descripcion: '', clave_sat: '', clave_unidad: 'H87', peso_unitario_kg: '', clave_embalaje: 'Z01', material_peligroso: false 
   });
+  
   const [formDataRe, setFormDataRe] = useState({ numero_economico: '', placas: '', tipo_placa: 'Federal', subtipo_remolque: 'CTR002' });
   const [formDataCl, setFormDataCl] = useState({ 
     nombre: '', rfc: '', regimen_fiscal: '601', codigo_postal: '', dias_credito: 0, uso_cfdi: 'G03',
@@ -107,7 +103,6 @@ const [formDataMe, setFormDataMe] = useState({
   const [importingInfo, setImportingInfo] = useState(false);
   const [validandoSAT, setValidandoSAT] = useState(false);
 
-  // === LÓGICA DE ORDENAMIENTO Y FILTRADO ===
   const manejarOrden = (columna) => {
     setOrden(prev => ({
       columna,
@@ -137,8 +132,6 @@ const [formDataMe, setFormDataMe] = useState({
       procesados.sort((a, b) => {
         let valA = a[orden.columna];
         let valB = b[orden.columna];
-        
-        // Manejo especial para fechas y nulos
         if (!valA) valA = '';
         if (!valB) valB = '';
         if (typeof valA === 'string') valA = valA.toLowerCase();
@@ -153,7 +146,6 @@ const [formDataMe, setFormDataMe] = useState({
     return procesados;
   };
 
-  // Reset de filtros al cambiar de pestaña
   useEffect(() => {
     setBusqueda('');
     setOrden({ columna: 'created_at', direccion: 'desc' });
@@ -278,10 +270,10 @@ const [formDataMe, setFormDataMe] = useState({
             payload.clave_sat = payload.clave_sat.trim();
 
             if (!/^\d{8}$/.test(payload.clave_sat)) {
-                throw new Error("La Clave SAT debe ser de 8 números exactos.");
+                throw new Error("🚨 ERROR DE SINTAXIS: La Clave SAT debe ser de 8 números exactos.");
             }
 
-            // 🛡️ RECHAZO TOTAL Y BLOQUEO SAT
+            // 1. CONSULTAR AL INSPECTOR DE FACTURAPI
             const resVal = await fetch('/api/facturapi', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sesion.access_token}` },
@@ -289,10 +281,34 @@ const [formDataMe, setFormDataMe] = useState({
             });
 
             const dataVal = await resVal.json();
+
+            // 🛡️ BLINDAJE ROBUSTO DE RED Y LLAVES
+            if (!resVal.ok || dataVal.error || dataVal.message) {
+                const motivoRechazo = dataVal.message || dataVal.error || 'Acceso Denegado / Sin Llaves Fiscales';
+                throw new Error(`🔌 ERROR DE CONEXIÓN O LLAVES: No pudimos validar la clave en el SAT. Motivo: ${motivoRechazo}.`);
+            }
             
-            // Si la búsqueda devuelve vacío o Facturapi no lo reconoce, ESTALLA un error e impide el guardado.
-            if (!dataVal.data || dataVal.data.length === 0) {
-                throw new Error(`RECHAZO SAT: La clave ${payload.clave_sat} no existe en el catálogo oficial de Facturapi/SAT. Revisa el código e intenta de nuevo.`);
+            // 2. BUSCAR EXACTAMENTE EL CÓDIGO (Ya corregido a item.key)
+            const productoEncontrado = dataVal.data && dataVal.data.find(item => item.key === payload.clave_sat);
+
+            if (!productoEncontrado) {
+                throw new Error(`🚨 RECHAZO SAT (Catálogo Producto): La clave ${payload.clave_sat} NO EXISTE en el catálogo oficial.`);
+            }
+
+            // 3. VALIDACIÓN DE PELIGROSIDAD
+            const nivelPeligroSAT = String(productoEncontrado.hazardous_material || "0,1"); 
+
+            if (payload.material_peligroso) {
+                if (nivelPeligroSAT === "0") {
+                    throw new Error(`🛑 ERROR MATERIAL PELIGROSO: El SAT dictamina que la clave ${payload.clave_sat} es estrictamente "NO Peligrosa". Desmarca la casilla.`);
+                }
+                if (!payload.clave_embalaje || payload.clave_embalaje === "Z01") {
+                    throw new Error(`🛑 ERROR DE EMBALAJE: Al ser material peligroso, el SAT TE EXIGE seleccionar un Tipo de Embalaje físico válido.`);
+                }
+            } else {
+                if (nivelPeligroSAT === "1") {
+                    throw new Error(`🛑 ERROR MATERIAL PELIGROSO: El SAT dictamina que la clave ${payload.clave_sat} es estrictamente "PELIGROSA". Estás OBLIGADO a marcar la casilla y elegir un embalaje.`);
+                }
             }
         }
 
@@ -360,7 +376,8 @@ const [formDataMe, setFormDataMe] = useState({
     setMostrarModal(false); setEditandoId(null); setTabOperador('ficha');
     setFormDataOp({ nombre_completo: '', rfc: '', numero_licencia: '', vencimiento_licencia: '', telefono: '', doc_ine: '', doc_licencia: '', doc_comprobante_domicilio: '', doc_estudios: '', doc_acta_nacimiento: '', doc_curp: '', doc_rfc: '', doc_nss: '' });
     setFormDataUb({ nombre_lugar: '', rfc_ubicacion: '', codigo_postal: '', estado: '', municipio: '', calle_numero: '', colonia: '' });
-    setFormDataMe({ descripcion: '', clave_sat: '', clave_unidad: 'H87', peso_unitario_kg: '', clave_embalaje: '4G', material_peligroso: false });
+    // Aseguramos valores por defecto limpios
+    setFormDataMe({ descripcion: '', clave_sat: '', clave_unidad: 'H87', peso_unitario_kg: '', clave_embalaje: 'Z01', material_peligroso: false });
     setFormDataRe({ numero_economico: '', placas: '', tipo_placa: 'Federal', subtipo_remolque: 'CTR002' });
     setFormDataCl({ nombre: '', rfc: '', regimen_fiscal: '601', codigo_postal: '', dias_credito: 0, uso_cfdi: 'G03', calle_numero: '', colonia: '', municipio: '', estado: '' });
   };
@@ -369,7 +386,19 @@ const [formDataMe, setFormDataMe] = useState({
   const editarOperador = (op) => { setEditandoId(op.id); setFormDataOp({ nombre_completo: op.nombre_completo || '', rfc: op.rfc || '', numero_licencia: op.numero_licencia || '', vencimiento_licencia: op.vencimiento_licencia || '', telefono: op.telefono || '', doc_ine: op.doc_ine || '', doc_licencia: op.doc_licencia || '', doc_comprobante_domicilio: op.doc_comprobante_domicilio || '', doc_estudios: op.doc_estudios || '', doc_acta_nacimiento: op.doc_acta_nacimiento || '', doc_curp: op.doc_curp || '', doc_rfc: op.doc_rfc || '', doc_nss: op.doc_nss || '' }); setTabOperador('ficha'); setMostrarModal(true); };
   const editarRemolque = (r) => { setEditandoId(r.id); setFormDataRe({ numero_economico: r.numero_economico || '', placas: r.placas || '', tipo_placa: r.tipo_placa || 'Federal', subtipo_remolque: r.subtipo_remolque || 'CTR002' }); setMostrarModal(true); };
   const editarUbicacion = (ub) => { setEditandoId(ub.id); setFormDataUb({ nombre_lugar: ub.nombre_lugar || '', rfc_ubicacion: ub.rfc_ubicacion || '', codigo_postal: ub.codigo_postal || '', estado: ub.estado || '', municipio: ub.municipio || '', calle_numero: ub.calle_numero || '', colonia: ub.colonia || '' }); setMostrarModal(true); };
-  const editarMercancia = (me) => { setEditandoId(me.id); setFormDataMe({ descripcion: me.descripcion || '', clave_sat: me.clave_sat || '', clave_unidad: me.clave_unidad || 'H87', peso_unitario_kg: me.peso_unitario_kg || '', clave_embalaje: me.clave_embalaje || '4G', material_peligroso: me.material_peligroso || false }); setMostrarModal(true); };
+  
+  const editarMercancia = (me) => { 
+    setEditandoId(me.id); 
+    setFormDataMe({ 
+        descripcion: me.descripcion || '', 
+        clave_sat: me.clave_sat || '', 
+        clave_unidad: me.clave_unidad || 'H87', 
+        peso_unitario_kg: me.peso_unitario_kg || '', 
+        clave_embalaje: me.clave_embalaje || 'Z01', 
+        material_peligroso: me.material_peligroso || false 
+    }); 
+    setMostrarModal(true); 
+  };
 
   const verificarVigencia = (fecha) => {
     if (!fecha) return { texto: 'Sin registro', color: 'text-slate-500', bg: 'bg-slate-100 border-slate-200' };
@@ -423,7 +452,6 @@ const [formDataMe, setFormDataMe] = useState({
 
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 sm:mb-8 px-2 transition-colors">
                 
-                {/* BARRA DE BÚSQUEDA */}
                 <div className="relative w-full sm:w-72">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                     <Search size={16} className="text-slate-400" />
@@ -499,10 +527,11 @@ const [formDataMe, setFormDataMe] = useState({
                         {activeTab === 'mercancias' && (
                           <>
                             <th onClick={() => manejarOrden('descripcion')} className="p-4 sm:px-6 text-[9px] font-black uppercase tracking-widest text-slate-500 cursor-pointer hover:bg-slate-100 transition-colors">Descripción del Bien <IconoOrden columna="descripcion"/></th>
-                            <th onClick={() => manejarOrden('clave_sat')} className="p-4 sm:px-6 text-[9px] font-black uppercase tracking-widest text-slate-500 cursor-pointer hover:bg-slate-100 transition-colors">Clave SAT <IconoOrden columna="clave_sat"/></th>
-                            <th onClick={() => manejarOrden('clave_embalaje')} className="p-4 sm:px-6 text-[9px] font-black uppercase tracking-widest text-slate-500 cursor-pointer hover:bg-slate-100 transition-colors">Embalaje <IconoOrden columna="clave_embalaje"/></th>
-                            <th onClick={() => manejarOrden('created_at')} className="p-4 sm:px-6 text-[9px] font-black uppercase tracking-widest text-slate-500 cursor-pointer hover:bg-slate-100 transition-colors"><Calendar size={12} className="inline mr-1 mb-0.5"/>Fecha Alta <IconoOrden columna="created_at"/></th>
-                            <th className="p-4 sm:px-6 text-[9px] font-black uppercase tracking-widest text-slate-500 text-right">Acciones</th>
+                            {/* NUEVAS COLUMNAS SEPARADAS */}
+                            <th onClick={() => manejarOrden('clave_unidad')} className="p-4 sm:px-6 text-[9px] font-black uppercase tracking-widest text-slate-500 cursor-pointer hover:bg-slate-100 transition-colors border-l border-slate-100">Unidad de Medida <IconoOrden columna="clave_unidad"/></th>
+                            <th onClick={() => manejarOrden('clave_embalaje')} className="p-4 sm:px-6 text-[9px] font-black uppercase tracking-widest text-slate-500 cursor-pointer hover:bg-slate-100 transition-colors border-l border-slate-100">Tipo Embalaje <IconoOrden columna="clave_embalaje"/></th>
+                            <th onClick={() => manejarOrden('created_at')} className="p-4 sm:px-6 text-[9px] font-black uppercase tracking-widest text-slate-500 cursor-pointer hover:bg-slate-100 transition-colors border-l border-slate-100"><Calendar size={12} className="inline mr-1 mb-0.5"/>Fecha Alta <IconoOrden columna="created_at"/></th>
+                            <th className="p-4 sm:px-6 text-[9px] font-black uppercase tracking-widest text-slate-500 text-right border-l border-slate-100">Acciones</th>
                           </>
                         )}
                       </tr>
@@ -604,7 +633,8 @@ const [formDataMe, setFormDataMe] = useState({
                         </tr>
                       ))}
 
-                      {activeTab === 'mercancias' && procesarDatos(mercancias).length === 0 && <tr><td colSpan="5" className="p-8 text-center text-slate-400 text-xs uppercase font-bold">No se encontraron resultados</td></tr>}
+                      {/* RENDERIZADO VISUALMENTE SEPARADO PARA MERCANCÍAS */}
+                      {activeTab === 'mercancias' && procesarDatos(mercancias).length === 0 && <tr><td colSpan="6" className="p-8 text-center text-slate-400 text-xs uppercase font-bold">No se encontraron resultados</td></tr>}
                       {activeTab === 'mercancias' && procesarDatos(mercancias).map(me => (
                         <tr key={me.id} className={`hover:bg-slate-50 transition-colors group ${me.material_peligroso ? 'bg-red-50/30' : ''}`}>
                           <td className="p-4 sm:px-6">
@@ -614,16 +644,21 @@ const [formDataMe, setFormDataMe] = useState({
                               </div>
                               <div>
                                 <p className="text-xs font-black uppercase text-slate-900 truncate max-w-[250px]">{me.descripcion}</p>
+                                <p className="text-[10px] font-mono text-slate-500 mt-0.5">SAT: {me.clave_sat}</p>
                                 {me.material_peligroso && <span className="text-[8px] text-red-600 bg-red-100 px-2 py-0.5 rounded-md font-bold uppercase tracking-widest mt-1 inline-block">Material Peligroso</span>}
                               </div>
                             </div>
                           </td>
-                          <td className="p-4 sm:px-6 text-[11px] font-mono font-bold text-slate-600">{me.clave_sat}</td>
-                          <td className="p-4 sm:px-6">
-                            <span className="text-[10px] font-bold text-slate-500 uppercase bg-slate-100 px-3 py-1 rounded-md">{me.clave_embalaje || 'N/A'}</span>
+                          {/* COLUMNA EXCLUSIVA PARA UNIDAD */}
+                          <td className="p-4 sm:px-6 border-l border-slate-100">
+                            <span className="text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-100 px-3 py-1 rounded-md">{me.clave_unidad || 'H87'}</span>
                           </td>
-                          <td className="p-4 sm:px-6 text-[10px] font-mono font-medium text-slate-500">{formatearFecha(me.created_at)}</td>
-                          <td className="p-4 sm:px-6 text-right">
+                          {/* COLUMNA EXCLUSIVA PARA EMBALAJE */}
+                          <td className="p-4 sm:px-6 border-l border-slate-100">
+                            <span className="text-[10px] font-bold text-slate-500 uppercase bg-slate-100 px-3 py-1 rounded-md">{me.clave_embalaje || 'Z01'}</span>
+                          </td>
+                          <td className="p-4 sm:px-6 text-[10px] font-mono font-medium text-slate-500 border-l border-slate-100">{formatearFecha(me.created_at)}</td>
+                          <td className="p-4 sm:px-6 text-right border-l border-slate-100">
                             <div className="flex justify-end gap-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-all">
                               <button onClick={() => editarMercancia(me)} className="p-2 text-slate-400 hover:text-blue-600 bg-slate-100 rounded-lg"><Edit2 size={14}/></button>
                               <button onClick={() => eliminarRegistro(me.id)} className="p-2 text-slate-400 hover:text-red-600 bg-slate-100 rounded-lg"><Trash2 size={14}/></button>
@@ -667,6 +702,19 @@ const [formDataMe, setFormDataMe] = useState({
                         <input className="w-full bg-slate-50 border border-slate-200 p-4 rounded-2xl text-sm text-slate-900 transition-colors" 
                           value={perfilFiscal.codigo_postal} onChange={e => setPerfilFiscal({...perfilFiscal, codigo_postal: e.target.value})} />
                       </div>
+      {/* === NUEVO BLOQUE: RÉGIMEN FISCAL EMISOR === */}
+                            <div className="sm:col-span-2">
+                              <label className="text-[9px] font-black text-slate-500 uppercase ml-1 mb-2 block transition-colors">Régimen Fiscal (Emisor)</label>
+                              <select className="w-full bg-slate-50 border border-slate-200 p-4 rounded-2xl text-sm text-slate-900 font-bold transition-colors" 
+                                value={perfilFiscal.regimen_fiscal} onChange={e => setPerfilFiscal({...perfilFiscal, regimen_fiscal: e.target.value})}>
+                                <option value="601">601 - General de Ley Personas Morales</option>
+                                <option value="612">612 - Personas Físicas con Actividad Empresarial y Profesional</option>
+                                <option value="626">626 - Régimen Simplificado de Confianza (RESICO)</option>
+                                <option value="603">603 - Personas Morales con Fines no Lucrativos</option>
+                                <option value="621">621 - Incorporación Fiscal</option>
+                              </select>
+                            </div>
+
                     </div>
                     
                     <div className="pt-4 border-t border-slate-200 mt-2 transition-colors">
@@ -865,7 +913,8 @@ const [formDataMe, setFormDataMe] = useState({
                         </div>
                       )}
 
-{activeTab === 'mercancias' && (
+                      {/* FORMULARIO DE MERCANCÍAS DEFINITIVO (SEPARADO) */}
+                      {activeTab === 'mercancias' && (
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           <div className="sm:col-span-2">
                             <label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1 transition-colors">Descripción del Bien</label>
@@ -885,22 +934,21 @@ const [formDataMe, setFormDataMe] = useState({
                           <div className="sm:col-span-2 mt-2 pt-4 border-t border-slate-200 transition-colors">
                             <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4 transition-colors">Unidad de Medida y Logística</p>
                             
-<div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-center">
-                              {/* 1. CLAVE UNIDAD (CÓMO SE CUENTA) */}
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-center">
+                              {/* 1. CLAVE UNIDAD */}
                               <div>
                                 <label className="text-[9px] font-black text-blue-600 uppercase block mb-2 ml-1 transition-colors">Unidad de Medida</label>
                                 <select className="w-full bg-slate-50 border border-slate-200 p-4 rounded-xl text-sm text-slate-900 transition-colors" value={formDataMe.clave_unidad} onChange={e => setFormDataMe({...formDataMe, clave_unidad: e.target.value})}>
                                   <option value="H87">H87 - Pieza</option>
-                                  <option value="XG">XG - Tarima (Como unidad)</option>
                                   <option value="KGM">KGM - Kilogramo</option>
                                   <option value="LTR">LTR - Litro</option>
                                   <option value="E48">E48 - Unidad de servicio</option>
+                                  <option value="XG">XG - Tarima (Como unidad)</option>
                                 </select>
                               </div>
 
-                                {/* 3. TIPO DE EMBALAJE (AHORA ES CONDICIONAL) */}
-
-                               <div className={`transition-all duration-300 ${!formDataMe.material_peligroso ? 'opacity-50 grayscale pointer-events-none' : ''}`}>
+                              {/* 2. TIPO DE EMBALAJE (CONDICIONAL) */}
+                              <div className={`transition-all duration-300 ${!formDataMe.material_peligroso ? 'opacity-50 grayscale pointer-events-none' : ''}`}>
                                 <label className="text-[9px] font-black text-slate-500 uppercase block mb-2 ml-1 transition-colors">
                                   Tipo de Embalaje {!formDataMe.material_peligroso && '(No requerido)'}
                                 </label>
@@ -920,7 +968,8 @@ const [formDataMe, setFormDataMe] = useState({
                                 </select>
                               </div>
 
-                              {/* 2. MATERIAL PELIGROSO (LO MOVIMOS AL MEDIO PARA MEJOR FLUJO) */}
+
+                              {/* 3. MATERIAL PELIGROSO */}
                               <div className="flex items-center justify-center bg-slate-50 border border-slate-200 p-4 rounded-xl h-full transition-colors">
                                 <label className="flex items-center gap-3 cursor-pointer w-full justify-center">
                                   <input 
@@ -930,7 +979,6 @@ const [formDataMe, setFormDataMe] = useState({
                                     onChange={e => setFormDataMe({
                                       ...formDataMe, 
                                       material_peligroso: e.target.checked,
-                                      // Truco: Si desmarcan la casilla, forzamos el embalaje a Z01
                                       clave_embalaje: e.target.checked ? formDataMe.clave_embalaje : 'Z01'
                                     })} 
                                   />
@@ -940,11 +988,9 @@ const [formDataMe, setFormDataMe] = useState({
                                 </label>
                               </div>
 
-                              
 
                               
                             </div>
-
                           </div>
                         </div>
                       )}

@@ -87,7 +87,6 @@ export const generarPDFCartaPorte = async (viaje, perfilEmisor) => {
   // Bloque Derecho (Folios y Fechas)
   doc.setFillColor(15, 23, 42); doc.rect(125, 15, 71, 7, 'F'); 
   doc.setTextColor(255); doc.setFontSize(9); doc.setFont("helvetica", "bold");
-  // Ajuste táctico: Cambiar el título si es borrador
   doc.text(isBorrador ? "PREVISUALIZACIÓN DE VIAJE" : "INGRESO / CARTA PORTE 3.1", 160.5, 20, { align: 'center' });
   
   doc.setTextColor(0); doc.setFontSize(8);
@@ -165,11 +164,11 @@ export const generarPDFCartaPorte = async (viaje, perfilEmisor) => {
   // ==========================================
   const filasMercancias = (viaje.mercancias_detalle || []).map(item => {
     const textoPeligroso = item.material_peligroso ? 'MAT. PELIGROSO: SÍ ⚠️' : 'MAT. PELIGROSO: NO';
-    const descripcionAmpliacion = `${item.descripcion}\n${textoPeligroso}`;
+    const descripcionAmpliacion = `${item.descripcion}\nEmb: ${item.clave_embalaje || 'Z01'} | ${textoPeligroso}`;
     
     return [
       item.cantidad,
-      item.embalaje || 'KGM',
+      item.clave_unidad || 'H87',
       item.clave_sat,
       descripcionAmpliacion,
       `${item.peso_kg} kg`
@@ -177,12 +176,18 @@ export const generarPDFCartaPorte = async (viaje, perfilEmisor) => {
   });
 
   if (filasMercancias.length === 0 && viaje.mercancias) {
-    filasMercancias.push([viaje.cantidad_mercancia || 1, 'E48', viaje.mercancias?.clave_sat, `${viaje.mercancias?.descripcion}\nMAT. PELIGROSO: NO`, `${viaje.peso_total_kg} kg`]);
+    filasMercancias.push([
+        viaje.cantidad_mercancia || 1, 
+        viaje.mercancias?.clave_unidad || 'H87', 
+        viaje.mercancias?.clave_sat, 
+        `${viaje.mercancias?.descripcion}\nEmb: ${viaje.mercancias?.clave_embalaje || 'Z01'} | MAT. PELIGROSO: NO`, 
+        `${viaje.peso_total_kg} kg`
+    ]);
   }
 
   autoTable(doc, {
     startY: startTablas,
-    head: [['Cant.', 'Emb.', 'Clave SAT', 'Descripción del Bien', 'Peso (KG)']],
+    head: [['Cant.', 'Unidad', 'Clave SAT', 'Descripción del Bien', 'Peso (KG)']],
     body: filasMercancias,
     theme: 'grid', styles: { fontSize: 7 }, headStyles: { fillColor: [40, 40, 40] }
   });
