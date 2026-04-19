@@ -1,9 +1,9 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import { 
-  Truck, User, MapPin, Package, PlusCircle, Trash2, FileText, Navigation, Receipt, ShieldCheck, DollarSign, Loader2, Edit2, XCircle, FileCode, X, Calendar, ChevronDown, AlertTriangle
+  Truck, User, MapPin, Package, PlusCircle, Trash2, FileText, Navigation, Receipt, ShieldCheck, DollarSign, Loader2, Edit2, XCircle, FileCode, X, Calendar, ChevronDown, AlertTriangle, Search
 } from 'lucide-react';
 import Sidebar from '@/components/sidebar';
 import { generarPDFCartaPorte } from '@/utils/PdfCartaPorte'; 
@@ -18,7 +18,8 @@ const viajeSchema = z.object({
   fecha_salida: z.string().min(10, "🛑 La fecha de salida es obligatoria.")
 });
 
-const traducirErrorFacturapi = (err) => {
+// === TRADUCTOR INTELIGENTE DE ERRORES DEL SAT ===
+const traducirErrorFacturapi = (err, viaje = null) => {
   const errorStr = typeof err === 'object' ? JSON.stringify(err).toLowerCase() : String(err).toLowerCase();
   
   if (errorStr.includes("legal_name") || errorStr.includes("nombre")) return "NOMBRE INCORRECTO: Escríbelo exactamente como en la Constancia Fiscal.";
@@ -31,12 +32,101 @@ const traducirErrorFacturapi = (err) => {
   if (errorStr.includes("unidadpeso") || errorStr.includes("claveunidad")) return "CLAVE DE EMBALAJE: Verifica el embalaje seleccionado.";
   if (errorStr.includes("permisosct") || errorStr.includes("numpermiso")) return "PERMISO SCT: Faltan datos del permiso SCT de la unidad.";
   if (errorStr.includes("fecha") || errorStr.includes("date")) return "FECHA INVÁLIDA: La fecha de salida no es válida.";
-  if (errorStr.includes("catalog key") || errorStr.includes("bienestransp")) return "CLAVE SAT INVÁLIDA: El código de la mercancía no existe en el SAT.";
   if (errorStr.includes("ubicaciones") && errorStr.includes("estado")) return "ESTADO FALTANTE: Falta la clave del Estado (Ej: NLE) en Origen o Destino.";
+
+  // DETECTOR ESPECÍFICO DE MERCANCÍAS
+  if (errorStr.includes("catalog key") || errorStr.includes("bienestransp") || errorStr.includes("product key")) {
+    const match = errorStr.match(/key '?([0-9]+)'?/i) || String(err).match(/BienesTransp.*?([0-9]+)/i);
+    let badKey = match ? match[1] : null;
+
+    if (badKey && viaje && viaje.mercancias_detalle) {
+      const productoProblematico = viaje.mercancias_detalle.find(m => String(m.clave_sat).includes(badKey));
+      if (productoProblematico) {
+        return `CLAVE SAT RECHAZADA: El producto "${productoProblematico.descripcion}" tiene una clave SAT (${badKey}) que no existe en el catálogo oficial. Edita la mercancía.`;
+      }
+    }
+    return "CLAVE SAT INVÁLIDA: Uno de los productos tiene un código que no existe en el catálogo oficial del SAT.";
+  }
 
   if (typeof err === 'object' && err.message) return `El SAT rechazó el timbrado:\n${err.message}`;
   return `Error técnico:\n${typeof err === 'object' ? JSON.stringify(err) : err}`;
 };
+
+// === COMPONENTE: SELECTOR BUSCADOR INTELIGENTE ===
+const SelectorBuscador = ({ opciones, valorSeleccionado, onSelect, placeholder, isSmall = false }) => {
+  const [busqueda, setBusqueda] = useState('');
+  const [abierto, setAbierto] = useState(false);
+  const wrapperRef = useRef(null);
+
+  const itemSeleccionado = opciones.find(o => o.id === valorSeleccionado);
+
+  useEffect(() => {
+    if (itemSeleccionado) setBusqueda(itemSeleccionado.label);
+    else setBusqueda('');
+  }, [valorSeleccionado, itemSeleccionado]);
+
+  useEffect(() => {
+    const handleClickFuera = (event) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
+        setAbierto(false);
+        if (itemSeleccionado) setBusqueda(itemSeleccionado.label);
+        else setBusqueda('');
+      }
+    };
+    document.addEventListener("mousedown", handleClickFuera);
+    return () => document.removeEventListener("mousedown", handleClickFuera);
+  }, [itemSeleccionado]);
+
+  const filtradas = opciones.filter(o => o.label.toLowerCase().includes(busqueda.toLowerCase()));
+
+  // Lógica dinámica de tamaño para empatar alturas
+  const paddingClass = isSmall ? 'p-3 md:p-[0.55rem] pl-9 md:pl-9 text-xs' : 'p-4 pl-10 text-sm';
+  const iconSize = isSmall ? 14 : 16;
+  const iconPos = isSmall ? 'left-3' : 'left-4';
+
+  return (
+    <div className="relative w-full" ref={wrapperRef}>
+      <div className="relative">
+        <input
+          type="text"
+          placeholder={placeholder}
+          className={`w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-900 dark:text-white transition-colors outline-none focus:border-blue-500 ${paddingClass}`}
+          value={abierto ? busqueda : (itemSeleccionado?.label || '')}
+          onChange={(e) => { 
+            setBusqueda(e.target.value); 
+            setAbierto(true); 
+            if(valorSeleccionado) onSelect(''); 
+          }}
+          onFocus={() => { setAbierto(true); setBusqueda(''); }}
+        />
+        <Search size={iconSize} className={`absolute ${iconPos} top-1/2 transform -translate-y-1/2 text-slate-400`} />
+      </div>
+      
+      {abierto && (
+        <ul className="absolute z-[60] w-full mt-1 max-h-56 overflow-y-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl custom-scrollbar">
+          {filtradas.length === 0 ? (
+            <li className="p-4 text-xs text-slate-500 italic text-center">No se encontraron resultados...</li>
+          ) : (
+            filtradas.map(op => (
+              <li 
+                key={op.id} 
+                className="p-3 px-4 text-sm text-slate-700 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-blue-900/30 cursor-pointer transition-colors border-b border-slate-50 dark:border-slate-800/50 last:border-0"
+                onMouseDown={() => { 
+                  onSelect(op.id); 
+                  setBusqueda(op.label); 
+                  setAbierto(false); 
+                }}
+              >
+                {op.label}
+              </li>
+            ))
+          )}
+        </ul>
+      )}
+    </div>
+  );
+};
+
 
 export default function ViajesPage() {
   const router = useRouter();
@@ -47,7 +137,6 @@ export default function ViajesPage() {
   const [viajes, setViajes] = useState([]);
   const [mostrarModal, setMostrarModal] = useState(false);
 
-  
   const [dialogoConfirmacion, setDialogoConfirmacion] = useState({ visible: false, mensaje: '', accion: null });
 
   const [filtroEstatus, setFiltroEstatus] = useState('Todos'); 
@@ -71,7 +160,7 @@ export default function ViajesPage() {
   const formInicial = {
     unidad_id: '', remolque_id: '', operador_id: '', origen_id: '', destino_id: '', 
     cliente_id: '', monto_flete: '', 
-    moneda: 'MXN', // <-- AGREGADO POR DEFECTO
+    moneda: 'MXN',
     aplica_iva: true, 
     aplica_retencion: true, 
     distancia_km: '', referencia: '', fecha_salida: new Date().toISOString().split('T')[0],
@@ -138,7 +227,7 @@ export default function ViajesPage() {
   const eliminarFilaMercancia = (index) => { const nuevasMercancias = formData.mercancias_detalle.filter((_, i) => i !== index); setFormData({ ...formData, mercancias_detalle: nuevasMercancias }); };
   const calcularPesoTotal = () => { return formData.mercancias_detalle.reduce((acc, curr) => acc + (Number(curr.peso_kg) || 0), 0); };
 
-const cerrarModal = () => { setMostrarModal(false); setFormData(formInicial); };
+  const cerrarModal = () => { setMostrarModal(false); setFormData(formInicial); };
 
   const pedirConfirmacion = (mensaje, accion) => { setDialogoConfirmacion({ visible: true, mensaje, accion }); };
   const ejecutarConfirmacion = async () => { if (dialogoConfirmacion.accion) { await dialogoConfirmacion.accion(); } setDialogoConfirmacion({ visible: false, mensaje: '', accion: null }); };
@@ -175,27 +264,11 @@ const cerrarModal = () => { setMostrarModal(false); setFormData(formInicial); };
     });
   };
 
-  const descargarXML = async (viajeId) => {
-    setLoading(true);
-    try {
-      const { data: factura } = await supabase.from('facturas').select('facturapi_id').eq('viaje_id', viajeId).single();
-      if (!factura || !factura.facturapi_id) throw new Error("No se encontró el registro de esta factura en el sistema.");
-      const response = await fetch('/api/facturapi', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ endpoint: `invoices/${factura.facturapi_id}/xml`, method: 'GET' }) });
-      if (!response.ok) throw new Error("No se pudo descargar el XML del SAT.");
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a'); a.href = url; a.download = `CartaPorte_${factura.facturapi_id}.xml`;
-      document.body.appendChild(a); a.click(); a.remove();
-    } catch (err) { mostrarAlerta(err.message, "error"); } finally { setLoading(false); }
-  };
-
  const timbrarCartaPorte = async (viaje) => {
     try {
-      // 1. OBTENCIÓN DE SESIÓN (Arregla el error "session is not defined")
       const { data: { session: currentSession } } = await supabase.auth.getSession();
       if (!currentSession) throw new Error("Sesión expirada o inválida. Por favor, vuelve a iniciar sesión.");
 
-      // 2. VALIDACIONES DE DATOS MAESTROS
       if (!viaje.clientes?.rfc) throw new Error("Falta el RFC del Cliente.");
       if (!viaje.clientes?.codigo_postal) throw new Error("Falta el Código Postal del Cliente.");
       if (!viaje.clientes?.regimen_fiscal) throw new Error("Falta el Régimen Fiscal del Cliente.");
@@ -216,22 +289,23 @@ const cerrarModal = () => { setMostrarModal(false); setFormData(formInicial); };
       if (!op?.rfc || !op?.numero_licencia) throw new Error("Faltan datos requeridos en el Operador (RFC o Licencia).");
 
 
-// 3. 🛡️ FORMACIÓN DE MERCANCÍAS (BLINDAJE SAT 3.1 DEFINITIVO)
+      // 3. 🛡️ FORMACIÓN DE MERCANCÍAS Y FILTRO ESPECÍFICO
       const arregloMercanciasFacturapi = (viaje.mercancias_detalle || []).map((item, index) => {
         if (!item.clave_sat || !item.descripcion || !item.peso_kg) {
           throw new Error(`Faltan datos en el producto #${index + 1}: "${item.descripcion || 'Sin nombre'}"`);
         }
 
         const claveSatLimpia = String(item.clave_sat).trim().replace(/[^0-9]/g, '');
-        if (claveSatLimpia.length !== 8) throw new Error(`ERROR SAT: La Clave SAT del producto #${index + 1} debe tener 8 dígitos.`);
+        // AQUÍ HACEMOS EL ERROR MUY ESPECÍFICO
+        if (claveSatLimpia.length !== 8) {
+           throw new Error(`ERROR SAT: El producto "${item.descripcion}" tiene la clave '${item.clave_sat}'. El SAT exige que tenga exactamente 8 números. Edítalo en tu catálogo.`);
+        }
 
-        // 🛡️ Filtro de Unidad: Si tu BD tiene basura como "Pieza" o está vacío, fuerza "H87" (Clave SAT Oficial)
         let unidadValida = "H87";
         if (item.clave_unidad && String(item.clave_unidad).length <= 3) {
           unidadValida = String(item.clave_unidad).trim().toUpperCase();
         }
 
-        // Objeto base de la mercancía
         let mercancia = { 
           BienesTransp: claveSatLimpia, 
           Descripcion: item.descripcion, 
@@ -240,17 +314,13 @@ const cerrarModal = () => { setMostrarModal(false); setFormData(formInicial); };
           PesoEnKg: parseFloat(item.peso_kg) 
         };
 
-        // 🛡️ REGLA CRÍTICA SAT 3.1: Solo enviar MaterialPeligroso y Embalaje si REALMENTE lo es.
         const esPeligroso = item.material_peligroso === true || item.material_peligroso === "Sí" || item.material_peligroso === "1";
-
         if (esPeligroso) {
           mercancia.MaterialPeligroso = "Sí";
           if (item.clave_embalaje || item.embalaje) {
             mercancia.Embalaje = item.clave_embalaje || item.embalaje;
           }
         } 
-        // ❌ AQUÍ ESTABA EL ERROR: No pongas el "else". Si no es peligroso, el SAT exige 
-        // que el atributo "MaterialPeligroso" no viaje en la petición. Desaparecido.
 
         if (item.valor && parseFloat(item.valor) > 0) { 
           mercancia.ValorMercancia = parseFloat(item.valor); 
@@ -260,7 +330,6 @@ const cerrarModal = () => { setMostrarModal(false); setFormData(formInicial); };
         return mercancia;
       });
 
-      // 4. CÁLCULO DE PESO Y FECHAS
       const pesoTotalTimbre = (viaje.mercancias_detalle || []).reduce((acc, item) => acc + (Number(item.peso_kg) || 0), 0) || viaje.peso_total_kg || 1;
       
       const ahora = new Date(); ahora.setHours(ahora.getHours() - 1);
@@ -274,7 +343,6 @@ const cerrarModal = () => { setMostrarModal(false); setFormData(formInicial); };
       const llegadaHoras = String(llegadaDate.getHours()).padStart(2, '0'); const llegadaMinutos = String(llegadaDate.getMinutes()).padStart(2, '0'); const llegadaSegundos = String(llegadaDate.getSeconds()).padStart(2, '0');
       const fechaHoraLlegadaCFDI = `${llegadaAño}-${llegadaMes}-${llegadaDia}T${llegadaHoras}:${llegadaMinutos}:${llegadaSegundos}`;
 
-      // 5. CONFIGURACIÓN DE AUTOTRANSPORTE Y REMOLQUES
       const configSAT = u.configuracion_vehicular.trim().toUpperCase();
       const requiereRemolqueSAT = configSAT.includes('T') || configSAT.includes('R');
 
@@ -298,7 +366,6 @@ const cerrarModal = () => { setMostrarModal(false); setFormData(formInicial); };
         }];
       }
 
-      // 6. ESTRUCTURA FINAL DEL INVOICE (FACTURAPI)
       const subtotal = parseFloat(viaje.monto_flete || 0);
       let impuestosArray = [];
       if (viaje.aplica_iva !== false) impuestosArray.push({ type: "IVA", rate: 0.16 });
@@ -350,7 +417,6 @@ const cerrarModal = () => { setMostrarModal(false); setFormData(formInicial); };
         }]
       };
 
-      // 7. ENVÍO A API Y ACTUALIZACIÓN
       setLoading(true);
       const response = await fetch('/api/facturapi', { 
         method: 'POST', 
@@ -364,7 +430,6 @@ const cerrarModal = () => { setMostrarModal(false); setFormData(formInicial); };
       const res = await response.json();
       
       if (response.ok) {
-        // ACTUALIZACIÓN EXITOSA EN SUPABASE
         await supabase.from('viajes').update({ 
           estatus: 'Emitido (Timbrado)', 
           folio_fiscal: res.uuid, 
@@ -387,8 +452,7 @@ const cerrarModal = () => { setMostrarModal(false); setFormData(formInicial); };
         mostrarAlerta(`¡CARTA PORTE TIMBRADA! 🎉🎉\n`, "exito");
         obtenerViajes(empresaId);
       } else {
-        // Error controlado desde Facturapi
-        mostrarAlerta(traducirErrorFacturapi(res), "error");
+        mostrarAlerta(traducirErrorFacturapi(res, viaje), "error");
       }
     } catch (err) { 
       mostrarAlerta(err.message, "error"); 
@@ -399,11 +463,19 @@ const cerrarModal = () => { setMostrarModal(false); setFormData(formInicial); };
 
 const registrarViaje = async (e) => {
     e.preventDefault();
-    if (formData.mercancias_detalle.length === 0) {
-      mostrarAlerta("Debes agregar al menos una mercancía al viaje.", "error");
-      return;
-    }
     
+    // === VALIDACIONES MANUALES (Para selectores inteligentes) ===
+    if (!formData.unidad_id) return mostrarAlerta("Debes seleccionar una Unidad / Tractocamión.", "error");
+    if (esCamionArticulado && !formData.remolque_id) return mostrarAlerta("Este camión requiere un remolque seleccionado.", "error");
+    if (!formData.operador_id) return mostrarAlerta("Debes seleccionar un Operador.", "error");
+    if (!formData.origen_id) return mostrarAlerta("Debes seleccionar un Origen de Ruta.", "error");
+    if (!formData.destino_id) return mostrarAlerta("Debes seleccionar un Destino de Ruta.", "error");
+    if (!formData.cliente_id) return mostrarAlerta("Debes seleccionar un Cliente para facturar.", "error");
+    
+    if (formData.mercancias_detalle.length === 0) return mostrarAlerta("Debes agregar al menos una mercancía al viaje.", "error");
+    const mercanciaIncompleta = formData.mercancias_detalle.find(m => !m.mercancia_id);
+    if (mercanciaIncompleta) return mostrarAlerta("Hay una fila de mercancía sin producto. Búscalo en la lista.", "error");
+
     setLoading(true);
     try {
       const clienteObj = clientes.find(c => c.id === formData.cliente_id);
@@ -418,7 +490,7 @@ const registrarViaje = async (e) => {
         distancia_km: parseFloat(formData.distancia_km || 0), unidad_id: formData.unidad_id, remolque_id: remolqueLimpio, operador_id: formData.operador_id, origen_id: formData.origen_id, destino_id: formData.destino_id,
         mercancia_id: formData.mercancias_detalle[0].mercancia_id, mercancias_detalle: mercanciasEnriquecidas, peso_total_kg: calcularPesoTotal(), cliente_id: formData.cliente_id || null, 
         monto_flete: parseFloat(formData.monto_flete || 0), 
-        moneda: formData.moneda, // <-- SE ENVÍA LA DIVISA A VIAJES
+        moneda: formData.moneda, 
         aplica_iva: formData.aplica_iva, 
         aplica_retencion: formData.aplica_retencion, 
         referencia: formData.referencia || '', fecha_salida: formData.fecha_salida, tag_casetas: formData.tag_casetas, tarjeta_gasolina: formData.tarjeta_gasolina
@@ -453,7 +525,7 @@ const registrarViaje = async (e) => {
             empresa_id: empresaId, 
             cliente: clienteObj.nombre, 
             monto_total: montoCalculado, 
-            moneda: formData.moneda, // <-- SE ENVÍA LA DIVISA A FACTURAS
+            moneda: formData.moneda,
             fecha_viaje: formData.fecha_salida, 
             fecha_vencimiento: fechaVenc.toISOString().split('T')[0], 
             estatus_pago: 'Pendiente', 
@@ -717,27 +789,63 @@ const getFiltrosArray = () => {
                 <h2 className="text-2xl font-black text-slate-900 dark:text-white italic uppercase mb-8 transition-colors">Programar <span className="text-blue-600 dark:text-blue-500">Operación</span></h2>
                 
                 <form onSubmit={registrarViaje} className="space-y-6">
+                  
+                  {/* ASIGNACIONES (AHORA CON BUSCADORES) */}
                   <div className={`grid gap-4 ${esCamionArticulado ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3' : 'grid-cols-1 sm:grid-cols-2'}`}>
-                    <select required className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white transition-colors" value={formData.unidad_id} 
-                      onChange={e => {
-                        setFormData({...formData, unidad_id: e.target.value});
-                        const unidadElegida = catalogos.unidades.find(u => u.id === e.target.value);
+                    <SelectorBuscador
+                      placeholder="Buscar Unidad / Tractocamión..."
+                      opciones={catalogos.unidades.map(u => ({ id: u.id, label: `${u.numero_economico} (${u.configuracion_vehicular})` }))}
+                      valorSeleccionado={formData.unidad_id}
+                      onSelect={(id) => {
+                        setFormData({...formData, unidad_id: id});
+                        const unidadElegida = catalogos.unidades.find(u => u.id === id);
                         if (unidadElegida && !unidadElegida.configuracion_vehicular.includes('T') && !unidadElegida.configuracion_vehicular.includes('R')) {
-                           setFormData(prev => ({...prev, unidad_id: e.target.value, remolque_id: ''}));
+                           setFormData(prev => ({...prev, unidad_id: id, remolque_id: ''}));
                         }
-                      }}><option value="">Tractocamión / Unidad...</option>{catalogos.unidades.map(u => <option key={u.id} value={u.id}>{u.numero_economico} ({u.configuracion_vehicular})</option>)}</select>
+                      }}
+                    />
+
                     {esCamionArticulado && (
-                      <select required className="bg-orange-50 dark:bg-slate-950 border border-orange-200 dark:border-orange-500/50 p-4 rounded-xl text-sm text-slate-900 dark:text-white transition-colors" value={formData.remolque_id} onChange={e => setFormData({...formData, remolque_id: e.target.value})}><option value="">Remolque (OBLIGATORIO)...</option>{catalogos.remolques.map(r => <option key={r.id} value={r.id}>{r.placas} - {r.subtipo_remolque || 'Caja'}</option>)}</select>
+                      <SelectorBuscador
+                        placeholder="Buscar Remolque (OBLIGATORIO)..."
+                        opciones={catalogos.remolques.map(r => ({ id: r.id, label: `${r.placas} - ${r.subtipo_remolque || 'Caja'}` }))}
+                        valorSeleccionado={formData.remolque_id}
+                        onSelect={(id) => setFormData({...formData, remolque_id: id})}
+                      />
                     )}
-                    <select required className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white transition-colors" value={formData.operador_id} onChange={e => setFormData({...formData, operador_id: e.target.value})}><option value="">Operador...</option>{catalogos.operadores.map(o => <option key={o.id} value={o.id}>{o.nombre_completo}</option>)}</select>
+
+                    <SelectorBuscador
+                      placeholder="Buscar Operador..."
+                      opciones={catalogos.operadores.map(o => ({ id: o.id, label: o.nombre_completo }))}
+                      valorSeleccionado={formData.operador_id}
+                      onSelect={(id) => setFormData({...formData, operador_id: id})}
+                    />
                   </div>
                   
+                  {/* RUTAS (CON BUSCADORES) */}
                   <div className="grid grid-cols-1 sm:grid-cols-5 gap-4">
-                    <select required className="col-span-1 sm:col-span-2 w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white transition-colors" value={formData.origen_id} onChange={e => setFormData({...formData, origen_id: e.target.value})}><option value="">Origen...</option>{catalogos.ubicaciones.map(ub => <option key={ub.id} value={ub.id}>{ub.nombre_lugar}</option>)}</select>
-                    <select required className="col-span-1 sm:col-span-2 w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white transition-colors" value={formData.destino_id} onChange={e => setFormData({...formData, destino_id: e.target.value})}><option value="">Destino...</option>{catalogos.ubicaciones.map(ub => <option key={ub.id} value={ub.id}>{ub.nombre_lugar}</option>)}</select>
-                    <input required type="number" placeholder="KM Total" className="col-span-1 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white text-center transition-colors" value={formData.distancia_km} onChange={e => setFormData({...formData, distancia_km: e.target.value})} />
+                    <div className="col-span-1 sm:col-span-2">
+                      <SelectorBuscador
+                        placeholder="Buscar Origen..."
+                        opciones={catalogos.ubicaciones.map(ub => ({ id: ub.id, label: ub.nombre_lugar }))}
+                        valorSeleccionado={formData.origen_id}
+                        onSelect={(id) => setFormData({...formData, origen_id: id})}
+                      />
+                    </div>
+                    
+                    <div className="col-span-1 sm:col-span-2">
+                      <SelectorBuscador
+                        placeholder="Buscar Destino..."
+                        opciones={catalogos.ubicaciones.map(ub => ({ id: ub.id, label: ub.nombre_lugar }))}
+                        valorSeleccionado={formData.destino_id}
+                        onSelect={(id) => setFormData({...formData, destino_id: id})}
+                      />
+                    </div>
+                    
+                    <input required type="number" placeholder="KM Total" className="col-span-1 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white text-center transition-colors outline-none focus:border-blue-500" value={formData.distancia_km} onChange={e => setFormData({...formData, distancia_km: e.target.value})} />
                   </div>
                   
+                  {/* MERCANCÍAS (PRODUCTOS CON BUSCADOR PEQUEÑO) */}
                   <div className="p-4 sm:p-6 border border-blue-200 dark:border-blue-500/20 bg-blue-50 dark:bg-blue-900/10 rounded-2xl space-y-4 transition-colors">
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-2">
                       <p className="text-[10px] text-blue-600 dark:text-blue-400 uppercase flex items-center gap-2 font-black tracking-widest"><Package size={14}/> Detalle de Carga</p>
@@ -745,35 +853,55 @@ const getFiltrosArray = () => {
                     </div>
                     {formData.mercancias_detalle.map((item, index) => (
                       <div key={index} className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center bg-white dark:bg-slate-950 p-4 sm:p-3 rounded-xl border border-slate-200 dark:border-slate-800 transition-colors">
-                        <select required className="md:col-span-4 bg-transparent text-sm text-slate-900 dark:text-white outline-none w-full border md:border-0 border-slate-200 dark:border-slate-800 p-2 md:p-0 rounded-lg" value={item.mercancia_id} onChange={e => actualizarFilaMercancia(index, 'mercancia_id', e.target.value)}><option value="">Seleccionar Producto...</option>{catalogos.mercancias.map(m => <option key={m.id} value={m.id}>{m.descripcion}</option>)}</select>
+                        
+                        <div className="md:col-span-4">
+                          <SelectorBuscador
+                            isSmall={true} // <-- Hace que el tamaño empate con los inputs de al lado
+                            placeholder="Buscar Producto..."
+                            opciones={catalogos.mercancias.map(m => ({ id: m.id, label: m.descripcion }))}
+                            valorSeleccionado={item.mercancia_id}
+                            onSelect={(id) => actualizarFilaMercancia(index, 'mercancia_id', id)}
+                          />
+                        </div>
+
                         <div className="grid grid-cols-2 gap-3 md:col-span-4">
-                          <input required type="number" placeholder="Cant." className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-2 rounded-lg text-xs text-slate-900 dark:text-white text-center transition-colors w-full" value={item.cantidad} onChange={e => actualizarFilaMercancia(index, 'cantidad', e.target.value)} />
-                          <input required type="number" step="0.01" placeholder="Peso (KG)" className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-2 rounded-lg text-xs text-slate-900 dark:text-white text-center transition-colors w-full" value={item.peso_kg} onChange={e => actualizarFilaMercancia(index, 'peso_kg', e.target.value)} />
+                          <input required type="number" placeholder="Cant." className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-3 md:p-2.5 rounded-lg text-xs text-slate-900 dark:text-white text-center transition-colors w-full outline-none focus:border-blue-500" value={item.cantidad} onChange={e => actualizarFilaMercancia(index, 'cantidad', e.target.value)} />
+                          <input required type="number" step="0.01" placeholder="Peso (KG)" className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-3 md:p-2.5 rounded-lg text-xs text-slate-900 dark:text-white text-center transition-colors w-full outline-none focus:border-blue-500" value={item.peso_kg} onChange={e => actualizarFilaMercancia(index, 'peso_kg', e.target.value)} />
                         </div>
                         <div className="grid grid-cols-2 gap-3 md:col-span-3">
-                          <input type="number" step="0.01" placeholder="Valor ($)" className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-2 rounded-lg text-xs text-slate-900 dark:text-white text-center transition-colors w-full" value={item.valor} onChange={e => actualizarFilaMercancia(index, 'valor', e.target.value)} />
-                          <select className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-2 rounded-lg text-xs text-slate-900 dark:text-white text-center transition-colors w-full" value={item.moneda} onChange={e => actualizarFilaMercancia(index, 'moneda', e.target.value)}><option value="MXN">MXN</option><option value="USD">USD</option></select>
+                          <input type="number" step="0.01" placeholder="Valor ($)" className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-3 md:p-2.5 rounded-lg text-xs text-slate-900 dark:text-white text-center transition-colors w-full outline-none focus:border-blue-500" value={item.valor} onChange={e => actualizarFilaMercancia(index, 'valor', e.target.value)} />
+                          <select className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-3 md:p-2.5 rounded-lg text-xs text-slate-900 dark:text-white text-center transition-colors w-full outline-none focus:border-blue-500" value={item.moneda} onChange={e => actualizarFilaMercancia(index, 'moneda', e.target.value)}><option value="MXN">MXN</option><option value="USD">USD</option></select>
                         </div>
-                        <button type="button" onClick={() => eliminarFilaMercancia(index)} disabled={formData.mercancias_detalle.length === 1} className="md:col-span-1 text-slate-400 dark:text-slate-500 hover:text-red-500 flex justify-center py-2 md:py-0 disabled:opacity-30 border md:border-0 border-slate-200 dark:border-slate-800 rounded-lg transition-colors"><Trash2 size={16}/></button>
+                        <button type="button" onClick={() => eliminarFilaMercancia(index)} disabled={formData.mercancias_detalle.length === 1} className="md:col-span-1 text-slate-400 dark:text-slate-500 hover:text-red-500 flex justify-center py-3 md:py-0 disabled:opacity-30 border md:border-0 border-slate-200 dark:border-slate-800 rounded-lg transition-colors"><Trash2 size={16}/></button>
                       </div>
                     ))}
                     <div className="text-right mt-2"><p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest transition-colors">Peso Total: <span className="text-slate-900 dark:text-white text-xs ml-1 transition-colors">{calcularPesoTotal().toLocaleString('es-MX', {minimumFractionDigits: 2})} KG</span></p></div>
                   </div>
                   
+                  {/* CASETAS Y GASOLINA */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-                    <input type="text" placeholder="TAG de Casetas (Ejemplo: Pase-123)" className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white transition-colors" value={formData.tag_casetas} onChange={e => setFormData({...formData, tag_casetas: e.target.value})} />
-                    <input type="text" placeholder="Tarjeta de Gasolina (Ejemplo: Edenred-456)" className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white transition-colors" value={formData.tarjeta_gasolina} onChange={e => setFormData({...formData, tarjeta_gasolina: e.target.value})} />
+                    <input type="text" placeholder="TAG de Casetas (Ejemplo: Pase-123)" className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white transition-colors outline-none focus:border-blue-500" value={formData.tag_casetas} onChange={e => setFormData({...formData, tag_casetas: e.target.value})} />
+                    <input type="text" placeholder="Tarjeta de Gasolina (Ejemplo: Edenred-456)" className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white transition-colors outline-none focus:border-blue-500" value={formData.tarjeta_gasolina} onChange={e => setFormData({...formData, tarjeta_gasolina: e.target.value})} />
                   </div>
                   
+                  {/* CLIENTE, FLETE E IMPUESTOS */}
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <select required className="col-span-1 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white transition-colors" value={formData.cliente_id} onChange={e => setFormData({...formData, cliente_id: e.target.value})}><option value="">Cliente Factura...</option>{clientes.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}</select>
-                    <input type="text" placeholder="Orden de Compra / Referencia" className="col-span-1 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white transition-colors" value={formData.referencia} onChange={e => setFormData({...formData, referencia: e.target.value})} />
+                    <div className="col-span-1">
+                      <SelectorBuscador
+                        placeholder="Buscar Cliente para Facturar..."
+                        opciones={clientes.map(c => ({ id: c.id, label: c.nombre }))}
+                        valorSeleccionado={formData.cliente_id}
+                        onSelect={(id) => setFormData({...formData, cliente_id: id})}
+                      />
+                    </div>
+                    
+                    <input type="text" placeholder="Orden de Compra / Referencia" className="col-span-1 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white transition-colors outline-none focus:border-blue-500" value={formData.referencia} onChange={e => setFormData({...formData, referencia: e.target.value})} />
                     
                     {puedeVerAdmin && (
                       <div className="col-span-1 flex flex-col gap-2">
                         <div className="flex gap-2">
-                          <input type="number" placeholder="Monto Flete Base ($)" className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white font-mono transition-colors" value={formData.monto_flete} onChange={e => setFormData({...formData, monto_flete: e.target.value})} />
-                          <select className="w-24 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white font-bold transition-colors" value={formData.moneda} onChange={e => setFormData({...formData, moneda: e.target.value})}>
+                          <input type="number" placeholder="Monto Flete Base ($)" className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white font-mono transition-colors outline-none focus:border-blue-500" value={formData.monto_flete} onChange={e => setFormData({...formData, monto_flete: e.target.value})} />
+                          <select className="w-24 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-sm text-slate-900 dark:text-white font-bold transition-colors outline-none focus:border-blue-500" value={formData.moneda} onChange={e => setFormData({...formData, moneda: e.target.value})}>
                             <option value="MXN">MXN</option>
                             <option value="USD">USD</option>
                           </select>
