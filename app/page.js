@@ -3,6 +3,8 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import TarjetaDato from '@/components/tarjetaDato';
 import Sidebar from '@/components/sidebar';
+import { fetchSafe } from '@/lib/fetchSafe';
+import { notifyOffline } from '@/lib/notifyOffline';
 import { 
   Bell, Calendar, DollarSign, TrendingUp, AlertTriangle, 
   ChevronRight, Search, ChevronDown, Truck, User, Loader2,
@@ -125,11 +127,11 @@ export default function Page() {
     const fIni = filtroActivo && fechaInicio ? new Date(fechaInicio + 'T00:00:00') : null;
     const fFinObj = filtroActivo && fechaFin ? new Date(fechaFin + 'T23:59:59') : null;
     
-    const { data: perfilData } = await supabase
-      .from('perfiles')
-      .select('empresa_id, rol, activo')
-      .eq('id', userId)
-      .single();
+    const { data: perfilData, offline: perfilOffline } = await fetchSafe(
+      supabase.from('perfiles').select('empresa_id, rol, activo').eq('id', userId).single(),
+      `perfil_${userId}`
+    );
+    if (perfilOffline) notifyOffline();
 
     if (perfilData && perfilData.activo === false) {
       await supabase.auth.signOut();
@@ -151,17 +153,30 @@ export default function Page() {
       queryViajes = queryViajes.gte('fecha_salida', fechaInicio).lte('fecha_salida', fechaFin);
     }
 
+    const filtroClave = filtroActivo ? `_${fechaInicio}_${fechaFin}` : '_all';
+
     const [
-      { data: facturasPagadas }, { data: gastosBD }, { data: viajesBD },
-      { data: unidades }, { data: operadores }, { data: facturasPendientes },
-      { data: alertasMtto }
+      resFacturas, resGastos, resViajes,
+      resUnidades, resOperadores, resFactPend, resAlertas
     ] = await Promise.all([
-      queryFacturas, queryGastos, queryViajes,
-      supabase.from('unidades').select('numero_economico, vencimiento_seguro, vencimiento_sct, vencimiento_circulacion').eq('empresa_id', idMaestro),
-      supabase.from('operadores').select('nombre_completo, vencimiento_licencia').eq('empresa_id', idMaestro),
-      supabase.from('facturas').select('cliente, fecha_vencimiento, monto_total').eq('empresa_id', idMaestro).eq('estatus_pago', 'Pendiente'),
-      supabase.from('alertas_mantenimiento').select('id, kilometraje_meta, mensaje, unidades(numero_economico, kilometraje_actual)').eq('empresa_id', idMaestro)
+      fetchSafe(queryFacturas, `facturas_pagadas_${idMaestro}${filtroClave}`),
+      fetchSafe(queryGastos, `gastos_${idMaestro}${filtroClave}`),
+      fetchSafe(queryViajes, `viajes_resumen_${idMaestro}${filtroClave}`),
+      fetchSafe(supabase.from('unidades').select('numero_economico, vencimiento_seguro, vencimiento_sct, vencimiento_circulacion').eq('empresa_id', idMaestro), `unidades_venc_${idMaestro}`),
+      fetchSafe(supabase.from('operadores').select('nombre_completo, vencimiento_licencia').eq('empresa_id', idMaestro), `operadores_venc_${idMaestro}`),
+      fetchSafe(supabase.from('facturas').select('cliente, fecha_vencimiento, monto_total').eq('empresa_id', idMaestro).eq('estatus_pago', 'Pendiente'), `facturas_pendientes_${idMaestro}`),
+      fetchSafe(supabase.from('alertas_mantenimiento').select('id, kilometraje_meta, mensaje, unidades(numero_economico, kilometraje_actual)').eq('empresa_id', idMaestro), `alertas_mtto_${idMaestro}`),
     ]);
+
+    if (resFacturas.offline) notifyOffline();
+
+    const facturasPagadas    = resFacturas.data;
+    const gastosBD           = resGastos.data;
+    const viajesBD           = resViajes.data;
+    const unidades           = resUnidades.data;
+    const operadores         = resOperadores.data;
+    const facturasPendientes = resFactPend.data;
+    const alertasMtto        = resAlertas.data;
 
     const totalIngresos = facturasPagadas?.reduce((acc, curr) => acc + (Number(curr.monto_total) || 0), 0) || 0;
     const totalGastos = gastosBD?.reduce((acc, curr) => acc + (Number(curr.costo) || 0), 0) || 0;

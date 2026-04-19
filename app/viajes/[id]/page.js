@@ -8,6 +8,8 @@ import {
 } from 'lucide-react';
 import Sidebar from '@/components/sidebar';
 import { useToast } from '@/components/toastprovider'; 
+import { fetchSafe } from '@/lib/fetchSafe';
+import { notifyOffline } from '@/lib/notifyOffline';
 
 export default function DetalleViajePage() {
   const { id } = useParams();
@@ -44,7 +46,11 @@ export default function DetalleViajePage() {
 
   async function inicializarDatos(userId) {
     try {
-      const { data: perfilData } = await supabase.from('perfiles').select('empresa_id').eq('id', userId).single();
+      const { data: perfilData, offline } = await fetchSafe(
+        supabase.from('perfiles').select('empresa_id').eq('id', userId).single(),
+        `perfil_${userId}`
+      );
+      if (offline) notifyOffline();
       const idMaestro = perfilData?.empresa_id || userId;
       setEmpresaId(idMaestro);
 
@@ -61,23 +67,27 @@ export default function DetalleViajePage() {
 
   async function cargarCatalogos(idMaestro) {
     const [u, o, r, ub, cl, m] = await Promise.all([
-      supabase.from('unidades').select('*').eq('empresa_id', idMaestro).eq('activo', true),
-      supabase.from('operadores').select('*').eq('empresa_id', idMaestro).eq('activo', true),
-      supabase.from('remolques').select('*').eq('empresa_id', idMaestro).eq('activo', true),
-      supabase.from('ubicaciones').select('*').eq('empresa_id', idMaestro).eq('activo', true),
-      supabase.from('clientes').select('*').eq('empresa_id', idMaestro).eq('activo', true),
-      supabase.from('mercancias').select('*').eq('empresa_id', idMaestro).eq('activo', true)
+      fetchSafe(supabase.from('unidades').select('*').eq('empresa_id', idMaestro).eq('activo', true), `unidades_${idMaestro}`),
+      fetchSafe(supabase.from('operadores').select('*').eq('empresa_id', idMaestro).eq('activo', true), `operadores_${idMaestro}`),
+      fetchSafe(supabase.from('remolques').select('*').eq('empresa_id', idMaestro).eq('activo', true), `remolques_${idMaestro}`),
+      fetchSafe(supabase.from('ubicaciones').select('*').eq('empresa_id', idMaestro).eq('activo', true), `ubicaciones_${idMaestro}`),
+      fetchSafe(supabase.from('clientes').select('*').eq('empresa_id', idMaestro).eq('activo', true), `clientes_${idMaestro}`),
+      fetchSafe(supabase.from('mercancias').select('*').eq('empresa_id', idMaestro).eq('activo', true), `mercancias_${idMaestro}`),
     ]);
+    if (u.offline) notifyOffline();
     setCatalogos({ unidades: u.data || [], operadores: o.data || [], remolques: r.data || [], ubicaciones: ub.data || [], clientes: cl.data || [], mercancias: m.data || [] });
   }
 
   async function obtenerDetalleViaje(idMaestro) {
-    const { data, error } = await supabase.from('viajes').select(`
-      *, unidades(*), operadores(*), remolques(*), clientes(*),
-      origen:ubicaciones!viajes_origen_id_fkey(*), destino:ubicaciones!viajes_destino_id_fkey(*)
-    `).eq('id', id).eq('empresa_id', idMaestro).single();
-
-    if (error) throw error;
+    const { data, offline } = await fetchSafe(
+      supabase.from('viajes').select(`
+        *, unidades(*), operadores(*), remolques(*), clientes(*),
+        origen:ubicaciones!viajes_origen_id_fkey(*), destino:ubicaciones!viajes_destino_id_fkey(*)
+      `).eq('id', id).eq('empresa_id', idMaestro).single(),
+      `viaje_detalle_${id}`
+    );
+    if (offline) notifyOffline();
+    if (!data) throw new Error("Viaje no encontrado");
     setViaje(data);
     setNuevaFechaSalida(data.fecha_salida || '');
   }

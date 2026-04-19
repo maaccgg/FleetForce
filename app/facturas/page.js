@@ -12,6 +12,8 @@ import { generarFacturaPDF } from '@/utils/PdfFactura';
 import { z } from 'zod';
 import * as XLSX from 'xlsx';
 import { useToast } from '@/components/toastprovider'; 
+import { fetchSafe } from '@/lib/fetchSafe';
+import { notifyOffline } from '@/lib/notifyOffline';
 
 const facturaSchema = z.object({
   cliente: z.string().min(2, "El nombre del cliente es obligatorio."),
@@ -115,7 +117,11 @@ function FacturasContenido() {
 
   async function inicializarDatos(userId) {
     setLoading(true);
-    const { data: perfilData } = await supabase.from('perfiles').select('empresa_id, rol').eq('id', userId).single();
+    const { data: perfilData, offline } = await fetchSafe(
+      supabase.from('perfiles').select('empresa_id, rol').eq('id', userId).single(),
+      `perfil_${userId}`
+    );
+    if (offline) notifyOffline();
     const idMaestro = perfilData?.empresa_id || userId;
     setEmpresaId(idMaestro);
     if (perfilData?.rol) setRolUsuario(perfilData.rol);
@@ -125,12 +131,20 @@ function FacturasContenido() {
   }
 
   async function obtenerPerfilEmisor(idMaestro) {
-    const { data } = await supabase.from('perfil_emisor').select('*').eq('empresa_id', idMaestro).single();
+    const { data, offline } = await fetchSafe(
+      supabase.from('perfil_emisor').select('*').eq('empresa_id', idMaestro).single(),
+      `perfil_emisor_${idMaestro}`
+    );
+    if (offline) notifyOffline();
     if (data) setPerfilEmisor(data);
   }
 
   async function obtenerClientes(idMaestro) {
-    const { data } = await supabase.from('clientes').select('*').eq('empresa_id', idMaestro).eq('activo', true).order('nombre');
+    const { data, offline } = await fetchSafe(
+      supabase.from('clientes').select('*').eq('empresa_id', idMaestro).eq('activo', true).order('nombre'),
+      `clientes_${idMaestro}`
+    );
+    if (offline) notifyOffline();
     setClientes(data || []);
   }
 
@@ -144,8 +158,9 @@ function FacturasContenido() {
        if (fechaFin) query = query.lte('fecha_viaje', fechaFin);
     }
 
-    const { data: facturasBD, error } = await query;
-    if (error) console.error("Error cargando facturas:", error.message);
+    const filtroClave = viajeIdHighlight ? `viaje_${viajeIdHighlight}` : (filtroActivo ? `${fechaInicio}_${fechaFin}` : 'all');
+    const { data: facturasBD, offline } = await fetchSafe(query, `facturas_${idMaestro}_${filtroClave}`);
+    if (offline) notifyOffline();
 
     const cobrado = facturasBD?.filter(f => f.estatus_pago === 'Pagado').reduce((acc, curr) => acc + (Number(curr.monto_total) || 0), 0) || 0;
     const pendiente = facturasBD?.filter(f => f.estatus_pago === 'Pendiente').reduce((acc, curr) => acc + (Number(curr.monto_total) || 0), 0) || 0;

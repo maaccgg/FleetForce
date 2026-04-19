@@ -10,6 +10,8 @@ import {
 import Sidebar from '@/components/sidebar';
 import * as XLSX from 'xlsx';
 import { useToast } from '@/components/toastprovider';
+import { fetchSafe } from '@/lib/fetchSafe';
+import { notifyOffline } from '@/lib/notifyOffline';
 
 const DOCS_OPERADOR = [
   { id: 'doc_ine', label: 'INE / Identificación', icon: User },
@@ -231,17 +233,28 @@ export default function SATConfigPage() {
   async function cargarDatos(userId) {
     setLoading(true);
     try {
-      const { data: perfilData } = await supabase.from('perfiles').select('empresa_id, rol').eq('id', userId).single();
+      const { data: perfilData, offline: offP } = await fetchSafe(
+        supabase.from('perfiles').select('empresa_id, rol').eq('id', userId).single(),
+        `perfil_${userId}`
+      );
+      if (offP) notifyOffline();
       const idInstitucion = perfilData?.empresa_id || userId;
       setEmpresaId(idInstitucion);
       if (perfilData?.rol) setRolUsuario(perfilData.rol);
 
       if (activeTab === 'fiscal') {
-        const { data } = await supabase.from('perfil_emisor').select('*').eq('empresa_id', idInstitucion).single();
+        const { data, offline } = await fetchSafe(
+          supabase.from('perfil_emisor').select('*').eq('empresa_id', idInstitucion).single(),
+          `perfil_emisor_${idInstitucion}`
+        );
+        if (offline) notifyOffline();
         if (data) setPerfilFiscal({...data, razon_social: data.razon_social||'', rfc: data.rfc||'', codigo_postal: data.codigo_postal||''});
       } else {
-        const { data, error } = await supabase.from(activeTab).select('*').eq('empresa_id', idInstitucion).eq('activo', true).order('created_at', { ascending: false });
-        if (error) throw error;
+        const { data, offline } = await fetchSafe(
+          supabase.from(activeTab).select('*').eq('empresa_id', idInstitucion).eq('activo', true).order('created_at', { ascending: false }),
+          `${activeTab}_${idInstitucion}`
+        );
+        if (offline) notifyOffline();
         if (activeTab === 'operadores') setOperadores(data || []);
         if (activeTab === 'ubicaciones') setUbicaciones(data || []);
         if (activeTab === 'mercancias') setMercancias(data || []);

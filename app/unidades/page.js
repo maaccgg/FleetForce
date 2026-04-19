@@ -9,6 +9,8 @@ import Sidebar from '@/components/sidebar';
 
 // === SISTEMA DE ALERTAS ===
 import { useToast } from '@/components/toastprovider';
+import { fetchSafe } from '@/lib/fetchSafe';
+import { notifyOffline } from '@/lib/notifyOffline';
 
 export default function UnidadesPage() {
   const { mostrarAlerta } = useToast();
@@ -49,31 +51,39 @@ export default function UnidadesPage() {
 
   async function obtenerUnidades(userId) {
     setLoading(true);
-    const { data: perfilData } = await supabase.from('perfiles').select('empresa_id').eq('id', userId).single();
-    
-    const idInstitucion = perfilData?.empresa_id || userId; 
+    const { data: perfilData, offline: offP } = await fetchSafe(
+      supabase.from('perfiles').select('empresa_id').eq('id', userId).single(),
+      `perfil_${userId}`
+    );
+    if (offP) notifyOffline();
+
+    const idInstitucion = perfilData?.empresa_id || userId;
     setEmpresaId(idInstitucion);
 
-    try {
-      const { data, error } = await supabase
-        .from('unidades')
-        .select('*')
-        .eq('empresa_id', idInstitucion) 
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setUnidades(data || []);
-    } catch (err) { console.error("Error cargando unidades:", err.message); }
+    const { data, offline } = await fetchSafe(
+      supabase.from('unidades').select('*').eq('empresa_id', idInstitucion).order('created_at', { ascending: false }),
+      `unidades_${idInstitucion}`
+    );
+    if (offline) notifyOffline();
+    setUnidades(data || []);
     setLoading(false);
   }
 
   async function cargarMantenimientos(unidadId) {
-    const { data } = await supabase.from('mantenimientos').select('*').eq('unidad_id', unidadId).order('fecha', { ascending: false });
+    const { data, offline } = await fetchSafe(
+      supabase.from('mantenimientos').select('*').eq('unidad_id', unidadId).order('fecha', { ascending: false }),
+      `mantenimientos_unidad_${unidadId}`
+    );
+    if (offline) notifyOffline();
     setMantenimientos(data || []);
   }
 
   async function cargarAlertas(unidadId) {
-    const { data } = await supabase.from('alertas_mantenimiento').select('*').eq('unidad_id', unidadId).order('kilometraje_meta', { ascending: true });
+    const { data, offline } = await fetchSafe(
+      supabase.from('alertas_mantenimiento').select('*').eq('unidad_id', unidadId).order('kilometraje_meta', { ascending: true }),
+      `alertas_unidad_${unidadId}`
+    );
+    if (offline) notifyOffline();
     setAlertas(data || []);
   }
 

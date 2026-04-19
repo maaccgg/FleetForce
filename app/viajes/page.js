@@ -9,7 +9,9 @@ import Sidebar from '@/components/sidebar';
 import { generarPDFCartaPorte } from '@/utils/PdfCartaPorte'; 
 import { z } from 'zod';
 import * as XLSX from 'xlsx';
-import { useToast } from '@/components/toastprovider'; 
+import { useToast } from '@/components/toastprovider';
+import { fetchSafe } from '@/lib/fetchSafe';
+import { notifyOffline } from '@/lib/notifyOffline'; 
 
 // === ESCUDO DE VALIDACIÓN ZOD PARA VIAJES ===
 const viajeSchema = z.object({
@@ -196,28 +198,37 @@ export default function ViajesPage() {
   }
 
   async function obtenerPerfilFiscal(idMaestro) {
-    const { data } = await supabase.from('perfil_emisor').select('*').eq('empresa_id', idMaestro).single();
+    const { data, offline } = await fetchSafe(
+      supabase.from('perfil_emisor').select('*').eq('empresa_id', idMaestro).single(),
+      `perfil_emisor_${idMaestro}`
+    );
+    if (offline) notifyOffline();
     if (data) setPerfilEmisor(data);
   }
 
   async function cargarCatalogos(idMaestro) {
     const [u, o, ub, m, cl, r] = await Promise.all([
-      supabase.from('unidades').select('*').eq('empresa_id', idMaestro).eq('activo', true),
-      supabase.from('operadores').select('*').eq('empresa_id', idMaestro).eq('activo', true),
-      supabase.from('ubicaciones').select('*').eq('empresa_id', idMaestro).eq('activo', true),
-      supabase.from('mercancias').select('*').eq('empresa_id', idMaestro).eq('activo', true),
-      supabase.from('clientes').select('*').eq('empresa_id', idMaestro).eq('activo', true),
-      supabase.from('remolques').select('*').eq('empresa_id', idMaestro).eq('activo', true)
+      fetchSafe(supabase.from('unidades').select('*').eq('empresa_id', idMaestro).eq('activo', true), `unidades_${idMaestro}`),
+      fetchSafe(supabase.from('operadores').select('*').eq('empresa_id', idMaestro).eq('activo', true), `operadores_${idMaestro}`),
+      fetchSafe(supabase.from('ubicaciones').select('*').eq('empresa_id', idMaestro).eq('activo', true), `ubicaciones_${idMaestro}`),
+      fetchSafe(supabase.from('mercancias').select('*').eq('empresa_id', idMaestro).eq('activo', true), `mercancias_${idMaestro}`),
+      fetchSafe(supabase.from('clientes').select('*').eq('empresa_id', idMaestro).eq('activo', true), `clientes_${idMaestro}`),
+      fetchSafe(supabase.from('remolques').select('*').eq('empresa_id', idMaestro).eq('activo', true), `remolques_${idMaestro}`),
     ]);
+    if (u.offline || o.offline || ub.offline) notifyOffline();
     setCatalogos({ unidades: u.data || [], operadores: o.data || [], ubicaciones: ub.data || [], mercancias: m.data || [], remolques: r.data || [] });
     setClientes(cl.data || []);
   }
 
   async function obtenerViajes(idMaestro) {
-    const { data } = await supabase.from('viajes').select(`
+    const { data, offline } = await fetchSafe(
+      supabase.from('viajes').select(`
         *, unidades(*), operadores(*), remolques(*), clientes(*),
         origen:ubicaciones!viajes_origen_id_fkey(*), destino:ubicaciones!viajes_destino_id_fkey(*)
-      `).eq('empresa_id', idMaestro).order('created_at', { ascending: false });
+      `).eq('empresa_id', idMaestro).order('created_at', { ascending: false }),
+      `viajes_completos_${idMaestro}`
+    );
+    if (offline) notifyOffline();
     setViajes(data || []);
   }
 

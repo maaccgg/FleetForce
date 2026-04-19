@@ -3,7 +3,8 @@ import "./globals.css";
 
 // IMPORTACIONES DE PROVEEDORES GLOBALES
 import { ToastProvider } from "@/components/toastprovider"; 
-import { ThemeProvider } from "@/components/themeprovider"; // <-- NUEVO
+import { ThemeProvider } from "@/components/themeprovider";
+import OfflineBanner from "@/components/OfflineBanner";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -30,7 +31,7 @@ export default function RootLayout({ children }) {
         {/* ENVOLVEMOS TODO EN EL TEMA PRIMERO */}
         <ThemeProvider>
           <ToastProvider>
-            
+            <OfflineBanner />
             {/* Lado Derecho: Contenido Dinámico */}
             {/* 🛑 También quitamos el bg-slate-950 de aquí */}
             <main className="flex-1 h-screen overflow-y-auto relative">

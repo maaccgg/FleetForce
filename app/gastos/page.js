@@ -11,6 +11,8 @@ import TarjetaDato from '@/components/tarjetaDato';
 
 // === SISTEMA DE ALERTAS ===
 import { useToast } from '@/components/toastprovider';
+import { fetchSafe } from '@/lib/fetchSafe';
+import { notifyOffline } from '@/lib/notifyOffline';
 
 // === DICCIONARIO INSTITUCIONAL DE GASTOS ===
 const DICCIONARIO_GASTOS = {
@@ -115,7 +117,11 @@ export default function GastosOperativosPage() {
 
   async function inicializarDatos(userId) {
     setLoading(true);
-    const { data: perfilData } = await supabase.from('perfiles').select('empresa_id, rol').eq('id', userId).single();
+    const { data: perfilData, offline } = await fetchSafe(
+      supabase.from('perfiles').select('empresa_id, rol').eq('id', userId).single(),
+      `perfil_${userId}`
+    );
+    if (offline) notifyOffline();
     const idMaestro = perfilData?.empresa_id || userId;
     setEmpresaId(idMaestro);
     if (perfilData?.rol) setRolUsuario(perfilData.rol);
@@ -125,16 +131,26 @@ export default function GastosOperativosPage() {
 
   async function obtenerDatos(idMaestro) {
     setLoading(true);
-    
-    const { data: unidadesBD } = await supabase.from('unidades').select('id, numero_economico').eq('empresa_id', idMaestro).eq('activo', true);
+
+    const { data: unidadesBD, offline: offU } = await fetchSafe(
+      supabase.from('unidades').select('id, numero_economico').eq('empresa_id', idMaestro).eq('activo', true),
+      `unidades_simple_${idMaestro}`
+    );
+    if (offU) notifyOffline();
     setUnidades(unidadesBD || []);
 
-    const { data: viajesBD } = await supabase.from('viajes').select('id, folio_interno, fecha_salida').eq('empresa_id', idMaestro).order('created_at', { ascending: false }).limit(50);
+    const { data: viajesBD, offline: offV } = await fetchSafe(
+      supabase.from('viajes').select('id, folio_interno, fecha_salida').eq('empresa_id', idMaestro).order('created_at', { ascending: false }).limit(50),
+      `viajes_simple_${idMaestro}`
+    );
+    if (offV) notifyOffline();
     setViajesActivos(viajesBD || []);
 
-    const { data: gastosBD, error } = await supabase.from('mantenimientos').select(`*, unidades(numero_economico), viajes(folio_interno), gastos_detalle(*)`).eq('empresa_id', idMaestro).gte('fecha', fechaInicio).lte('fecha', fechaFin).order('fecha', { ascending: false });
-
-    if (error) console.error(error);
+    const { data: gastosBD, offline: offG } = await fetchSafe(
+      supabase.from('mantenimientos').select(`*, unidades(numero_economico), viajes(folio_interno), gastos_detalle(*)`).eq('empresa_id', idMaestro).gte('fecha', fechaInicio).lte('fecha', fechaFin).order('fecha', { ascending: false }),
+      `gastos_${idMaestro}_${fechaInicio}_${fechaFin}`
+    );
+    if (offG) notifyOffline();
 
     const total = gastosBD?.reduce((acc, curr) => acc + (Number(curr.costo) || 0), 0) || 0;
     setMetricas({ totalPeriodo: total, conteo: gastosBD?.length || 0 });
