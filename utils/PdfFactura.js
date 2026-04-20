@@ -22,9 +22,7 @@ export const generarFacturaPDF = async (factura, clienteData, perfilEmisor) => {
       doc.setTextColor(225, 225, 225);
       doc.setFontSize(70);
       doc.setFont("helvetica", "bold");
-      doc.text("BORRADOR", 105, 140, { align: 'center', angle: 45 });
       doc.setFontSize(25);
-      doc.text("SIN VALIDEZ FISCAL", 105, 160, { align: 'center', angle: 45 });
       doc.setTextColor(0);
     }
   };
@@ -105,7 +103,6 @@ export const generarFacturaPDF = async (factura, clienteData, perfilEmisor) => {
     startY: 23, margin: { left: 125, right: 14 }, 
     body: [
       ['Serie y Folio:', `F - ${String(factura.folio_interno || 'S/N').padStart(4, '0')}`],
-      ['Folio Fiscal:', isBorrador ? 'DOCUMENTO NO TIMBRADO' : factura.folio_fiscal],
       ['Fecha Emisión:', fechaImpresion],
       ['Orden / Ref:', textoReferencia],
       ['Uso CFDI:', clienteData?.uso_cfdi || 'G03']
