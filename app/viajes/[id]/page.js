@@ -322,7 +322,7 @@ const getBadgeColor = (estatus) => {
             <div className="flex items-center gap-4">
               <button onClick={() => router.push('/viajes')} className="p-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-500 hover:text-slate-900 dark:hover:text-white transition-colors shadow-sm"><ArrowLeft size={18} /></button>
               <div>
-                <h1 className="text-3xl font-black tracking-tighter uppercase italic text-slate-900 dark:text-white leading-none transition-colors">Viaje <span className="text-blue-600 dark:text-blue-500">V-{String(viaje.folio_interno).padStart(4, '0')}</span></h1>
+<h1 className="text-3xl font-black tracking-tighter uppercase italic text-slate-900 dark:text-white leading-none transition-colors">Viaje <span className="text-blue-600 dark:text-blue-500">V-{viaje.folio_interno}</span></h1>
                 <div className="flex items-center gap-2 mt-2">
                   <span className={`inline-flex px-2 py-0.5 rounded border uppercase tracking-widest text-[9px] font-black items-center gap-1 ${getBadgeColor(viaje.estatus)}`}>{viaje.estatus}</span>
                   {viaje.id_ccp && <span className="text-slate-500 text-[10px] font-mono tracking-widest bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded">CCP: {viaje.id_ccp}</span>}

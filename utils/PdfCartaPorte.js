@@ -93,11 +93,11 @@ export const generarPDFCartaPorte = async (viaje, perfilEmisor) => {
   autoTable(doc, {
     startY: 22, margin: { left: 125, right: 14 },
     body: [
-      ['Folio Interno:', `V - ${String(viaje.folio_interno).padStart(4, '0')}`],
+      ['Folio Interno:', `V-${viaje.folio_interno || 'S/N'}`],
       ['Fecha Emisión:', fechaEmisionCompleta],
-      ['Folio Fiscal:', isBorrador ? 'DOCUMENTO NO TIMBRADO' : (viaje.folio_fiscal || 'POR ASIGNAR')],
       ['Orden Compra:', viaje.referencia || '---']
     ],
+
     theme: 'plain', styles: { fontSize: 7, cellPadding: 0.8 },
     columnStyles: { 0: { fontStyle: 'bold', cellWidth: 22 }, 1: { halign: 'right', cellWidth: 49 } }
   });
@@ -256,13 +256,20 @@ export const generarPDFCartaPorte = async (viaje, perfilEmisor) => {
     }
   }
 
-  // Textos y Sellos a la derecha del QR único
+// Textos y Sellos a la derecha del QR único
   let textoY = footerY + 2;
   doc.setFontSize(6); doc.setFont("helvetica", "bold");
+  
+  const uuid = isBorrador ? 'DOCUMENTO EN BORRADOR' : (viaje.folio_fiscal || 'POR DEFINIR');
+  doc.text(`Folio Fiscal (UUID): ${uuid}`, 46, textoY);
+  
+  textoY += 4;
   doc.text(`IdCCP: ${isBorrador ? 'DOCUMENTO EN BORRADOR' : idCcp}`, 46, textoY);
   
-  textoY += 6;
+  textoY += 5;
   doc.text("Sello Digital del Emisor:", 46, textoY);
+
+
   doc.setFont("helvetica", "normal");
   const textoSelloEmisor = isBorrador ? 'DOCUMENTO EN BORRADOR - SIN EFECTOS FISCALES' : (viaje.sello_emisor || 'Pendiente...');
   const lineasSelloEmisor = doc.splitTextToSize(textoSelloEmisor, 145); 
@@ -313,6 +320,6 @@ export const generarPDFCartaPorte = async (viaje, perfilEmisor) => {
   doc.setFont("helvetica", "bold"); doc.text("FIRMA DE CONFORMIDAD DEL CLIENTE / REMITENTE", 105, yLegal + 30, { align: 'center' });
   doc.line(65, yLegal + 25, 145, yLegal + 25);
 
-  const nombreArchivo = isBorrador ? `PREVISUALIZACION_Borrador_V${viaje.folio_interno || '0000'}.pdf` : `CartaPorte_${viaje.folio_interno || '0000'}.pdf`;
+  const nombreArchivo = isBorrador ? `PREVISUALIZACION_Borrador_V-${viaje.folio_interno || 'SN'}.pdf` : `CartaPorte_V-${viaje.folio_interno || 'SN'}.pdf`;
   doc.save(nombreArchivo);
 };

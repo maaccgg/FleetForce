@@ -274,8 +274,10 @@ export default function GastosOperativosPage() {
       historial.forEach(item => {
         const vieneDeViaje = item.viaje_id !== null;
         const fechaStr = item.fecha ? item.fecha.slice(0, 10) : 'S/F';
-        const folioOrigen = item.folio_interno ? `G-${String(item.folio_interno).padStart(4, '0')}` : 'G-S/N';
-        const referenciaViaje = vieneDeViaje ? `VIAJE V-${String(item.viajes?.folio_interno).padStart(4, '0')}` : 'Gasto General';
+
+        const folioOrigen = item.folio_interno ? `G-${item.folio_interno}` : 'G-S/N';
+        const referenciaViaje = vieneDeViaje ? `VIAJE V-${item.viajes?.folio_interno}` : 'Gasto General';
+
         const unidad = item.unidades?.numero_economico || '---';
 
         if (item.gastos_detalle && item.gastos_detalle.length > 0) {
@@ -377,9 +379,13 @@ export default function GastosOperativosPage() {
 
                     return (
                       <tr key={item.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors group">
-                        <td className="p-4 pl-8 whitespace-nowrap"><span className="text-[14px] text-slate-900 dark:text-white font-mono font-medium transition-colors">{item.folio_interno ? `G-${String(item.folio_interno).padStart(4, '0')}` : 'G-S/N'}</span></td>
+                        <td className="p-4 pl-8 whitespace-nowrap">
+                         <span className="text-[14px] text-slate-900 dark:text-white font-mono font-medium transition-colors">{item.folio_interno ? `G-${item.folio_interno}` : 'G-S/N'}</span>
+                          </td>
                         <td className="p-4 whitespace-nowrap">
-                          {vieneDeViaje ? ( <span className="inline-flex px-2 py-1 rounded-md bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-500/30 text-blue-600 dark:text-blue-400 font-mono text-[12px] items-center gap-1.5 transition-colors"><Truck size={12}/> V-{String(item.viajes?.folio_interno).padStart(4, '0')}</span>) : ( <span className="text-slate-400 dark:text-slate-600 text-[12px] font-mono transition-colors">---</span> )}
+                          {vieneDeViaje ? ( <span className="inline-flex px-2 py-1 rounded-md bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-500/30 text-blue-600 dark:text-blue-400 font-mono text-[12px] items-center gap-1.5 transition-colors"><Truck size={12}/> V-{item.viajes?.folio_interno}</span>) :
+                          
+                          ( <span className="text-slate-400 dark:text-slate-600 text-[12px] font-mono transition-colors">---</span> )}
                         </td>
                         <td className="p-4 whitespace-nowrap">
                           {item.unidades?.numero_economico ? ( <span className="inline-flex px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-mono text-[12px] transition-colors">ECO: {item.unidades.numero_economico}</span> ) : ( <span className="text-slate-400 dark:text-slate-600 text-[12px] font-mono transition-colors">---</span> )}
@@ -449,7 +455,7 @@ export default function GastosOperativosPage() {
                       </select>
                       <select className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3.5 rounded-xl text-sm text-slate-900 dark:text-white focus:border-blue-500 outline-none transition-colors" value={formData.viaje_id} onChange={e => setFormData({...formData, viaje_id: e.target.value})}>
                         <option value="">-- Gasto Admin --</option>
-                        {viajesActivos.map(v => <option key={v.id} value={v.id}>Viaje V-{String(v.folio_interno).padStart(4, '0')}</option>)}
+                        {viajesActivos.map(v => <option key={v.id} value={v.id}>Viaje V-{v.folio_interno}</option>)}
                       </select>
                       <input type="date" className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3.5 rounded-xl text-sm text-slate-900 dark:text-white focus:border-blue-500 outline-none cursor-pointer transition-colors" value={formData.fecha} onChange={e => setFormData({...formData, fecha: e.target.value})} required />
                     </div>

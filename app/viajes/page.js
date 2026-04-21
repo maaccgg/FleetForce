@@ -552,7 +552,7 @@ const registrarViaje = async (e) => {
       }
 
       if (formData.gasto_monto && parseFloat(formData.gasto_monto) > 0) {
-        await supabase.from('mantenimientos').insert([{ unidad_id: formData.unidad_id, empresa_id: empresaId, viaje_id: nuevoViaje.id, descripcion: formData.gasto_descripcion || `Gastos Operativos - Viaje V-${String(nuevoViaje.folio_interno).padStart(4, '0')}`, costo: parseFloat(formData.gasto_monto), tipo: 'Otros', fecha: formData.fecha_salida }]);
+await supabase.from('mantenimientos').insert([{ unidad_id: formData.unidad_id, empresa_id: empresaId, viaje_id: nuevoViaje.id, descripcion: formData.gasto_descripcion || `Gastos Operativos - Viaje V-${nuevoViaje.folio_interno}`, costo: parseFloat(formData.gasto_monto), tipo: 'Otros', fecha: formData.fecha_salida }]);
       }
       mostrarAlerta("Viaje programado exitosamente.", "exito");
 
@@ -604,7 +604,7 @@ const getFiltrosArray = () => {
   }
   
   const exportarExcelViajes = () => {
-    const datosParaExcel = viajesFiltrados.map(v => ({ Folio: `V-${String(v.folio_interno).padStart(4, '0')}`, Fecha: v.fecha_salida, Estatus: v.estatus, Cliente: v.clientes?.nombre || 'N/A', Referencia: v.referencia || '', Origen: v.origen?.nombre_lugar || '', Destino: v.destino?.nombre_lugar || '', Unidad: v.unidades?.numero_economico || '', Operador: v.operadores?.nombre_completo || '', Peso_KG: v.peso_total_kg, Monto_Flete: v.monto_flete || 0, Moneda: v.moneda || 'MXN', ID_CartaPorte: v.id_ccp || '' }));
+    const datosParaExcel = viajesFiltrados.map(v => ({ Folio: `V-${v.folio_interno}`, Fecha: v.fecha_salida, Estatus: v.estatus, Cliente: v.clientes?.nombre || 'N/A', Referencia: v.referencia || '', Origen: v.origen?.nombre_lugar || '', Destino: v.destino?.nombre_lugar || '', Unidad: v.unidades?.numero_economico || '', Operador: v.operadores?.nombre_completo || '', Peso_KG: v.peso_total_kg, Monto_Flete: v.monto_flete || 0, Moneda: v.moneda || 'MXN', ID_CartaPorte: v.id_ccp || '' }));
     const ws = XLSX.utils.json_to_sheet(datosParaExcel); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Viajes"); XLSX.writeFile(wb, `Reporte_Viajes_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
@@ -685,7 +685,7 @@ const getFiltrosArray = () => {
                     <tr key={v.id} className={`hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors group ${v.estatus === 'Cancelado' ? 'opacity-50 grayscale' : ''}`}>
 <td className="p-4 pl-8 whitespace-nowrap align-middle">
     <div className="flex flex-col items-start gap-1">
-      <span className="text-[14px] text-slate-900 dark:text-white font-mono font-medium transition-colors">V-{String(v.folio_interno).padStart(4, '0')}</span>
+<span className="text-[14px] text-slate-900 dark:text-white font-mono font-medium transition-colors">V-{v.folio_interno}</span>
       <span className="text-[11px] text-slate-500 font-medium">{v.fecha_salida?.slice(0, 10)}</span>
     </div>
   </td>
