@@ -317,12 +317,13 @@ export default function ViajesPage() {
           unidadValida = String(item.clave_unidad).trim().toUpperCase();
         }
 
-        let mercancia = { 
+let mercancia = { 
           BienesTransp: claveSatLimpia, 
           Descripcion: item.descripcion, 
-          Cantidad: parseFloat(item.cantidad || 1), 
+          // Redondeamos a 3 decimales exactos como pide el SAT
+          Cantidad: Number(parseFloat(item.cantidad || 1).toFixed(3)), 
           ClaveUnidad: unidadValida,
-          PesoEnKg: parseFloat(item.peso_kg) 
+          PesoEnKg: Number(parseFloat(item.peso_kg).toFixed(3)) 
         };
 
         const esPeligroso = item.material_peligroso === true || item.material_peligroso === "Sí" || item.material_peligroso === "1";
@@ -334,15 +335,21 @@ export default function ViajesPage() {
         } 
 
         if (item.valor && parseFloat(item.valor) > 0) { 
-          mercancia.ValorMercancia = parseFloat(item.valor); 
+          // El dinero (ValorMercancia) debe ir a 2 decimales
+          mercancia.ValorMercancia = Number(parseFloat(item.valor).toFixed(2)); 
           mercancia.Moneda = item.moneda || "MXN"; 
         }
 
         return mercancia;
       });
 
-      const pesoTotalTimbre = (viaje.mercancias_detalle || []).reduce((acc, item) => acc + (Number(item.peso_kg) || 0), 0) || viaje.peso_total_kg || 1;
+// Primero sumamos
+      const sumaPesos = (viaje.mercancias_detalle || []).reduce((acc, item) => acc + (Number(item.peso_kg) || 0), 0) || viaje.peso_total_kg || 1;
       
+      // Luego obligamos a que el total tenga solo 3 decimales
+      const pesoTotalTimbre = Number(sumaPesos.toFixed(3));
+
+
       const ahora = new Date(); ahora.setHours(ahora.getHours() - 1);
       const año = ahora.getFullYear(); const mes = String(ahora.getMonth() + 1).padStart(2, '0'); const dia = String(ahora.getDate()).padStart(2, '0');
       const horas = String(ahora.getHours()).padStart(2, '0'); const minutos = String(ahora.getMinutes()).padStart(2, '0'); const segundos = String(ahora.getSeconds()).padStart(2, '0');
