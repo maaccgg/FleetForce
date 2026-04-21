@@ -102,7 +102,7 @@ export const generarFacturaPDF = async (factura, clienteData, perfilEmisor) => {
   autoTable(doc, {
     startY: 23, margin: { left: 125, right: 14 }, 
     body: [
-      ['Serie y Folio:', `F - ${String(factura.folio_interno || 'S/N').padStart(4, '0')}`],
+      ['Serie y Folio:', `FF-${factura.folio_interno || 'S/N'}`],
       ['Fecha Emisión:', fechaImpresion],
       ['Orden / Ref:', textoReferencia],
       ['Uso CFDI:', clienteData?.uso_cfdi || 'G03']
@@ -248,6 +248,7 @@ export const generarFacturaPDF = async (factura, clienteData, perfilEmisor) => {
   doc.text("Este documento es una representación impresa de un CFDI 4.0", 105, 288, { align: 'center' });
 
   // Nombre del archivo dinámico
-  const nombreArchivo = isBorrador ? `PREVISUALIZACION_Borrador_F${String(factura.folio_interno || '0000').padStart(4, '0')}.pdf` : `Factura_F${String(factura.folio_interno || '0000').padStart(4, '0')}.pdf`;
+  // Nombre del archivo dinámico
+  const nombreArchivo = isBorrador ? `PREVISUALIZACION_Borrador_FF-${factura.folio_interno || 'SN'}.pdf` : `Factura_FF-${factura.folio_interno || 'SN'}.pdf`;
   doc.save(nombreArchivo);
 };

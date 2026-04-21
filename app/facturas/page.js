@@ -198,7 +198,7 @@ function FacturasContenido() {
       
       const blob = await response.blob(); 
       const url = window.URL.createObjectURL(blob);
-      const folioStr = folio_interno ? `F-${String(folio_interno).padStart(4, '0')}` : 'F-SN';
+      const folioStr = folio_interno ? `FF-${folio_interno}` : 'FF-SN';
       const link = document.createElement('a'); 
       link.href = url; link.download = `Factura_XML_${folioStr}_${cliente_nombre.replace(/\s+/g, '_')}.xml`;
       document.body.appendChild(link); link.click(); link.remove(); window.URL.revokeObjectURL(url);
@@ -384,7 +384,7 @@ function FacturasContenido() {
   };
 
   const exportarExcelFacturas = () => {
-    const datosParaExcel = historial.map(f => ({ Folio_Interno: f.folio_interno ? `F-${String(f.folio_interno).padStart(4, '0')}` : 'F-S/N', Folio_Viaje: f.viaje_id || f.folio_viaje ? `V-${String(f.folio_viaje || 0).padStart(4, '0')}` : 'N/A', Fecha_Emision: f.fecha_viaje, Fecha_Vencimiento: f.fecha_vencimiento || 'S/V', Estatus_Pago: f.estatus_pago, Fecha_Pago_Real: f.fecha_pago || 'Pendiente', Cliente: f.cliente, Concepto: f.ruta || '', Referencia: f.referencia || '', Monto_Total: f.monto_total, Moneda: f.moneda || 'MXN', Metodo_Pago: f.metodo_pago, Forma_Pago: f.forma_pago, UUID_SAT: f.folio_fiscal || 'Sin Timbrar' }));
+    const datosParaExcel = historial.map(f => ({ Folio_Interno: f.folio_interno ? `FF-${f.folio_interno}` : 'FF-S/N', Folio_Viaje: f.viaje_id || f.folio_viaje ? `V-${String(f.folio_viaje || 0).padStart(4, '0')}` : 'N/A', Fecha_Emision: f.fecha_viaje, Fecha_Vencimiento: f.fecha_vencimiento || 'S/V', Estatus_Pago: f.estatus_pago, Fecha_Pago_Real: f.fecha_pago || 'Pendiente', Cliente: f.cliente, Concepto: f.ruta || '', Referencia: f.referencia || '', Monto_Total: f.monto_total, Moneda: f.moneda || 'MXN', Metodo_Pago: f.metodo_pago, Forma_Pago: f.forma_pago, UUID_SAT: f.folio_fiscal || 'Sin Timbrar' }));
     const ws = XLSX.utils.json_to_sheet(datosParaExcel); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Facturas"); XLSX.writeFile(wb, `Reporte_Facturas_FleetForce_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
@@ -464,8 +464,7 @@ function FacturasContenido() {
 
                         <td className="p-4 align-middle">
                           <div className="flex flex-col items-start gap-1">
-                            <span className="text-[14px] text-slate-900 dark:text-white font-mono font-medium transition-colors">{item.folio_interno ? `F-${String(item.folio_interno).padStart(4, '0')}` : 'F-S/N'}</span>
-                            {vieneDeViaje ? ( <span className="inline-flex px-2 py-0.5 rounded bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-500/30 text-blue-600 dark:text-blue-400 uppercase tracking-widest text-[9px] items-center gap-1 mt-0.5 transition-colors"><Truck size={8}/> VIAJE: {item.folio_viaje ? `V-${String(item.folio_viaje).padStart(4, '0')}` : 'V-S/N'}</span> ) : ( <span className="inline-flex px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 uppercase tracking-widest text-[9px] items-center gap-1 mt-0.5 transition-colors">Libre</span> )}
+                          <span className="text-[14px] text-slate-900 dark:text-white font-mono font-medium transition-colors">{item.folio_interno ? `FF-${item.folio_interno}` : 'FF-S/N'}</span>                            {vieneDeViaje ? ( <span className="inline-flex px-2 py-0.5 rounded bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-500/30 text-blue-600 dark:text-blue-400 uppercase tracking-widest text-[9px] items-center gap-1 mt-0.5 transition-colors"><Truck size={8}/> VIAJE: {item.folio_viaje ? `V-${String(item.folio_viaje).padStart(4, '0')}` : 'V-S/N'}</span> ) : ( <span className="inline-flex px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 uppercase tracking-widest text-[9px] items-center gap-1 mt-0.5 transition-colors">Libre</span> )}
                           </div>
                         </td>
 
