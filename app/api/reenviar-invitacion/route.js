@@ -1,5 +1,11 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
+
+// Esquema de validación — igual que en crear-usuario para consistencia
+const schemaReenviarInvitacion = z.object({
+  email: z.string().email({ message: 'El email proporcionado no es válido.' }),
+});
 
 export async function POST(request) {
   try {
@@ -46,10 +52,21 @@ export async function POST(request) {
     }
 
     // ==========================================
-    // FASE 3: REENVÍO DE INVITACIÓN
+    // FASE 3: VALIDACIÓN DEL EMAIL
     // ==========================================
-    const { email } = await request.json();
+    const body = await request.json();
 
+    const parsed = schemaReenviarInvitacion.safeParse(body);
+    if (!parsed.success) {
+      const mensajeError = parsed.error.errors.map(e => e.message).join(' ');
+      return NextResponse.json({ error: mensajeError }, { status: 400 });
+    }
+
+    const { email } = parsed.data;
+
+    // ==========================================
+    // FASE 4: REENVÍO DE INVITACIÓN
+    // ==========================================
     // Requerimos la llave maestra porque enviar correos de sistema es una acción de alto nivel
     const supabaseAdmin = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL,

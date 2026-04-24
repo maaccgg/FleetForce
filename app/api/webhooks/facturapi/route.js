@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { timingSafeEqual } from 'crypto';
 
 // Usamos la llave maestra (SERVICE ROLE) porque esta petición viene de un servidor externo (Facturapi),
 // no de un usuario logueado en tu app. Esto nos da permiso de escribir en la BD.
@@ -7,6 +8,27 @@ const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
+
+// Comparación en tiempo constante: evita que un atacante adivine el secreto
+// midiendo cuánto tarda el servidor en responder (timing attack).
+// timingSafeEqual siempre tarda exactamente lo mismo, sin importar si el token
+// coincide en 0 o en 99 caracteres.
+function verificarToken(tokenRecibido) {
+  const secreto = process.env.WEBHOOK_SECRET_FACTURAPI;
+
+  // Si falta el secreto en las variables de entorno, bloqueamos todo
+  if (!secreto || !tokenRecibido) return false;
+
+  // timingSafeEqual requiere que ambos Buffers tengan el mismo tamaño.
+  // Si no coinciden en longitud, ya sabemos que son distintos — pero aun así
+  // comparamos contra el secreto para no filtrar información por tiempo.
+  const bufRecibido = Buffer.from(tokenRecibido, 'utf8');
+  const bufSecreto  = Buffer.from(secreto,        'utf8');
+
+  if (bufRecibido.length !== bufSecreto.length) return false;
+
+  return timingSafeEqual(bufRecibido, bufSecreto);
+}
 
 export async function POST(req) {
   try {
@@ -17,7 +39,7 @@ export async function POST(req) {
     const url = new URL(req.url);
     const token = url.searchParams.get('token');
 
-    if (token !== process.env.WEBHOOK_SECRET_FACTURAPI) {
+    if (!verificarToken(token)) {
       return NextResponse.json({ error: 'Acceso no autorizado al Webhook' }, { status: 401 });
     }
 

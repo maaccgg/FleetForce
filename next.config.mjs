@@ -1,4 +1,6 @@
 /** @type {import('next').NextConfig} */
+const isDev = process.env.NODE_ENV === 'development';
+
 const nextConfig = {
   async headers() {
     return [
@@ -15,16 +17,19 @@ const nextConfig = {
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
           // Deshabilita funciones del navegador que no se usan
           { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
-          // Política básica de contenido: solo carga recursos del propio dominio y servicios conocidos
+          // Política de contenido: solo carga recursos del propio dominio y servicios conocidos
           {
             key: 'Content-Security-Policy',
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-inline' 'unsafe-eval'", // unsafe-eval requerido por Next.js en dev
+              // unsafe-eval solo en desarrollo (Next.js lo requiere en dev, no en producción)
+              `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''}`,
               "style-src 'self' 'unsafe-inline'",
-              "img-src 'self' data: blob:",
+              // api.qrserver.com: generación de QR para Carta Porte y Facturas (PDF)
+              "img-src 'self' data: blob: https://api.qrserver.com",
               "font-src 'self'",
-              "connect-src 'self' https://*.supabase.co https://www.facturapi.io",
+              // api.qrserver.com: fetch() del QR en PdfCartaPorte.js y PdfFactura.js
+              "connect-src 'self' https://*.supabase.co https://www.facturapi.io https://api.qrserver.com",
               "frame-ancestors 'self'",
             ].join('; '),
           },
