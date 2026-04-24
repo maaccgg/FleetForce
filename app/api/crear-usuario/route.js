@@ -1,5 +1,15 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
+
+// Whitelist de roles válidos del sistema
+const schemaCrearUsuario = z.object({
+  email: z.string().email({ message: 'El email no es válido.' }),
+  nombre_completo: z.string().min(2, { message: 'El nombre debe tener al menos 2 caracteres.' }).max(120),
+  rol: z.enum(['administrador', 'operador', 'visualizador'], {
+    errorMap: () => ({ message: 'Rol inválido. Valores permitidos: administrador, operador, visualizador.' })
+  }),
+});
 
 export async function POST(request) {
   try {
@@ -49,9 +59,15 @@ export async function POST(request) {
     // FASE 3: INVITACIÓN SEGURA (Sin pedir contraseña inicial)
     // ==========================================
     const body = await request.json();
-    
-    // ATENCIÓN: Ya no exigimos 'password' del body
-    const { email, nombre_completo, rol } = body; 
+
+    // Validar y sanear los datos del body con Zod
+    const parsed = schemaCrearUsuario.safeParse(body);
+    if (!parsed.success) {
+      const mensajeError = parsed.error.errors.map(e => e.message).join(' ');
+      return NextResponse.json({ error: mensajeError }, { status: 400 });
+    }
+
+    const { email, nombre_completo, rol } = parsed.data;
     
     const idDeLaEmpresaFija = perfilPeticionario.empresa_id || user.id;
 
@@ -83,6 +99,6 @@ export async function POST(request) {
 
   } catch (error) {
     console.error("Falla en creación de usuario/invitación:", error);
-    return NextResponse.json({ error: error.message }, { status: 400 });
+    return NextResponse.json({ error: 'No se pudo crear el usuario.' }, { status: 400 });
   }
 }

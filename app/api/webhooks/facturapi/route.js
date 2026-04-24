@@ -12,15 +12,18 @@ export async function POST(req) {
   try {
 
     // 1. EL ESCUDO DE SEGURIDAD
+    // Facturapi no soporta headers personalizados, el secreto viaja como query param.
+    // El valor viene de la variable de entorno WEBHOOK_SECRET_FACTURAPI en Vercel.
     const url = new URL(req.url);
     const token = url.searchParams.get('token');
-    
+
     if (token !== process.env.WEBHOOK_SECRET_FACTURAPI) {
       return NextResponse.json({ error: 'Acceso no autorizado al Webhook' }, { status: 401 });
     }
+
     const payload = await req.json();
 
-    // 1. EVENTO: FACTURA TIMBRADA
+    // 2. EVENTO: FACTURA TIMBRADA
     if (payload.type === 'invoice.stamped') {
       const facturapiId = payload.data.invoice.id;
       const uuidSat = payload.data.invoice.uuid;
@@ -34,7 +37,7 @@ export async function POST(req) {
         .eq('facturapi_id', facturapiId);
     }
 
-    // 2. EVENTO: FACTURA CANCELADA DESDE EL SAT O DESDE FACTURAPI DIRECTAMENTE
+    // 3. EVENTO: FACTURA CANCELADA DESDE EL SAT O DESDE FACTURAPI DIRECTAMENTE
     if (payload.type === 'invoice.canceled') {
       const facturapiId = payload.data.invoice.id;
       
@@ -44,11 +47,11 @@ export async function POST(req) {
         .eq('facturapi_id', facturapiId);
     }
 
-    // 3. RESPUESTA RÁPIDA: Facturapi necesita un OK (200) para saber que el mensaje llegó.
+    // 4. RESPUESTA RAPIDA: Facturapi necesita un OK (200) para saber que el mensaje llego.
     return NextResponse.json({ received: true }, { status: 200 });
 
   } catch (error) {
-    console.error("Error crítico en Webhook de Facturapi:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error("Error critico en Webhook de Facturapi:", error);
+    return NextResponse.json({ error: 'Error interno del servidor.' }, { status: 500 });
   }
 }
